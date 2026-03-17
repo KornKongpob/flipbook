@@ -23,3 +23,18 @@ export async function signInAction(formData: FormData) {
 
   redirect("/dashboard");
 }
+
+export async function signInAnonymouslyAction() {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) {
+    redirect("/login?error=missing_env");
+  }
+
+  const { error } = await supabase.auth.signInAnonymously();
+
+  if (error) {
+    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect("/dashboard");
+}

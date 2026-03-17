@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getSetupDiagnostics } from "@/lib/env";
-import { signInAction } from "@/app/login/actions";
+import { signInAction, signInAnonymouslyAction } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,6 +105,12 @@ export default async function LoginPage({
             ) : null}
 
             <Button className="w-full">Sign in</Button>
+          </form>
+
+          <form action={signInAnonymouslyAction} className="mt-3">
+            <Button variant="secondary" className="w-full">
+              Continue as guest
+            </Button>
           </form>
 
           <div className="mt-8 rounded-[28px] border border-line bg-white/70 p-5">
