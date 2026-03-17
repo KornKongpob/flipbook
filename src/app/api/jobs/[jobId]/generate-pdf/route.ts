@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { renderCatalogPdf } from "@/lib/catalog/pdf/renderer";
 import { createHeyzineFlipbook } from "@/lib/catalog/flipbooks/heyzine";
+import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import {
   createGeneratedFileRecord,
   getCatalogJobBundle,
@@ -55,12 +56,16 @@ export async function POST(
     );
 
     const theme = (bundle.template?.theme_json as Record<string, string>) ?? {};
-    const styleOptions = (bundle.job.style_options_json as Record<string, string>) ?? {};
+    const styleOptions = {
+      ...DEFAULT_STYLE_OPTIONS,
+      ...(bundle.job.style_options_json as Record<string, unknown>),
+    };
     const { buffer, pageCount } = await renderCatalogPdf({
       jobName: bundle.job.job_name,
       variant: String(styleOptions.variant ?? bundle.template?.variant ?? "promo"),
       theme,
       items: renderItems,
+      options: styleOptions,
     });
 
     const pdfFile = await createGeneratedFileRecord({

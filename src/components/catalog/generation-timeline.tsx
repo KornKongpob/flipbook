@@ -1,5 +1,6 @@
 import type { EventRow } from "@/components/catalog/types";
 import type { CatalogJobStatus } from "@/lib/database.types";
+import { JOB_STATUS_META } from "@/lib/catalog/constants";
 import { Badge } from "@/components/ui/badge";
 
 const stepOrder: Array<{ key: CatalogJobStatus; label: string }> = [
@@ -21,10 +22,18 @@ interface GenerationTimelineProps {
 
 export function GenerationTimeline({ status, events }: GenerationTimelineProps) {
   const activeIndex = stepOrder.findIndex((entry) => entry.key === status);
+  const statusMeta = JOB_STATUS_META[status];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
       <div className="space-y-3 rounded-[28px] border border-line bg-white/70 p-5">
+        {activeIndex < 0 ? (
+          <div className="flex items-center justify-between gap-3 rounded-3xl border border-line bg-white px-4 py-3">
+            <span className="text-sm font-semibold text-foreground">{statusMeta.label}</span>
+            <Badge tone={statusMeta.tone}>Current</Badge>
+          </div>
+        ) : null}
+
         {stepOrder.map((step, index) => {
           const active = index <= activeIndex || step.key === status;
 

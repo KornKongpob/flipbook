@@ -34,6 +34,10 @@ export async function POST(
     );
   }
 
+  if (bundle.job.flipbook_mode === "disabled") {
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url));
+  }
+
   if (bundle.job.flipbook_mode !== "client_id") {
     await upsertFlipbookRecord({
       jobId,

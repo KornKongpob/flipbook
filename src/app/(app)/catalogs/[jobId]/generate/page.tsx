@@ -7,12 +7,18 @@ import { getCatalogJobBundle } from "@/lib/catalog/repository";
 
 export default async function CatalogGeneratePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ jobId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { jobId } = await params;
+  const resolvedSearchParams = await searchParams;
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
+  const errorMessage = resolvedSearchParams.error
+    ? decodeURIComponent(resolvedSearchParams.error)
+    : bundle.job.error_message;
 
   return (
     <div className="space-y-6">
@@ -33,6 +39,12 @@ export default async function CatalogGeneratePage({
             </a>
           </div>
         </div>
+
+        {errorMessage ? (
+          <p className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {errorMessage}
+          </p>
+        ) : null}
       </Card>
 
       <GenerationTimeline status={bundle.job.status} events={bundle.events} />

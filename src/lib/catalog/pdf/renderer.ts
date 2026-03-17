@@ -22,9 +22,16 @@ export interface RenderCatalogPdfInput {
   variant: string;
   theme: Record<string, string>;
   items: RenderableCatalogItem[];
+  options?: Record<string, unknown>;
 }
 
-function drawFallbackImage(doc: PDFKit.PDFDocument, x: number, y: number, width: number, height: number) {
+function drawFallbackImage(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
   doc.save();
   doc.roundedRect(x, y, width, height, 18).fill("#fff4ef");
   doc.fillColor("#d4795d").font("Sarabun-SemiBold").fontSize(12);
@@ -44,6 +51,7 @@ function drawCard(
   height: number,
   variant: string,
   theme: Record<string, string>,
+  options: Record<string, unknown>,
 ) {
   const padding = 14;
   const imageHeight = 108;
@@ -52,6 +60,13 @@ function drawCard(
     item.normalPrice !== null &&
     item.promoPrice > 0 &&
     item.promoPrice < item.normalPrice;
+  const showDiscountAmount = options.showDiscountAmount !== false;
+  const showDiscountPercent = options.showDiscountPercent === true;
+  const showNormalPrice = options.showNormalPrice !== false;
+  const showPromoPrice = options.showPromoPrice !== false;
+  const showSku = options.showSku !== false;
+  const showPackSize = options.showPackSize !== false;
+  const showPromoLine = promoActive && showPromoPrice;
 
   doc.save();
   doc.roundedRect(originX, originY, width, height, 18).fillAndStroke("#ffffff", "#eedbcf");
@@ -63,21 +78,38 @@ function drawCard(
       valign: "center",
     });
   } else {
-    drawFallbackImage(doc, originX + padding, originY + padding, width - padding * 2, imageHeight);
+    drawFallbackImage(
+      doc,
+      originX + padding,
+      originY + padding,
+      width - padding * 2,
+      imageHeight,
+    );
   }
 
-  if (promoActive && item.discountAmount) {
+  if (promoActive && item.discountAmount && showDiscountAmount) {
     doc
-      .roundedRect(originX + padding, originY + padding + imageHeight + 6, width - padding * 2, 22, 11)
+      .roundedRect(
+        originX + padding,
+        originY + padding + imageHeight + 6,
+        width - padding * 2,
+        22,
+        11,
+      )
       .fill(theme.highlight ?? "#ffd55e");
     doc
       .fillColor(theme.accentStrong ?? "#c62813")
       .font("Sarabun-Bold")
       .fontSize(11)
-      .text(`ถูกลง ${formatCurrency(item.discountAmount)}`, originX + padding + 10, originY + padding + imageHeight + 11, {
-        width: width - padding * 2 - 20,
-        align: "center",
-      });
+      .text(
+        `ถูกลง ${formatCurrency(item.discountAmount)}`,
+        originX + padding + 10,
+        originY + padding + imageHeight + 11,
+        {
+          width: width - padding * 2 - 20,
+          align: "center",
+        },
+      );
   }
 
   const textY = originY + padding + imageHeight + (promoActive ? 38 : 14);
@@ -89,7 +121,9 @@ function drawCard(
     lineGap: 1,
   });
 
-  const meta = [item.sku, item.packSize, item.unit].filter(Boolean).join(" • ");
+  const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
+    .filter(Boolean)
+    .join(" • ");
   doc.fillColor("#75675a").font("Sarabun-Regular").fontSize(9.5);
   doc.text(meta || " ", originX + padding, textY + 38, {
     width: width - padding * 2,
@@ -97,32 +131,53 @@ function drawCard(
     ellipsis: true,
   });
 
-  if (promoActive) {
+  if (showPromoLine) {
     doc.fillColor(theme.accent ?? "#eb4529").font("Sarabun-Bold").fontSize(24);
     doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 54, {
       width: width - padding * 2,
     });
 
-    doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(10);
-    const normalY = originY + height - 26;
-    const normalText = formatCurrency(item.normalPrice);
-    doc.text(normalText, originX + padding, normalY, {
-      width: width - padding * 2,
-    });
+    if (showNormalPrice) {
+      doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(10);
+      const normalY = originY + height - 26;
+      const normalText = formatCurrency(item.normalPrice);
+      doc.text(normalText, originX + padding, normalY, {
+        width: width - padding * 2,
+      });
 
-    const measured = doc.widthOfString(normalText);
-    doc
-      .moveTo(originX + padding, normalY + 7)
-      .lineTo(originX + padding + measured, normalY + 7)
-      .lineWidth(1)
-      .strokeColor("#98816a")
-      .stroke();
+      const measured = doc.widthOfString(normalText);
+      doc
+        .moveTo(originX + padding, normalY + 7)
+        .lineTo(originX + padding + measured, normalY + 7)
+        .lineWidth(1)
+        .strokeColor("#98816a")
+        .stroke();
+
+      if (showDiscountPercent && item.discountPercent) {
+        doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(9);
+        doc.text(
+          `${item.discountPercent.toFixed(0)}% off`,
+          originX + padding + measured + 10,
+          normalY,
+          {
+            width: Math.max(width - padding * 2 - measured - 10, 0),
+          },
+        );
+      }
+    }
   } else {
-    doc.fillColor(variant === "clean" ? theme.accentStrong ?? "#22344d" : theme.accent ?? "#eb4529");
+    doc.fillColor(
+      variant === "clean" ? theme.accentStrong ?? "#22344d" : theme.accent ?? "#eb4529",
+    );
     doc.font("Sarabun-Bold").fontSize(22);
-    doc.text(formatCurrency(item.normalPrice ?? item.promoPrice), originX + padding, originY + height - 44, {
-      width: width - padding * 2,
-    });
+    doc.text(
+      formatCurrency(item.normalPrice ?? item.promoPrice),
+      originX + padding,
+      originY + height - 44,
+      {
+        width: width - padding * 2,
+      },
+    );
   }
 
   doc.restore();
@@ -143,6 +198,7 @@ export async function renderCatalogPdf({
   variant,
   theme,
   items,
+  options = {},
 }: RenderCatalogPdfInput) {
   const document = new PDFDocument({
     size: "A4",
@@ -190,7 +246,7 @@ export async function renderCatalogPdf({
       const x = margin + column * (cardWidth + gap);
       const y = margin + row * (cardHeight + gap) + 18;
 
-      drawCard(document, item, x, y, cardWidth, cardHeight - 18, variant, theme);
+      drawCard(document, item, x, y, cardWidth, cardHeight - 18, variant, theme, options);
     });
   });
 

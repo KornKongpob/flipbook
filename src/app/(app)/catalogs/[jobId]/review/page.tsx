@@ -14,13 +14,19 @@ import {
 
 export default async function CatalogReviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ jobId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { jobId } = await params;
+  const resolvedSearchParams = await searchParams;
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
   const reviewItems = bundle.items.filter((item) => item.match_status === "needs_review");
+  const errorMessage = resolvedSearchParams.error
+    ? decodeURIComponent(resolvedSearchParams.error)
+    : null;
 
   const enrichedItems = await Promise.all(
     reviewItems.map(async (item) => ({
@@ -48,6 +54,12 @@ export default async function CatalogReviewPage({
             Skip to preview
           </a>
         </div>
+
+        {errorMessage ? (
+          <p className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {errorMessage}
+          </p>
+        ) : null}
       </Card>
 
       {enrichedItems.length ? (

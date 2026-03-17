@@ -569,10 +569,11 @@ export async function duplicateCatalogJob(jobId: string, userId: string) {
       parsed_row_count: bundle.job.parsed_row_count,
       matched_row_count: bundle.job.matched_row_count,
       review_required_count: bundle.job.review_required_count,
-      page_count: bundle.job.page_count,
+      page_count: 0,
       flipbook_mode: bundle.job.flipbook_mode,
       column_mapping_json: bundle.job.column_mapping_json,
       style_options_json: bundle.job.style_options_json,
+      error_message: null,
     })
     .select("*")
     .single();
