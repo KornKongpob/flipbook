@@ -40,8 +40,6 @@ export interface CatalogJobBundle {
   events: EventRow[];
 }
 
-const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
-
 function asRow<T>(value: unknown) {
   return (value ?? null) as T;
 }
@@ -156,27 +154,30 @@ export async function getDashboardSummary(userId: string) {
 export async function getCatalogJobBundle(jobId: string, userId: string): Promise<CatalogJobBundle> {
   const admin = getAdminClientOrThrow();
   const job = await ensureJobAccess(admin, jobId, userId);
-
-  const itemIdsResponse = await admin
+  const itemsResponse = await admin
     .from("catalog_items")
-    .select("id")
-    .eq("job_id", job.id);
-  const itemIds = asRows<{ id: string }>(itemIdsResponse.data).map((item) => item.id);
+    .select("*")
+    .eq("job_id", job.id)
+    .order("display_order", { ascending: true });
 
-  const [templateResponse, itemsResponse, candidatesResponse, filesResponse, flipbookResponse, eventsResponse] =
+  if (itemsResponse.error) {
+    throw itemsResponse.error;
+  }
+
+  const items = asRows<CatalogItemRow>(itemsResponse.data);
+  const itemIds = items.map((item) => item.id);
+
+  const [templateResponse, candidatesResponse, filesResponse, flipbookResponse, eventsResponse] =
     await Promise.all([
       job.template_id
         ? admin.from("catalog_templates").select("*").eq("id", job.template_id).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
-      admin
-        .from("catalog_items")
-        .select("*")
-        .eq("job_id", job.id)
-        .order("display_order", { ascending: true }),
-      admin
-        .from("product_match_candidates")
-        .select("*")
-        .in("item_id", itemIds.length ? itemIds : [EMPTY_UUID]),
+      itemIds.length
+        ? admin
+            .from("product_match_candidates")
+            .select("*")
+            .in("item_id", itemIds)
+        : Promise.resolve({ data: [], error: null }),
       admin
         .from("generated_files")
         .select("*")
@@ -191,32 +192,17 @@ export async function getCatalogJobBundle(jobId: string, userId: string): Promis
         .limit(40),
     ]);
 
-  if (itemsResponse.error) {
-    throw itemsResponse.error;
-  }
-
-  if (candidatesResponse.error) {
-    throw candidatesResponse.error;
-  }
-
-  if (filesResponse.error) {
-    throw filesResponse.error;
-  }
-
-  if (flipbookResponse.error) {
-    throw flipbookResponse.error;
-  }
-
-  if (eventsResponse.error) {
-    throw eventsResponse.error;
-  }
-
-  const template = asRow<CatalogTemplateRow | null>(templateResponse.data);
-  const items = asRows<CatalogItemRow>(itemsResponse.data);
-  const candidates = asRows<ProductCandidateRow>(candidatesResponse.data);
-  const files = asRows<GeneratedFileRow>(filesResponse.data);
-  const flipbook = asRow<FlipbookRow | null>(flipbookResponse.data);
-  const events = asRows<EventRow>(eventsResponse.data);
+  const template = templateResponse.error
+    ? null
+    : asRow<CatalogTemplateRow | null>(templateResponse.data);
+  const candidates = candidatesResponse.error
+    ? []
+    : asRows<ProductCandidateRow>(candidatesResponse.data);
+  const files = filesResponse.error ? [] : asRows<GeneratedFileRow>(filesResponse.data);
+  const flipbook = flipbookResponse.error
+    ? null
+    : asRow<FlipbookRow | null>(flipbookResponse.data);
+  const events = eventsResponse.error ? [] : asRows<EventRow>(eventsResponse.data);
 
   const assetIds = [
     ...items.map((item) => item.selected_asset_id).filter(Boolean),
@@ -226,12 +212,7 @@ export async function getCatalogJobBundle(jobId: string, userId: string): Promis
   const assetResponse = assetIds.length
     ? await admin.from("product_assets").select("*").in("id", [...new Set(assetIds)])
     : { data: [], error: null };
-
-  if (assetResponse.error) {
-    throw assetResponse.error;
-  }
-
-  const assets = asRows<ProductAssetRow>(assetResponse.data);
+  const assets = assetResponse.error ? [] : asRows<ProductAssetRow>(assetResponse.data);
   const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
   const candidatesByItem = new Map<string, Array<{ row: ProductCandidateRow; asset: ProductAssetRow | null }>>();
 
