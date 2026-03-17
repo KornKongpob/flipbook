@@ -43,6 +43,14 @@ begin
 end;
 $$;
 
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role public.app_role not null default 'operator',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -55,14 +63,6 @@ as $$
       and role = 'admin'
   );
 $$;
-
-create table public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  role public.app_role not null default 'operator',
-  created_at timestamptz not null default timezone('utc', now()),
-  updated_at timestamptz not null default timezone('utc', now())
-);
 
 create table public.catalog_templates (
   id uuid primary key default gen_random_uuid(),
