@@ -32,18 +32,29 @@ export async function GET(request: Request) {
     return new NextResponse("Host not allowed", { status: 403 });
   }
 
+  const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" fill="#f1f5f9"/><text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" font-size="10" fill="#94a3b8">No image</text></svg>`;
+
   const upstream = await fetch(rawUrl, {
     headers: {
       "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
       referer: "https://www.makro.pro/",
-      accept: "image/webp,image/avif,image/apng,image/*,*/*;q=0.8",
+      accept: "image/webp,image/avif,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8",
+      "accept-encoding": "gzip, deflate, br",
     },
-    next: { revalidate: 86400 },
   }).catch(() => null);
 
-  if (!upstream?.ok) {
-    return new NextResponse("Upstream fetch failed", { status: 502 });
+  if (!upstream) {
+    return new NextResponse(PLACEHOLDER_SVG, {
+      headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=60" },
+    });
+  }
+
+  if (!upstream.ok) {
+    return new NextResponse(PLACEHOLDER_SVG, {
+      headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=60" },
+      status: 200,
+    });
   }
 
   const contentType = upstream.headers.get("content-type") ?? "image/jpeg";
