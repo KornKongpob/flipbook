@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Database } from "@/lib/database.types";
+import { getCatalogJobBundle } from "@/lib/catalog/repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -107,6 +108,21 @@ export async function GET(
       : { data: [], error: null };
     summary.assetsError = assetResponse.error?.message ?? null;
     summary.assetsCount = assetResponse.data?.length ?? 0;
+
+    try {
+      const bundle = await getCatalogJobBundle(jobId, user.id);
+      summary.bundleCheck = {
+        ok: true,
+        itemsCount: bundle.items.length,
+        filesCount: bundle.files.length,
+        eventsCount: bundle.events.length,
+      };
+    } catch (error) {
+      summary.bundleCheck = {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown bundle error.",
+      };
+    }
 
     return NextResponse.json(summary);
   } catch (error) {
