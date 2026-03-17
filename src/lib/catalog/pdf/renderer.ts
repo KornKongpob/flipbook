@@ -203,6 +203,8 @@ export async function renderCatalogPdf({
   const document = new PDFDocument({
     size: "A4",
     margin: 0,
+    autoFirstPage: false,
+    font: PDF_FONT_PATHS.regular,
     info: {
       Title: jobName,
       Author: "Promo Catalog Studio",
@@ -212,22 +214,22 @@ export async function renderCatalogPdf({
   document.registerFont("Sarabun-Regular", PDF_FONT_PATHS.regular);
   document.registerFont("Sarabun-SemiBold", PDF_FONT_PATHS.semibold);
   document.registerFont("Sarabun-Bold", PDF_FONT_PATHS.bold);
+  document.font("Sarabun-Regular");
 
   const bufferPromise = createDocumentBuffer(document);
   const pages = chunk(items, PRODUCTS_PER_PAGE);
-  const pageWidth = document.page.width;
-  const pageHeight = document.page.height;
   const margin = 18;
   const gap = 12;
   const columns = 3;
   const rows = 3;
-  const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
-  const cardHeight = (pageHeight - margin * 2 - gap * (rows - 1)) / rows;
 
-  pages.forEach((pageItems, pageIndex) => {
-    if (pageIndex > 0) {
-      document.addPage();
-    }
+  pages.forEach((pageItems) => {
+    document.addPage();
+
+    const pageWidth = document.page.width;
+    const pageHeight = document.page.height;
+    const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
+    const cardHeight = (pageHeight - margin * 2 - gap * (rows - 1)) / rows;
 
     document.rect(0, 0, pageWidth, pageHeight).fill(theme.background ?? "#fff8f2");
 

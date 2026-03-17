@@ -14,6 +14,7 @@ import {
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+const SEE_OTHER = 303;
 
 export async function POST(
   request: Request,
@@ -26,7 +27,7 @@ export async function POST(
   } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", request.url), SEE_OTHER);
   }
 
   try {
@@ -54,6 +55,10 @@ export async function POST(
           imageBuffer: await resolveProductAssetBuffer(item.selectedAsset),
         })),
     );
+
+    if (!renderItems.length) {
+      throw new Error("At least one visible product is required to generate the PDF.");
+    }
 
     const theme = (bundle.template?.theme_json as Record<string, string>) ?? {};
     const styleOptions = {
@@ -98,13 +103,14 @@ export async function POST(
       }
     }
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url));
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "PDF generation failed.";
     await markJobStatus(jobId, user.id, "failed", message);
 
     return NextResponse.redirect(
       new URL(`/catalogs/${jobId}/generate?error=${encodeURIComponent(message)}`, request.url),
+      SEE_OTHER,
     );
   }
 }

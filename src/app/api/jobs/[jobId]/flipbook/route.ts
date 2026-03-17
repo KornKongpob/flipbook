@@ -10,6 +10,7 @@ import {
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+const SEE_OTHER = 303;
 
 export async function POST(
   request: Request,
@@ -22,7 +23,7 @@ export async function POST(
   } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", request.url), SEE_OTHER);
   }
 
   const bundle = await getCatalogJobBundle(jobId, user.id);
@@ -31,11 +32,12 @@ export async function POST(
   if (!latestPdf) {
     return NextResponse.redirect(
       new URL(`/catalogs/${jobId}/result?error=${encodeURIComponent("Generate a PDF first.")}`, request.url),
+      SEE_OTHER,
     );
   }
 
   if (bundle.job.flipbook_mode === "disabled") {
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url));
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url), SEE_OTHER);
   }
 
   if (bundle.job.flipbook_mode !== "client_id") {
@@ -52,7 +54,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url));
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url), SEE_OTHER);
   }
 
   try {
@@ -78,13 +80,14 @@ export async function POST(
 
     await markJobStatus(jobId, user.id, "completed");
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url));
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Flipbook processing failed.";
     await markJobStatus(jobId, user.id, "pdf_ready", message);
 
     return NextResponse.redirect(
       new URL(`/catalogs/${jobId}/result?error=${encodeURIComponent(message)}`, request.url),
+      SEE_OTHER,
     );
   }
 }

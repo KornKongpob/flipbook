@@ -3,6 +3,7 @@ import { attachManualAssetToItem } from "@/lib/catalog/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+const SEE_OTHER = 303;
 
 export async function POST(
   request: Request,
@@ -15,7 +16,7 @@ export async function POST(
   } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", request.url), SEE_OTHER);
   }
 
   const formData = await request.formData();
@@ -26,6 +27,7 @@ export async function POST(
   if (!(file instanceof File)) {
     return NextResponse.redirect(
       new URL(`/catalogs/${jobId}/review?error=${encodeURIComponent("Asset file is required.")}`, request.url),
+      SEE_OTHER,
     );
   }
 
@@ -39,12 +41,13 @@ export async function POST(
       saveManualMapping,
     });
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/review`, request.url));
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/review`, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Upload failed.";
 
     return NextResponse.redirect(
       new URL(`/catalogs/${jobId}/review?error=${encodeURIComponent(message)}`, request.url),
+      SEE_OTHER,
     );
   }
 }

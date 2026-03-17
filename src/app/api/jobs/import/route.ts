@@ -3,6 +3,7 @@ import { createCatalogJobFromUpload } from "@/lib/catalog/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+const SEE_OTHER = 303;
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
   } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", request.url), SEE_OTHER);
   }
 
   const formData = await request.formData();
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) {
     return NextResponse.redirect(
       new URL(`/catalogs/new?error=${encodeURIComponent("Workbook file is required.")}`, request.url),
+      SEE_OTHER,
     );
   }
 
@@ -41,12 +43,13 @@ export async function POST(request: Request) {
       reuseManualMappings,
     });
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/mapping`, request.url));
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/mapping`, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Import failed.";
 
     return NextResponse.redirect(
       new URL(`/catalogs/new?error=${encodeURIComponent(message)}`, request.url),
+      SEE_OTHER,
     );
   }
 }

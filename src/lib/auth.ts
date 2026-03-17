@@ -21,8 +21,20 @@ export async function getSession() {
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const session = await getSession();
-  return session?.user ?? null;
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) {
+    return null;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return user ?? null;
 }
 
 export async function requireUser() {

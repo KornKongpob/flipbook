@@ -25,7 +25,9 @@ export default async function CatalogMappingPage({
       ? (rawMapping as Record<string, unknown>)
       : {};
   const rawWarnings = mappingMeta.warnings;
-  const warnings = Array.isArray(rawWarnings) ? rawWarnings.map((warning) => String(warning)) : [];
+  const warnings = Array.isArray(rawWarnings)
+    ? rawWarnings.map((warning) => String(warning))
+    : [];
   const rawPreviewRows = mappingMeta.previewRows;
   const previewRows = Array.isArray(rawPreviewRows)
     ? rawPreviewRows.filter(
@@ -47,7 +49,10 @@ export default async function CatalogMappingPage({
             <Link href={`/catalogs/${jobId}/review`} className={buttonClassName("primary")}>
               Go to review
             </Link>
-            <Link href={`/catalogs/${jobId}/preview`} className={buttonClassName("secondary")}>
+            <Link
+              href={`/catalogs/${jobId}/preview`}
+              className={buttonClassName("secondary")}
+            >
               Jump to preview
             </Link>
           </div>
@@ -55,10 +60,15 @@ export default async function CatalogMappingPage({
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-[28px] border border-line bg-white/75 p-5">
-            <h3 className="font-display text-xl font-semibold text-foreground">Detected columns</h3>
+            <h3 className="font-display text-xl font-semibold text-foreground">
+              Detected columns
+            </h3>
             <div className="mt-4 space-y-3 text-sm">
               {Object.entries(mapping).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+                <div
+                  key={key}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3"
+                >
                   <span className="font-medium capitalize text-foreground">{key}</span>
                   <span className="text-muted">{String(value ?? "")}</span>
                 </div>
