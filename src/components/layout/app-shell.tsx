@@ -4,16 +4,15 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { BookOpen, FolderOpen, LayoutDashboard, Menu, PlusCircle, Settings, X, LogOut, User } from "lucide-react";
+import { BookOpen, FolderOpen, LayoutDashboard, Menu, PlusCircle, Settings, X, LogOut } from "lucide-react";
 import { signOutAction } from "@/app/(app)/actions";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Overview & recent jobs" },
-  { href: "/catalogs/new", label: "New Catalog", icon: PlusCircle, description: "Start from Excel sheet" },
-  { href: "/library", label: "Asset Library", icon: FolderOpen, description: "Images & mappings" },
-  { href: "/settings", label: "Settings", icon: Settings, description: "Diagnostics & config" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/catalogs/new", label: "New Catalog", icon: PlusCircle },
+  { href: "/library", label: "Library", icon: FolderOpen },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 interface AppShellProps {
@@ -21,42 +20,36 @@ interface AppShellProps {
   userLabel: string;
 }
 
-function NavLink({
-  item,
-  active,
-  onClick,
+function SidebarNav({
+  pathname,
+  onLinkClick,
 }: {
-  item: (typeof navigation)[number];
-  active: boolean;
-  onClick?: () => void;
+  pathname: string;
+  onLinkClick?: () => void;
 }) {
-  const Icon = item.icon;
   return (
-    <Link
-      href={item.href}
-      onClick={onClick}
-      className={cn(
-        "group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all",
-        active
-          ? "bg-brand text-white shadow-[0_8px_24px_rgba(235,69,41,0.28)]"
-          : "text-muted-strong hover:bg-white/80 hover:text-foreground hover:shadow-sm",
-      )}
-    >
-      <span className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-xl transition-colors",
-        active ? "bg-white/20" : "bg-white/60 group-hover:bg-brand-soft",
-      )}>
-        <Icon className={cn("size-4", active ? "text-white" : "text-muted-strong group-hover:text-brand")} />
-      </span>
-      <span className="min-w-0">
-        <span className="block leading-snug">{item.label}</span>
-        {!active && (
-          <span className="block text-[11px] font-normal text-muted opacity-0 transition-opacity group-hover:opacity-100">
-            {item.description}
-          </span>
-        )}
-      </span>
-    </Link>
+    <nav className="flex flex-1 flex-col gap-0.5 px-3">
+      {navigation.map((item) => {
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onLinkClick}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              active
+                ? "bg-brand text-white"
+                : "text-slate-400 hover:bg-white/10 hover:text-white",
+            )}
+          >
+            <Icon className="size-4 shrink-0" />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -64,136 +57,111 @@ export function AppShell({ children, userLabel }: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const initials = userLabel
-    .split("@")[0]
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = userLabel.split("@")[0].slice(0, 2).toUpperCase();
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1600px] gap-6 px-4 py-4 lg:px-6">
+    <div className="flex min-h-screen">
       {/* Mobile header */}
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-background/90 px-4 backdrop-blur-lg lg:hidden">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-brand">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-12 items-center justify-between border-b border-line bg-white px-4 lg:hidden">
+        <div className="flex items-center gap-2">
+          <div className="flex size-6 items-center justify-center rounded bg-brand">
             <BookOpen className="size-3.5 text-white" />
           </div>
-          <span className="font-display text-base font-semibold tracking-tight text-foreground">
-            Catalog Studio
-          </span>
+          <span className="text-sm font-semibold text-foreground">Catalog Studio</span>
         </div>
         <button
           onClick={() => setMobileOpen(true)}
-          className="flex size-9 items-center justify-center rounded-xl border border-line bg-white/80 text-muted-strong transition hover:bg-white hover:text-foreground"
+          className="flex size-8 items-center justify-center rounded-lg text-muted-strong transition hover:text-foreground"
           aria-label="Open menu"
         >
           <Menu className="size-4" />
         </button>
       </header>
 
-      {/* Mobile drawer overlay */}
+      {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Mobile drawer */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col glass-panel border-r border-line px-5 py-6 transition-transform duration-300 lg:hidden",
-        mobileOpen ? "translate-x-0" : "-translate-x-full",
-      )}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-xl bg-brand shadow-[0_4px_12px_rgba(235,69,41,0.3)]">
-              <BookOpen className="size-4 text-white" />
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-slate-900 transition-transform duration-200 lg:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex h-12 items-center justify-between px-4 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="flex size-6 items-center justify-center rounded bg-brand">
+              <BookOpen className="size-3.5 text-white" />
             </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand">Promo Studio</p>
-              <p className="font-display text-sm font-semibold text-foreground">Catalog Workflow</p>
-            </div>
+            <span className="text-sm font-semibold text-white">Catalog Studio</span>
           </div>
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="flex size-8 items-center justify-center rounded-xl border border-line bg-white/80 text-muted transition hover:bg-white hover:text-foreground"
-          >
+          <button onClick={() => setMobileOpen(false)} className="text-slate-400 hover:text-white">
             <X className="size-4" />
           </button>
         </div>
 
-        <nav className="mt-6 flex flex-1 flex-col gap-1.5">
-          {navigation.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={active}
-                onClick={() => setMobileOpen(false)}
-              />
-            );
-          })}
-        </nav>
+        <div className="flex flex-1 flex-col gap-6 py-4 overflow-y-auto">
+          <SidebarNav pathname={pathname} onLinkClick={() => setMobileOpen(false)} />
+        </div>
 
-        <div className="space-y-3 border-t border-line pt-5">
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-white/70 p-3">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-xs font-bold text-brand">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Signed in</p>
-              <p className="truncate text-sm font-medium text-foreground">{userLabel}</p>
-            </div>
-          </div>
+        <div className="border-t border-white/10 p-4 space-y-2">
+          <p className="truncate text-xs text-slate-400">{userLabel}</p>
           <form action={signOutAction}>
-            <Button variant="secondary" className="w-full gap-2">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-white/10 hover:text-white"
+            >
               <LogOut className="size-3.5" />
               Sign out
-            </Button>
+            </button>
           </form>
         </div>
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="noise-grid hidden w-64 shrink-0 rounded-[28px] border border-line bg-card/90 px-4 py-5 shadow-[0_8px_32px_rgba(90,42,14,0.08)] backdrop-blur-xl lg:flex lg:flex-col">
-        <div className="flex items-center gap-3 border-b border-line pb-5">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand shadow-[0_4px_14px_rgba(235,69,41,0.32)]">
-            <BookOpen className="size-5 text-white" />
+      <aside className="hidden w-56 shrink-0 flex-col bg-slate-900 lg:flex">
+        <div className="flex h-14 items-center gap-2.5 px-4 border-b border-white/10">
+          <div className="flex size-7 items-center justify-center rounded-lg bg-brand">
+            <BookOpen className="size-4 text-white" />
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand">Promo Studio</p>
-            <h1 className="font-display text-sm font-bold tracking-tight text-foreground">Catalog Workflow</h1>
+          <div>
+            <p className="text-xs font-semibold text-white leading-none">Catalog Studio</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Promo workflow</p>
           </div>
         </div>
 
-        <nav className="mt-4 flex flex-1 flex-col gap-1.5">
-          {navigation.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return <NavLink key={item.href} item={item} active={active} />;
-          })}
-        </nav>
+        <div className="flex flex-1 flex-col gap-6 py-4 overflow-y-auto">
+          <SidebarNav pathname={pathname} />
+        </div>
 
-        <div className="space-y-3 border-t border-line pt-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-white/70 p-3">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-xs font-bold text-brand">
-              <User className="size-3.5" />
+        <div className="border-t border-white/10 p-4 space-y-1">
+          <div className="flex items-center gap-2.5 px-3 py-1.5">
+            <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
+              {initials}
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Signed in</p>
-              <p className="truncate text-sm font-medium text-foreground">{userLabel}</p>
-            </div>
+            <p className="truncate text-xs text-slate-400">{userLabel}</p>
           </div>
           <form action={signOutAction}>
-            <Button variant="secondary" className="w-full gap-2 text-xs">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-white/10 hover:text-white"
+            >
               <LogOut className="size-3.5" />
               Sign out
-            </Button>
+            </button>
           </form>
         </div>
       </aside>
 
-      {/* Main content — push down on mobile for fixed header */}
-      <main className="flex min-w-0 flex-1 flex-col gap-6 pt-14 lg:pt-0">{children}</main>
+      {/* Main content */}
+      <main className="flex min-w-0 flex-1 flex-col bg-background pt-12 lg:pt-0">
+        <div className="flex flex-1 flex-col gap-5 p-4 lg:p-6">{children}</div>
+      </main>
     </div>
   );
 }

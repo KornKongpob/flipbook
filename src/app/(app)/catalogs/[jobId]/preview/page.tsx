@@ -7,9 +7,7 @@ import {
 import { PagePreviewGrid } from "@/components/catalog/page-preview-grid";
 import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button, buttonClassName } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { requireUser } from "@/lib/auth";
 import {
   getCatalogJobBundle,
@@ -43,41 +41,30 @@ export default async function CatalogPreviewPage({
   );
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-[34px] p-8">
-        <WorkflowStepper jobId={jobId} currentStep="preview" jobStatus={bundle.job.status} />
-        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <SectionHeading
-            eyebrow="Step 3 — Page preview"
-            title="Finalize product order and visibility."
-            description="Reorder products, hide weak entries, and override display names before generating the PDF."
-          />
-          <div className="flex flex-wrap gap-3">
-            <Link href={`/catalogs/${jobId}/settings`} className={buttonClassName("secondary")}>
-              Style settings
-            </Link>
-            <Link href={`/catalogs/${jobId}/generate`} className={buttonClassName("primary")}>
-              Generate PDF
-            </Link>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="rounded-xl border border-line bg-card p-4">
+        <div className="flex items-center justify-between gap-4">
+          <WorkflowStepper jobId={jobId} currentStep="preview" jobStatus={bundle.job.status} />
+          <div className="flex shrink-0 gap-2">
+            <Link href={`/catalogs/${jobId}/settings`} className={buttonClassName("secondary")}>Style</Link>
+            <Link href={`/catalogs/${jobId}/generate`} className={buttonClassName("primary")}>Generate PDF</Link>
           </div>
         </div>
-      </Card>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="rounded-[34px] p-6">
-          <SectionHeading
-            title="Product controls"
-            description="Reorder, rename, or hide products. Changes affect the preview instantly."
-          />
+      <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
+        <div className="rounded-xl border border-line bg-card p-4">
+          <p className="mb-3 text-xs font-semibold text-muted uppercase tracking-wide">Products</p>
 
-          <div className="mt-5 space-y-2">
+          <div className="space-y-1.5">
             {bundle.items.map((item) => (
               <div
                 key={item.id}
-                className={`rounded-[22px] border p-3 transition ${
+                className={`rounded-lg border p-2.5 transition ${
                   item.is_visible
-                    ? "border-line bg-white/75"
-                    : "border-dashed border-line bg-white/40 opacity-60"
+                    ? "border-line bg-white"
+                    : "border-dashed border-line bg-white/50 opacity-55"
                 }`}
               >
                 {/* Row: order + name + visibility toggle */}
@@ -161,18 +148,12 @@ export default async function CatalogPreviewPage({
               </div>
             ))}
           </div>
-        </Card>
+        </div>
 
-        <Card className="rounded-[34px] p-6">
-          <SectionHeading
-            title="A4 preview"
-            description="Nine products per page, using the current template and style toggles."
-          />
-
-          <div className="mt-6">
-            <PagePreviewGrid items={previewItems} options={styleOptions} />
-          </div>
-        </Card>
+        <div className="rounded-xl border border-line bg-card p-4">
+          <p className="mb-3 text-xs font-semibold text-muted uppercase tracking-wide">A4 preview</p>
+          <PagePreviewGrid items={previewItems} options={styleOptions} />
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,6 @@ import { getSession } from "@/lib/auth";
 import { getSetupDiagnostics } from "@/lib/env";
 import { signInAction, signInAnonymouslyAction } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 const errorMap: Record<string, string> = {
@@ -53,105 +52,80 @@ export default async function LoginPage({
     : null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 lg:px-8">
-      <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+    <main className="flex min-h-screen">
+      {/* Left panel */}
+      <div className="hidden lg:flex lg:flex-1 lg:flex-col lg:justify-center lg:bg-slate-900 lg:px-12 lg:py-16">
+        <div className="flex items-center gap-2.5 mb-10">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-brand">
+            <BookOpen className="size-4 text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Catalog Studio</p>
+            <p className="text-xs text-slate-400">Promo workflow</p>
+          </div>
+        </div>
 
-        {/* Left panel — marketing / feature overview */}
-        <Card className="noise-grid overflow-hidden rounded-[36px] p-8 lg:p-10">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-brand shadow-[0_6px_18px_rgba(235,69,41,0.3)]">
-              <BookOpen className="size-5 text-white" />
+        <h1 className="text-3xl font-bold text-white leading-tight">
+          Upload promotions,<br />review images,<br />
+          <span className="text-brand">publish clean PDFs.</span>
+        </h1>
+
+        <div className="mt-10 grid grid-cols-2 gap-3">
+          {steps.map((item) => (
+            <div key={item.step} className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-bold text-brand/70">{item.step}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{item.title}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">{item.description}</p>
             </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand">Promo Studio</p>
-              <p className="font-display text-sm font-bold text-foreground">Catalog Workflow</p>
+          ))}
+        </div>
+      </div>
+
+      {/* Right panel — sign in form */}
+      <div className="flex flex-1 items-center justify-center bg-background px-6 py-12 lg:max-w-md">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 lg:hidden flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-brand">
+              <BookOpen className="size-3.5 text-white" />
             </div>
+            <p className="text-sm font-semibold text-foreground">Catalog Studio</p>
           </div>
 
-          <div className="mt-8">
-            <h1 className="font-display text-3xl font-semibold leading-snug tracking-tight text-foreground lg:text-4xl">
-              Upload promotions,<br />review images,<br />
-              <span className="text-brand">publish clean PDFs.</span>
-            </h1>
-            <p className="mt-4 max-w-md text-sm leading-6 text-muted">
-              Promo Catalog Studio is built for internal sales teams that need reliable Makro-style catalog generation with a fast manual review path.
-            </p>
-          </div>
+          <h2 className="text-xl font-bold text-foreground">Sign in</h2>
+          <p className="mt-1 text-sm text-muted">Access your catalog jobs.</p>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {steps.map((item) => (
-              <div
-                key={item.step}
-                className="rounded-[24px] border border-line bg-white/75 p-4"
-              >
-                <p className="font-display text-xs font-bold tracking-[0.18em] text-brand opacity-60">
-                  {item.step}
-                </p>
-                <p className="mt-1.5 text-sm font-semibold text-foreground">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-muted">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Right panel — sign in form */}
-        <Card className="rounded-[36px] p-8 lg:p-10">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Internal access</p>
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">Sign in</h2>
-            <p className="text-sm text-muted">Use your team account to access catalog jobs.</p>
-          </div>
-
-          <form action={signInAction} className="mt-8 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground" htmlFor="email">
-                Email
-              </label>
+          <form action={signInAction} className="mt-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground" htmlFor="email">Email</label>
               <Input id="email" name="email" type="email" required placeholder="team@company.com" />
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground" htmlFor="password">
-                Password
-              </label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground" htmlFor="password">Password</label>
               <Input id="password" name="password" type="password" required placeholder="••••••••" />
             </div>
 
-            {errorMessage ? (
-              <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                <p className="font-semibold">Sign-in failed</p>
-                <p className="mt-0.5">{errorMessage}</p>
-              </div>
-            ) : null}
+            {errorMessage && (
+              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">{errorMessage}</p>
+            )}
+            {!diagnostics.supabaseClient && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+                Configure <code>.env.local</code> before signing in.
+              </p>
+            )}
 
-            {!diagnostics.supabaseClient ? (
-              <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <p className="font-semibold">Setup required</p>
-                <p className="mt-0.5">Fill in the <code className="rounded bg-amber-100 px-1">.env.local</code> environment variables before signing in.</p>
-              </div>
-            ) : null}
-
-            <Button className="w-full" disabled={!diagnostics.supabaseClient}>
-              Sign in
-            </Button>
+            <Button className="w-full" disabled={!diagnostics.supabaseClient}>Sign in</Button>
           </form>
 
-          <div className="mt-3 flex items-center gap-3">
+          <div className="my-4 flex items-center gap-3">
             <div className="h-px flex-1 bg-line" />
             <span className="text-xs text-muted">or</span>
             <div className="h-px flex-1 bg-line" />
           </div>
 
-          <form action={signInAnonymouslyAction} className="mt-3">
-            <Button variant="secondary" className="w-full">
-              Continue as guest
-            </Button>
+          <form action={signInAnonymouslyAction}>
+            <Button variant="secondary" className="w-full">Continue as guest</Button>
           </form>
-
-          <p className="mt-6 text-center text-xs text-muted">
-            Guest access has limited permissions. Sign in with a team account for full access.
-          </p>
-        </Card>
+        </div>
       </div>
     </main>
   );

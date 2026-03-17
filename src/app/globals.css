@@ -1,21 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fffaf4;
-  --foreground: #1f1b16;
-  --card: rgba(255, 255, 255, 0.88);
-  --card-strong: #fffdf9;
-  --line: rgba(72, 51, 29, 0.12);
-  --line-strong: rgba(72, 51, 29, 0.22);
-  --muted: #7c6b5b;
-  --muted-strong: #5d4d40;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-strong: #ffffff;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --muted: #94a3b8;
+  --muted-strong: #64748b;
   --brand: #eb4529;
-  --brand-strong: #cb2a12;
-  --brand-soft: #fff1ea;
-  --accent: #f8c95e;
-  --success: #168b63;
-  --shadow-lg: 0 32px 80px rgba(90, 42, 14, 0.12);
-  --shadow-md: 0 16px 32px rgba(90, 42, 14, 0.08);
+  --brand-strong: #c73b22;
+  --brand-soft: #fff5f3;
+  --accent: #f59e0b;
+  --success: #16a34a;
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.1);
 }
 
 @theme inline {
@@ -45,10 +46,6 @@
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
-  background-image:
-    radial-gradient(circle at top left, rgba(248, 201, 94, 0.26), transparent 22%),
-    radial-gradient(circle at top right, rgba(235, 69, 41, 0.16), transparent 18%),
-    linear-gradient(180deg, #fffaf4 0%, #fff5eb 48%, #fffaf4 100%);
 }
 
 .app-chrome {
@@ -68,31 +65,17 @@ textarea {
 }
 
 ::selection {
-  background: rgba(235, 69, 41, 0.18);
+  background: rgba(235, 69, 41, 0.15);
 }
 
 .glass-panel {
   background: var(--card);
-  backdrop-filter: blur(18px);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .noise-grid {
   position: relative;
-}
-
-.noise-grid::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(90, 42, 14, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(90, 42, 14, 0.025) 1px, transparent 1px);
-  background-size: 28px 28px;
-  opacity: 0.45;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent);
 }
 
 .text-balance {
@@ -104,19 +87,19 @@ textarea {
 }
 
 .thin-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(72, 51, 29, 0.18);
+  background: var(--line-strong);
   border-radius: 999px;
 }
 
 .catalog-page {
   aspect-ratio: 210 / 297;
   background: white;
-  border: 1px solid rgba(72, 51, 29, 0.08);
-  border-radius: 1rem;
-  box-shadow: 0 14px 40px rgba(53, 29, 11, 0.12);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.1);
 }

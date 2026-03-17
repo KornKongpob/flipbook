@@ -775,7 +775,7 @@ export async function resolveProductAssetPreviewUrl(asset: ProductAssetRow | nul
   }
 
   if (asset.image_url) {
-    return asset.image_url;
+    return `/api/images/proxy?url=${encodeURIComponent(asset.image_url)}`;
   }
 
   if (asset.storage_bucket && asset.storage_path) {

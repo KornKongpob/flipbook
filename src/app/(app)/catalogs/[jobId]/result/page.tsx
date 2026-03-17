@@ -1,8 +1,6 @@
 import { duplicateJobAction } from "@/app/(app)/actions";
 import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { requireUser } from "@/lib/auth";
 import { getCatalogJobBundle, getLatestPdfFile } from "@/lib/catalog/repository";
 
@@ -23,123 +21,80 @@ export default async function CatalogResultPage({
     : bundle.job.error_message;
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-[34px] p-8">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="rounded-xl border border-line bg-card p-4">
         <WorkflowStepper jobId={jobId} currentStep="result" jobStatus={bundle.job.status} />
-        <div className="mt-6">
-          <SectionHeading
-            eyebrow="Step 5 — Result"
-            title="Exported files and next actions."
-            description="Download the PDF, duplicate the job, or trigger the optional flipbook conversion path."
-          />
-        </div>
+        <h1 className="mt-3 text-base font-semibold text-foreground">Result</h1>
+        {errorMessage && (
+          <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{errorMessage}</p>
+        )}
+      </div>
 
-        {errorMessage ? (
-          <p className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {errorMessage}
-          </p>
-        ) : null}
-
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-[28px] border border-line bg-white/75 p-5">
-            <p className="text-sm font-medium text-muted">Pages</p>
-            <p className="mt-4 font-display text-4xl font-semibold text-foreground">
-              {bundle.job.page_count || "-"}
-            </p>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Pages", value: bundle.job.page_count || "—" },
+          { label: "Matched rows", value: bundle.job.matched_row_count },
+          { label: "Review required", value: bundle.job.review_required_count },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-line bg-card p-4">
+            <p className="text-xs text-muted">{s.label}</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{s.value}</p>
           </div>
-          <div className="rounded-[28px] border border-line bg-white/75 p-5">
-            <p className="text-sm font-medium text-muted">Matched rows</p>
-            <p className="mt-4 font-display text-4xl font-semibold text-foreground">
-              {bundle.job.matched_row_count}
-            </p>
-          </div>
-          <div className="rounded-[28px] border border-line bg-white/75 p-5">
-            <p className="text-sm font-medium text-muted">Review required</p>
-            <p className="mt-4 font-display text-4xl font-semibold text-foreground">
-              {bundle.job.review_required_count}
-            </p>
-          </div>
-        </div>
-      </Card>
+        ))}
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <Card className="rounded-[34px] p-6">
-          <SectionHeading
-            title="Files"
-            description="Generated files are stored privately in Supabase Storage and exposed through signed download links."
-          />
+      <div className="grid gap-4 xl:grid-cols-2">
+        {/* Files */}
+        <div className="rounded-xl border border-line bg-card p-4 space-y-3">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wide">Files</p>
 
-          <div className="mt-6 space-y-4">
-            {latestPdf ? (
-              <div className="rounded-[28px] border border-line bg-white/75 p-5">
-                <p className="text-sm font-semibold text-foreground">Latest PDF</p>
-                <p className="mt-1 text-sm text-muted">{latestPdf.storage_path}</p>
-                <a
-                  href={`/api/files/${latestPdf.id}/download`}
-                  className="mt-4 inline-flex h-11 items-center rounded-2xl bg-brand px-4 text-sm font-semibold text-white"
-                >
-                  Download PDF
-                </a>
-              </div>
-            ) : (
-              <p className="text-sm text-muted">
-                No PDF has been generated yet. Go to the generation page to create one.
-              </p>
-            )}
-
-            {bundle.job.flipbook_mode === "disabled" ? (
-              <div className="rounded-[28px] border border-line bg-white/75 p-5">
-                <p className="text-sm font-semibold text-foreground">Flipbook-ready output</p>
-                <p className="mt-2 text-sm text-muted">
-                  Flipbook handling is disabled for this job. The generated PDF is the final output.
-                </p>
-              </div>
-            ) : (
-              <form
-                action={`/api/jobs/${jobId}/flipbook`}
-                method="post"
-                className="rounded-[28px] border border-line bg-white/75 p-5"
-              >
-                <p className="text-sm font-semibold text-foreground">Flipbook-ready output</p>
-                <p className="mt-2 text-sm text-muted">
-                  The default workflow remains manual Heyzine upload. If `HEYZINE_CLIENT_ID` is configured and the job is in `client_id` mode, the app will call Heyzine&apos;s conversion endpoint.
-                </p>
-                <Button className="mt-4">Process flipbook step</Button>
-              </form>
-            )}
-          </div>
-        </Card>
-
-        <Card className="rounded-[34px] p-6">
-          <SectionHeading
-            title="Next actions"
-            description="Reuse the current work as a template for the next campaign or open the stored flipbook URL when it exists."
-          />
-
-          <div className="mt-6 space-y-4">
-            {bundle.flipbook?.flipbook_url ? (
+          {latestPdf ? (
+            <div className="rounded-lg border border-line p-4">
+              <p className="text-sm font-medium text-foreground">Latest PDF</p>
+              <p className="mt-0.5 text-xs text-muted truncate">{latestPdf.storage_path}</p>
               <a
-                href={bundle.flipbook.flipbook_url}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-[28px] border border-line bg-white/75 p-5 text-sm text-brand"
+                href={`/api/files/${latestPdf.id}/download`}
+                className="mt-3 inline-flex h-9 items-center rounded-lg bg-brand px-4 text-sm font-medium text-white"
               >
-                Open flipbook
+                Download PDF
               </a>
-            ) : (
-              <div className="rounded-[28px] border border-dashed border-line bg-white/60 p-5 text-sm text-muted">
-                No flipbook URL stored yet. This is expected when the workflow stays PDF-first or manual.
-              </div>
-            )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">No PDF generated yet.</p>
+          )}
 
-            <form action={duplicateJobAction}>
-              <input type="hidden" name="jobId" value={jobId} />
-              <Button variant="secondary" className="w-full">
-                Duplicate job
-              </Button>
+          {bundle.job.flipbook_mode !== "disabled" && (
+            <form action={`/api/jobs/${jobId}/flipbook`} method="post" className="rounded-lg border border-line p-4">
+              <p className="text-sm font-medium text-foreground">Flipbook</p>
+              <Button className="mt-3 h-8 px-3 text-sm">Convert to flipbook</Button>
             </form>
-          </div>
-        </Card>
+          )}
+        </div>
+
+        {/* Next actions */}
+        <div className="rounded-xl border border-line bg-card p-4 space-y-3">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wide">Next actions</p>
+
+          {bundle.flipbook?.flipbook_url ? (
+            <a
+              href={bundle.flipbook.flipbook_url}
+              target="_blank"
+              rel="noreferrer"
+              className="block rounded-lg border border-line p-4 text-sm font-medium text-brand hover:bg-brand-soft/20 transition-colors"
+            >
+              Open flipbook ↗
+            </a>
+          ) : (
+            <p className="text-sm text-muted">No flipbook URL yet.</p>
+          )}
+
+          <form action={duplicateJobAction}>
+            <input type="hidden" name="jobId" value={jobId} />
+            <Button variant="secondary" className="w-full">Duplicate job</Button>
+          </form>
+        </div>
       </div>
     </div>
   );

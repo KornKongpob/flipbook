@@ -1,5 +1,3 @@
-import { Card } from "@/components/ui/card";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { requireUser } from "@/lib/auth";
 import { getLibraryData } from "@/lib/catalog/repository";
 
@@ -8,49 +6,55 @@ export default async function LibraryPage() {
   const library = await getLibraryData(user.id);
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
-      <Card className="rounded-[34px] p-6">
-        <SectionHeading
-          eyebrow="Manual mappings"
-          title="Reusable overrides"
-          description="Mappings saved during review are reused whenever the normalized SKU appears again."
-        />
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-lg font-semibold text-foreground">Library</h1>
+        <p className="text-sm text-muted">Saved mappings and cached assets</p>
+      </div>
 
-        <div className="mt-6 space-y-3">
-          {library.mappings.length ? (
-            library.mappings.map((mapping) => (
-              <div key={mapping.id} className="rounded-[24px] border border-line bg-white/70 p-4">
-                <p className="text-sm font-semibold text-foreground">{mapping.sku}</p>
-                <p className="mt-1 text-xs text-muted">
-                  locked image: {mapping.locked_image ? "yes" : "no"} • locked name:{" "}
-                  {mapping.locked_name ? "yes" : "no"}
-                </p>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted">No manual mappings saved yet.</p>
-          )}
+      <div className="grid gap-4 xl:grid-cols-2">
+        {/* Manual mappings */}
+        <div className="rounded-xl border border-line bg-card">
+          <div className="border-b border-line px-4 py-3">
+            <h2 className="text-sm font-semibold text-foreground">Manual mappings</h2>
+            <p className="text-xs text-muted">Reused when normalized SKU matches</p>
+          </div>
+          <div className="divide-y divide-line">
+            {library.mappings.length ? (
+              library.mappings.map((mapping) => (
+                <div key={mapping.id} className="px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">{mapping.sku}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    Image locked: {mapping.locked_image ? "yes" : "no"} · Name locked: {mapping.locked_name ? "yes" : "no"}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 py-6 text-sm text-muted">No mappings saved yet.</p>
+            )}
+          </div>
         </div>
-      </Card>
 
-      <Card className="rounded-[34px] p-6">
-        <SectionHeading
-          eyebrow="Asset cache"
-          title="Recent product assets"
-          description="Makro matches and manual uploads are stored here so later jobs can reuse them."
-        />
-
-        <div className="mt-6 space-y-3">
-          {library.assets.map((asset) => (
-            <div key={asset.id} className="rounded-[24px] border border-line bg-white/70 p-4">
-              <p className="text-sm font-semibold text-foreground">{asset.product_name}</p>
-              <p className="mt-1 text-xs text-muted">
-                {asset.source} • {asset.sku || "No SKU"}
-              </p>
-            </div>
-          ))}
+        {/* Asset cache */}
+        <div className="rounded-xl border border-line bg-card">
+          <div className="border-b border-line px-4 py-3">
+            <h2 className="text-sm font-semibold text-foreground">Asset cache</h2>
+            <p className="text-xs text-muted">Makro matches and manual uploads</p>
+          </div>
+          <div className="divide-y divide-line">
+            {library.assets.length ? (
+              library.assets.map((asset) => (
+                <div key={asset.id} className="px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">{asset.product_name}</p>
+                  <p className="mt-0.5 text-xs text-muted">{asset.source} · {asset.sku || "No SKU"}</p>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 py-6 text-sm text-muted">No assets cached yet.</p>
+            )}
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

@@ -2,8 +2,6 @@ import { saveStyleOptionsAction } from "@/app/(app)/actions";
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
 import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { requireUser } from "@/lib/auth";
 import {
   getCatalogJobBundle,
@@ -32,102 +30,82 @@ export default async function CatalogSettingsPage({
   const sampleImageUrl = await resolveProductAssetPreviewUrl(sampleItem?.selectedAsset ?? null);
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-[34px] p-6">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="rounded-xl border border-line bg-card p-4">
         <WorkflowStepper jobId={jobId} currentStep="preview" jobStatus={bundle.job.status} />
-      </Card>
+        <h1 className="mt-3 text-base font-semibold text-foreground">Style settings</h1>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <Card className="rounded-[34px] p-8">
-        <SectionHeading
-          eyebrow="Style settings"
-          title="Tune the catalog style."
-          description="Toggle commercial details on or off without changing the underlying data."
-        />
+      <div className="grid gap-4 xl:grid-cols-2">
+        {/* Style form */}
+        <div className="rounded-xl border border-line bg-card p-4">
+          <form action={saveStyleOptionsAction} className="space-y-4">
+            <input type="hidden" name="jobId" value={jobId} />
 
-        <form action={saveStyleOptionsAction} className="mt-8 space-y-6">
-          <input type="hidden" name="jobId" value={jobId} />
-
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-foreground">Template variant</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              {[
-                { value: "promo", title: "Promo flyer", description: "Big price treatment and sale-focused callouts." },
-                { value: "clean", title: "Clean grid", description: "More restrained treatment for standard catalogs." },
-              ].map((variant) => (
-                <label
-                  key={variant.value}
-                  className="rounded-[24px] border border-line bg-white/70 p-4 text-sm"
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="variant"
-                      value={variant.value}
-                      defaultChecked={styleOptions.variant === variant.value}
-                    />
+            <div>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Variant</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  { value: "promo", title: "Promo flyer", desc: "Sale-focused callouts" },
+                  { value: "clean", title: "Clean grid", desc: "Standard catalog look" },
+                ].map((v) => (
+                  <label key={v.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-white p-3 text-sm">
+                    <input type="radio" name="variant" value={v.value} defaultChecked={styleOptions.variant === v.value} className="mt-0.5" />
                     <div>
-                      <p className="font-semibold text-foreground">{variant.title}</p>
-                      <p className="mt-1 text-muted">{variant.description}</p>
+                      <p className="font-medium text-foreground">{v.title}</p>
+                      <p className="text-xs text-muted">{v.desc}</p>
                     </div>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            {[
-              ["showNormalPrice", "Show normal price"],
-              ["showPromoPrice", "Show promo price"],
-              ["showDiscountAmount", "Show discount amount"],
-              ["showDiscountPercent", "Show percent off"],
-              ["showSku", "Show SKU"],
-              ["showPackSize", "Show pack size"],
-            ].map(([name, label]) => (
-              <label
-                key={name}
-                className="flex items-center gap-3 rounded-[24px] border border-line bg-white/70 px-4 py-3 text-sm text-muted-strong"
-              >
-                <input
-                  type="checkbox"
-                  name={name}
-                  defaultChecked={Boolean(styleOptions[name as keyof typeof styleOptions])}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+            <div>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Display options</p>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {[
+                  ["showNormalPrice", "Normal price"],
+                  ["showPromoPrice", "Promo price"],
+                  ["showDiscountAmount", "Discount amount"],
+                  ["showDiscountPercent", "Percent off"],
+                  ["showSku", "SKU"],
+                  ["showPackSize", "Pack size"],
+                ].map(([name, label]) => (
+                  <label key={name} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-2 text-sm text-muted-strong">
+                    <input type="checkbox" name={name} defaultChecked={Boolean(styleOptions[name as keyof typeof styleOptions])} className="accent-brand" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
 
-          <Button>Save style settings</Button>
-        </form>
-      </Card>
-
-      <Card className="rounded-[34px] p-8">
-        <SectionHeading
-          title="Live card preview"
-          description="A single-card preview with the current item data and styling options."
-        />
-
-        <div className="mt-8 max-w-sm">
-          {sampleItem ? (
-            <CatalogCardPreview
-              title={sampleItem.display_name_override || sampleItem.product_name}
-              sku={sampleItem.sku}
-              packSize={sampleItem.pack_size}
-              unit={sampleItem.unit}
-              normalPrice={sampleItem.normal_price}
-              promoPrice={sampleItem.promo_price}
-              discountAmount={sampleItem.discount_amount}
-              discountPercent={sampleItem.discount_percent}
-              imageUrl={sampleImageUrl}
-              options={styleOptions}
-            />
-          ) : (
-            <p className="text-sm text-muted">No items are available for preview yet.</p>
-          )}
+            <Button>Save settings</Button>
+          </form>
         </div>
-      </Card>
+
+        {/* Card preview */}
+        <div className="rounded-xl border border-line bg-card p-4">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-4">Card preview</p>
+          <div className="max-w-xs">
+            {sampleItem ? (
+              <CatalogCardPreview
+                title={sampleItem.display_name_override || sampleItem.product_name}
+                sku={sampleItem.sku}
+                packSize={sampleItem.pack_size}
+                unit={sampleItem.unit}
+                normalPrice={sampleItem.normal_price}
+                promoPrice={sampleItem.promo_price}
+                discountAmount={sampleItem.discount_amount}
+                discountPercent={sampleItem.discount_percent}
+                imageUrl={sampleImageUrl}
+                options={styleOptions}
+              />
+            ) : (
+              <p className="text-sm text-muted">No items available.</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
