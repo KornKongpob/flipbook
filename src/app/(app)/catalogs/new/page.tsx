@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 
 export default async function NewCatalogPage({
   searchParams,
@@ -22,6 +22,54 @@ export default async function NewCatalogPage({
           title="Start from an Excel sheet."
           description="Upload an `.xlsx` file, choose a seeded template, decide how flipbooks should behave, and let the pipeline build a reviewable job."
         />
+
+        <div className="mt-8 rounded-[28px] border border-line bg-white/75 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h3 className="font-display text-xl font-semibold text-foreground">
+                Download the import template
+              </h3>
+              <p className="max-w-3xl text-sm leading-6 text-muted">
+                Use the official workbook template so the uploaded file always contains the correct
+                column names and required fields.
+              </p>
+            </div>
+            <a href="/api/templates/catalog-import" className={buttonClassName("secondary")}>
+              Download Excel template
+            </a>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="rounded-[24px] border border-line bg-white/70 p-4 text-sm">
+              <p className="font-semibold text-foreground">Required columns</p>
+              <ul className="mt-2 space-y-2 text-muted-strong">
+                <li>
+                  <span className="font-medium text-foreground">Item number</span>: main Makro Pro
+                  lookup key
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Normal price</span>: shown as the
+                  regular price
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Promo price</span>: shown as the
+                  promotional price
+                </li>
+              </ul>
+            </div>
+
+            <div className="rounded-[24px] border border-line bg-white/70 p-4 text-sm">
+              <p className="font-semibold text-foreground">Optional column</p>
+              <ul className="mt-2 space-y-2 text-muted-strong">
+                <li>
+                  <span className="font-medium text-foreground">Item name</span>: fallback name
+                  when item number matching is not enough
+                </li>
+                <li>Keep one product per row and do not rename the header row before uploading.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
 
         <form
           action="/api/jobs/import"

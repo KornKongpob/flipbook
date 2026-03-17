@@ -1,41 +1,62 @@
 import * as XLSX from "xlsx";
 import { normalizeName, normalizeSku } from "@/lib/utils";
 
-const COLUMN_ALIASES = {
+type ColumnKey =
+  | "sku"
+  | "productName"
+  | "normalPrice"
+  | "promoPrice"
+  | "packSize"
+  | "unit";
+
+export const CATALOG_IMPORT_TEMPLATE_COLUMNS = [
+  {
+    key: "sku" as const,
+    header: "Item number",
+    required: true,
+    description:
+      "Primary Makro Pro lookup key used to find the matching product page and image.",
+  },
+  {
+    key: "productName" as const,
+    header: "Item name",
+    required: false,
+    description:
+      "Optional fallback name used when item number matching is not confident enough.",
+  },
+  {
+    key: "normalPrice" as const,
+    header: "Normal price",
+    required: true,
+    description: "Shown as the regular price on the catalog artwork.",
+  },
+  {
+    key: "promoPrice" as const,
+    header: "Promo price",
+    required: true,
+    description: "Shown as the promotional price on the catalog artwork.",
+  },
+] as const;
+
+const COLUMN_ALIASES: Record<ColumnKey, string[]> = {
   sku: [
+    "item number",
+    "item no",
+    "item no.",
+    "item code",
     "sku",
     "product code",
     "product_code",
     "code",
-    "item code",
-    "รหัสสินค้า",
   ],
-  productName: [
-    "product name",
-    "name",
-    "description",
-    "product",
-    "ชื่อสินค้า",
-  ],
-  normalPrice: [
-    "normal price",
-    "regular price",
-    "price",
-    "original price",
-    "ราคาปกติ",
-  ],
-  promoPrice: [
-    "promo price",
-    "promotion price",
-    "promotional price",
-    "sale price",
-    "ราคาพิเศษ",
-  ],
-  packSize: ["pack size", "size", "packing", "pack", "ขนาดบรรจุ"],
-  unit: ["unit", "uom", "หน่วย"],
-} as const;
+  productName: ["item name", "product name", "name", "description", "product"],
+  normalPrice: ["normal price", "regular price", "price", "original price"],
+  promoPrice: ["promo price", "promotion price", "promotional price", "sale price"],
+  packSize: ["pack size", "size", "packing", "pack"],
+  unit: ["unit", "uom"],
+};
 
-type ColumnKey = keyof typeof COLUMN_ALIASES;
+const REQUIRED_COLUMN_KEYS: ColumnKey[] = ["sku", "normalPrice", "promoPrice"];
 
 export interface ColumnMappingResult {
   mapping: Partial<Record<ColumnKey, string>>;
@@ -109,15 +130,9 @@ function detectColumnMapping(headers: string[]): ColumnMappingResult {
   const warnings: string[] = [];
 
   if (!mapping.productName) {
-    warnings.push("Product name column was not detected automatically.");
-  }
-
-  if (!mapping.sku) {
-    warnings.push("SKU/Product code column is missing. Matching will rely on product names.");
-  }
-
-  if (!mapping.normalPrice && !mapping.promoPrice) {
-    warnings.push("No price columns were detected.");
+    warnings.push(
+      "Item name column was not found. Item number will be reused as the display name.",
+    );
   }
 
   return { mapping, warnings };
@@ -130,6 +145,128 @@ function getCellValue(
 ) {
   const header = mapping[key];
   return header ? row[header] : null;
+}
+
+function getRequiredColumnLabel(key: ColumnKey) {
+  return CATALOG_IMPORT_TEMPLATE_COLUMNS.find((column) => column.key === key)?.header ?? key;
+}
+
+function validateRequiredColumns(mapping: Partial<Record<ColumnKey, string>>) {
+  const missingColumns = REQUIRED_COLUMN_KEYS.filter((key) => !mapping[key]);
+
+  if (missingColumns.length) {
+    throw new Error(
+      `Missing required columns: ${missingColumns.map(getRequiredColumnLabel).join(", ")}.`,
+    );
+  }
+}
+
+function hasImportData(
+  row: Record<string, unknown>,
+  mapping: Partial<Record<ColumnKey, string>>,
+) {
+  return (Object.keys(mapping) as ColumnKey[]).some((key) => {
+    const value = getCellValue(row, mapping, key);
+
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    return String(value).trim() !== "";
+  });
+}
+
+function formatRowValidationErrors(errors: string[]) {
+  const preview = errors.slice(0, 5);
+  const suffix =
+    errors.length > preview.length
+      ? ` ${errors.length - preview.length} more row issue(s) were found.`
+      : "";
+
+  return `${preview.join(" ")}${suffix}`;
+}
+
+function isNormalizedCatalogRow(
+  row: NormalizedCatalogRow | null,
+): row is NormalizedCatalogRow {
+  return Boolean(row);
+}
+
+function addHeaderComment(
+  sheet: XLSX.WorkSheet,
+  columnIndex: number,
+  header: string,
+  comment: string,
+) {
+  const cellRef = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
+  const existingCell = sheet[cellRef] ?? { t: "s", v: header };
+
+  existingCell.c = [{ a: "Promo Catalog Studio", t: comment }];
+  sheet[cellRef] = existingCell;
+}
+
+export function buildCatalogImportTemplateBuffer() {
+  const workbook = XLSX.utils.book_new();
+  workbook.Props = {
+    Title: "Catalog Import Template",
+    Subject: "Catalog import workbook",
+    Author: "Promo Catalog Studio",
+    Company: "Promo Catalog Studio",
+  };
+
+  const dataSheet = XLSX.utils.aoa_to_sheet([
+    CATALOG_IMPORT_TEMPLATE_COLUMNS.map((column) => column.header),
+  ]);
+
+  dataSheet["!cols"] = [
+    { wch: 22 },
+    { wch: 34 },
+    { wch: 16 },
+    { wch: 16 },
+  ];
+
+  CATALOG_IMPORT_TEMPLATE_COLUMNS.forEach((column, index) => {
+    addHeaderComment(
+      dataSheet,
+      index,
+      column.header,
+      `${column.required ? "Required" : "Optional"}. ${column.description}`,
+    );
+  });
+
+  const instructionsSheet = XLSX.utils.aoa_to_sheet([
+    ["Field", "Requirement", "Usage"],
+    ...CATALOG_IMPORT_TEMPLATE_COLUMNS.map((column) => [
+      column.header,
+      column.required ? "Required" : "Optional",
+      column.description,
+    ]),
+    [],
+    ["Notes", "", ""],
+    ["One row per product", "", "Enter one product per row in the Catalog Import sheet."],
+    [
+      "Keep headers unchanged",
+      "",
+      "Do not rename the header row before uploading the workbook back into the app.",
+    ],
+    [
+      "Makro matching",
+      "",
+      "Item number is the primary lookup key used for Makro Pro search and image matching.",
+    ],
+  ]);
+
+  instructionsSheet["!cols"] = [{ wch: 24 }, { wch: 14 }, { wch: 90 }];
+
+  XLSX.utils.book_append_sheet(workbook, dataSheet, "Catalog Import");
+  XLSX.utils.book_append_sheet(workbook, instructionsSheet, "Instructions");
+
+  const output = XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+  });
+
+  return Buffer.isBuffer(output) ? output : Buffer.from(output);
 }
 
 export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
@@ -148,19 +285,26 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
   });
 
   if (table.length < 2) {
-    throw new Error("The uploaded workbook does not contain enough rows.");
+    throw new Error("The uploaded workbook only contains headers. Add at least one product row.");
   }
 
   const headers = (table[0] ?? []).map((value) => String(value ?? "").trim());
   const { mapping, warnings } = detectColumnMapping(headers);
+  validateRequiredColumns(mapping);
 
   const objectRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: null,
     raw: false,
   });
 
+  const validationErrors: string[] = [];
   const rows = objectRows
     .map((row, index) => {
+      if (!hasImportData(row, mapping)) {
+        return null;
+      }
+
+      const rowNo = index + 2;
       const productName = String(getCellValue(row, mapping, "productName") ?? "").trim();
       const sku = String(getCellValue(row, mapping, "sku") ?? "").trim();
       const packSize = String(getCellValue(row, mapping, "packSize") ?? "").trim();
@@ -168,7 +312,23 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
       const normalPrice = parsePrice(getCellValue(row, mapping, "normalPrice"));
       const promoPrice = parsePrice(getCellValue(row, mapping, "promoPrice"));
 
-      if (!productName && !sku) {
+      if (!sku) {
+        validationErrors.push(`Row ${rowNo}: "${getRequiredColumnLabel("sku")}" is required.`);
+      }
+
+      if (normalPrice === null) {
+        validationErrors.push(
+          `Row ${rowNo}: "${getRequiredColumnLabel("normalPrice")}" must be a valid number.`,
+        );
+      }
+
+      if (promoPrice === null) {
+        validationErrors.push(
+          `Row ${rowNo}: "${getRequiredColumnLabel("promoPrice")}" must be a valid number.`,
+        );
+      }
+
+      if (!sku || normalPrice === null || promoPrice === null) {
         return null;
       }
 
@@ -182,8 +342,8 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
         ? Number((((normalPrice - promoPrice) / normalPrice) * 100).toFixed(2))
         : null;
 
-      return {
-        rowNo: index + 2,
+      const normalizedRow: NormalizedCatalogRow = {
+        rowNo,
         sku: sku || null,
         productName: productName || sku,
         packSize: packSize || null,
@@ -195,9 +355,15 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
         normalizedSku: sku ? normalizeSku(sku) : null,
         normalizedName: normalizeName(productName || sku),
         displayOrder: index,
-      } satisfies NormalizedCatalogRow;
+      };
+
+      return normalizedRow;
     })
-    .filter((row): row is NormalizedCatalogRow => Boolean(row));
+    .filter(isNormalizedCatalogRow);
+
+  if (validationErrors.length) {
+    throw new Error(formatRowValidationErrors(validationErrors));
+  }
 
   if (!rows.length) {
     throw new Error("No importable product rows were found in the workbook.");
