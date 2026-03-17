@@ -13,10 +13,26 @@ export default async function CatalogMappingPage({
   const { jobId } = await params;
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
-  const mappingMeta = bundle.job.column_mapping_json as Record<string, unknown>;
-  const mapping = (mappingMeta.mapping ?? {}) as Record<string, string>;
-  const warnings = (mappingMeta.warnings ?? []) as string[];
-  const previewRows = (mappingMeta.previewRows ?? []) as Array<Record<string, string | number | null>>;
+  const mappingMeta =
+    bundle.job.column_mapping_json &&
+    typeof bundle.job.column_mapping_json === "object" &&
+    !Array.isArray(bundle.job.column_mapping_json)
+      ? (bundle.job.column_mapping_json as Record<string, unknown>)
+      : {};
+  const rawMapping = mappingMeta.mapping;
+  const mapping =
+    rawMapping && typeof rawMapping === "object" && !Array.isArray(rawMapping)
+      ? (rawMapping as Record<string, unknown>)
+      : {};
+  const rawWarnings = mappingMeta.warnings;
+  const warnings = Array.isArray(rawWarnings) ? rawWarnings.map((warning) => String(warning)) : [];
+  const rawPreviewRows = mappingMeta.previewRows;
+  const previewRows = Array.isArray(rawPreviewRows)
+    ? rawPreviewRows.filter(
+        (row): row is Record<string, string | number | null> =>
+          Boolean(row) && typeof row === "object" && !Array.isArray(row),
+      )
+    : [];
 
   return (
     <div className="space-y-6">
@@ -44,7 +60,7 @@ export default async function CatalogMappingPage({
               {Object.entries(mapping).map(([key, value]) => (
                 <div key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3">
                   <span className="font-medium capitalize text-foreground">{key}</span>
-                  <span className="text-muted">{value}</span>
+                  <span className="text-muted">{String(value ?? "")}</span>
                 </div>
               ))}
             </div>
