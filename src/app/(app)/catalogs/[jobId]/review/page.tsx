@@ -40,9 +40,9 @@ export default async function CatalogReviewPage({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="rounded-xl border border-line bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <WorkflowStepper jobId={jobId} currentStep="review" jobStatus={bundle.job.status} />
           <a href={`/catalogs/${jobId}/preview`} className={`shrink-0 ${buttonClassName("secondary")}`}>
@@ -60,7 +60,7 @@ export default async function CatalogReviewPage({
 
       {enrichedItems.length ? (
         enrichedItems.map((item) => (
-          <div key={item.id} className="rounded-xl border border-line bg-card overflow-hidden">
+          <div key={item.id} className="rounded-xl border border-line bg-card overflow-hidden shadow-sm">
             {/* Item header */}
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line p-4">
               <div>
@@ -151,7 +151,7 @@ export default async function CatalogReviewPage({
           </div>
         ))
       ) : (
-        <div className="rounded-xl border border-line bg-card px-6 py-12 text-center">
+        <div className="rounded-xl border border-line bg-card px-6 py-12 text-center shadow-sm">
           <p className="text-sm font-semibold text-foreground">All items reviewed!</p>
           <p className="mt-1 text-sm text-muted">Ready for preview and PDF generation.</p>
           <a href={`/catalogs/${jobId}/preview`} className={`${buttonClassName("primary")} mt-4 inline-flex`}>

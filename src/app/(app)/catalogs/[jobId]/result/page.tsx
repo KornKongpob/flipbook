@@ -21,9 +21,9 @@ export default async function CatalogResultPage({
     : bundle.job.error_message;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="rounded-xl border border-line bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
         <WorkflowStepper jobId={jobId} currentStep="result" jobStatus={bundle.job.status} />
         <h1 className="mt-3 text-base font-semibold text-foreground">Result</h1>
         {errorMessage && (

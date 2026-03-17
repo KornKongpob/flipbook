@@ -2,10 +2,11 @@ import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const toneClasses = {
-  neutral: "bg-white text-muted-strong border border-line",
-  success: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  warning: "bg-amber-50 text-amber-700 border border-amber-200",
-  danger: "bg-rose-50 text-rose-700 border border-rose-200",
+  neutral: "bg-gray-100 text-gray-600",
+  success: "bg-emerald-50 text-emerald-700",
+  warning: "bg-amber-50 text-amber-700",
+  danger: "bg-rose-50 text-rose-700",
+  brand: "bg-brand-soft text-brand",
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

@@ -36,9 +36,9 @@ export default async function CatalogMappingPage({
     : [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="rounded-xl border border-line bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <WorkflowStepper jobId={jobId} currentStep="mapping" jobStatus={bundle.job.status} />
           <div className="flex shrink-0 gap-2">
@@ -48,9 +48,9 @@ export default async function CatalogMappingPage({
         <h1 className="mt-3 text-base font-semibold text-foreground">{bundle.job.job_name}</h1>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* Columns */}
-        <div className="rounded-xl border border-line bg-card p-4">
+        <div className="rounded-xl border border-line bg-card p-5 shadow-sm">
           <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Detected columns</p>
           <div className="space-y-1.5 text-sm">
             {Object.entries(mapping).map(([key, value]) => (
@@ -69,7 +69,7 @@ export default async function CatalogMappingPage({
         </div>
 
         {/* Preview rows */}
-        <div className="rounded-xl border border-line bg-card p-4">
+        <div className="rounded-xl border border-line bg-card p-5 shadow-sm">
           <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Preview rows</p>
           <div className="overflow-auto rounded-lg border border-line">
             <table className="min-w-full divide-y divide-line text-left text-xs">

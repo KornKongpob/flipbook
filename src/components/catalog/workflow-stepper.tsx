@@ -52,38 +52,43 @@ export function WorkflowStepper({ jobId, currentStep, jobStatus }: WorkflowStepp
           <Link
             href={`/catalogs/${jobId}/${step.href}`}
             className={cn(
-              "flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-medium transition-colors",
+              "flex items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-150",
               isCurrent
-                ? "text-brand"
+                ? "bg-brand-soft text-brand"
                 : isCompleted
-                  ? "text-success hover:text-success/80"
-                  : "text-muted-strong hover:text-foreground",
+                  ? "text-success hover:bg-emerald-50"
+                  : "text-muted-strong hover:bg-gray-50 hover:text-foreground",
             )}
           >
             <span className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold border transition-colors",
+              "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-all",
               isCurrent
-                ? "border-brand bg-brand text-white"
+                ? "bg-brand text-white shadow-sm"
                 : isCompleted
-                  ? "border-success bg-success text-white"
-                  : "border-line bg-white text-muted",
+                  ? "bg-success text-white"
+                  : "bg-gray-100 text-muted",
             )}>
               {isCompleted && !isCurrent ? <Check className="size-2.5" /> : index + 1}
             </span>
-            {step.label}
+            <span className="hidden sm:inline">{step.label}</span>
           </Link>
         ) : (
-          <span className="flex cursor-not-allowed items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-medium text-muted opacity-40">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-line bg-white text-[10px] font-bold text-muted">
+          <span className="flex cursor-not-allowed items-center gap-2 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium text-muted/40">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-muted/40">
               {index + 1}
             </span>
-            {step.label}
+            <span className="hidden sm:inline">{step.label}</span>
           </span>
         );
 
         return (
           <div key={step.key} className="flex items-center">
-            {index > 0 && <div className="h-px w-4 shrink-0 bg-line" />}
+            {index > 0 && (
+              <div className={cn(
+                "mx-0.5 h-px w-4 shrink-0 transition-colors",
+                isCompleted ? "bg-success/40" : "bg-line",
+              )} />
+            )}
             {inner}
           </div>
         );

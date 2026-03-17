@@ -20,8 +20,8 @@ export default async function CatalogGeneratePage({
     : bundle.job.error_message;
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-line bg-card p-4">
+    <div className="space-y-5 animate-fade-in">
+      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <WorkflowStepper jobId={jobId} currentStep="generate" jobStatus={bundle.job.status} />
           <div className="flex shrink-0 gap-2">

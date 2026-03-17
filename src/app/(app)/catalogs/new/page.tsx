@@ -1,9 +1,12 @@
-import { FileSpreadsheet, Download } from "lucide-react";
+import { Download, ChevronRight } from "lucide-react";
 import { FLIPBOOK_MODE_OPTIONS } from "@/lib/catalog/constants";
 import { getActiveTemplates } from "@/lib/catalog/repository";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button, buttonClassName } from "@/components/ui/button";
+import { FileDropzone } from "@/components/ui/file-dropzone";
+
+const steps = ["Upload Excel", "Auto-match", "Review", "Generate PDF"];
 
 export default async function NewCatalogPage({
   searchParams,
@@ -14,38 +17,60 @@ export default async function NewCatalogPage({
   const params = await searchParams;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-foreground">New Catalog</h1>
+        <div>
+          <h1 className="text-xl font-bold text-foreground">New Catalog</h1>
+          <p className="mt-0.5 text-sm text-muted">Upload a product spreadsheet to start a new catalog job.</p>
+        </div>
         <a href="/api/templates/catalog-import" className={`${buttonClassName("secondary")} gap-1.5`}>
           <Download className="size-3.5" />
-          Template .xlsx
+          Download template
         </a>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
+      {/* Step pipeline */}
+      <div className="flex items-center gap-1 rounded-xl border border-line bg-card p-3 shadow-sm">
+        {steps.map((step, i) => (
+          <div key={step} className="flex items-center gap-1">
+            {i > 0 && <ChevronRight className="size-3.5 text-muted shrink-0" />}
+            <span className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${i === 0 ? "bg-brand text-white" : "text-muted"}`}>
+              <span className={`flex size-5 items-center justify-center rounded-full text-[10px] font-bold ${i === 0 ? "bg-white/20 text-white" : "bg-gray-100 text-muted"}`}>{i + 1}</span>
+              {step}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
         {/* Column guide */}
-        <div className="rounded-xl border border-line bg-card p-4">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Required columns</p>
-          <ul className="space-y-2 text-sm">
+        <div className="rounded-xl border border-line bg-card p-5 shadow-sm">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-4">Required columns</p>
+          <ul className="space-y-3 text-sm">
             {[["Item number", "SKU / Makro lookup key"], ["Normal price", "Regular retail price"], ["Promo price", "Promotional price"]].map(([name, desc]) => (
-              <li key={name}>
-                <span className="font-medium text-foreground">{name}</span>
-                <span className="block text-xs text-muted">{desc}</span>
+              <li key={name} className="flex items-start gap-2.5">
+                <span className="mt-1.5 status-dot status-dot-brand" />
+                <div>
+                  <span className="font-medium text-foreground">{name}</span>
+                  <span className="block text-xs text-muted mt-0.5">{desc}</span>
+                </div>
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-xs font-semibold text-muted uppercase tracking-wide mb-2">Optional</p>
-          <p className="text-sm text-muted-strong">Item name — fallback for ambiguous SKU</p>
+          <div className="mt-5 rounded-lg bg-gray-50 p-3">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Optional</p>
+            <p className="text-sm text-muted-strong">Item name — fallback for ambiguous SKU</p>
+          </div>
         </div>
 
         {/* Import form */}
-        <div className="rounded-xl border border-line bg-card p-5">
+        <div className="rounded-xl border border-line bg-card p-6 shadow-sm">
           <form
             action="/api/jobs/import"
             method="post"
             encType="multipart/form-data"
-            className="space-y-4"
+            className="space-y-5"
           >
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground" htmlFor="jobName">
@@ -54,7 +79,7 @@ export default async function NewCatalogPage({
               <Input id="jobName" name="jobName" placeholder="e.g. April 2026 Beverage Promotions" required />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground" htmlFor="templateId">Template</label>
                 <Select id="templateId" name="templateId" required defaultValue={templates[0]?.id}>
@@ -76,36 +101,24 @@ export default async function NewCatalogPage({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground" htmlFor="workbook">
+              <label className="text-sm font-medium text-foreground">
                 Excel file <span className="text-brand">*</span>
               </label>
-              <label
-                htmlFor="workbook"
-                className="flex cursor-pointer items-center gap-4 rounded-xl border-2 border-dashed border-line px-5 py-5 transition hover:border-brand/40 hover:bg-brand-soft/20"
-              >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
-                  <FileSpreadsheet className="size-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Click to choose .xlsx file</p>
-                  <p className="text-xs text-muted">Excel workbook with product data</p>
-                </div>
-                <input id="workbook" name="workbook" type="file" accept=".xlsx" required className="sr-only" />
-              </label>
+              <FileDropzone name="workbook" accept=".xlsx" required id="workbook" />
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-strong">
-              <input type="checkbox" name="reuseManualMappings" defaultChecked className="size-4 accent-brand" />
-              Reuse saved manual mappings
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-gray-50/50 px-4 py-3 text-sm text-muted-strong transition hover:bg-gray-50">
+              <input type="checkbox" name="reuseManualMappings" defaultChecked className="size-4 rounded accent-brand" />
+              Reuse saved manual mappings when SKU matches
             </label>
 
-            {params.error ? (
-              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+            {params.error && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {decodeURIComponent(params.error)}
-              </p>
-            ) : null}
+              </div>
+            )}
 
-            <Button className="w-full">Create catalog job</Button>
+            <Button className="w-full h-10 text-base">Create catalog job</Button>
           </form>
         </div>
       </div>

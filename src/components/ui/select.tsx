@@ -9,7 +9,7 @@ export function Select({
     <div className="relative w-full">
       <select
         className={cn(
-          "h-11 w-full appearance-none rounded-2xl border border-line bg-white/80 px-4 pr-10 text-sm text-foreground outline-none ring-0 transition focus:border-brand/40 focus:bg-white",
+          "h-9 w-full appearance-none rounded-lg border border-line bg-white px-3 pr-9 text-sm text-foreground outline-none transition-all focus:border-brand focus:ring-2 focus:ring-brand/20",
           className,
         )}
         {...props}

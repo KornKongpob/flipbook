@@ -41,9 +41,9 @@ export default async function CatalogPreviewPage({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="rounded-xl border border-line bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <WorkflowStepper jobId={jobId} currentStep="preview" jobStatus={bundle.job.status} />
           <div className="flex shrink-0 gap-2">
@@ -54,7 +54,7 @@ export default async function CatalogPreviewPage({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
-        <div className="rounded-xl border border-line bg-card p-4">
+        <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
           <p className="mb-3 text-xs font-semibold text-muted uppercase tracking-wide">Products</p>
 
           <div className="space-y-1.5">
@@ -150,7 +150,7 @@ export default async function CatalogPreviewPage({
           </div>
         </div>
 
-        <div className="rounded-xl border border-line bg-card p-4">
+        <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
           <p className="mb-3 text-xs font-semibold text-muted uppercase tracking-wide">A4 preview</p>
           <PagePreviewGrid items={previewItems} options={styleOptions} />
         </div>
