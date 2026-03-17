@@ -4,6 +4,7 @@ import { getCatalogJobBundle } from "@/lib/catalog/repository";
 import { buttonClassName } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 
 export default async function CatalogMappingPage({
   params,
@@ -39,15 +40,16 @@ export default async function CatalogMappingPage({
   return (
     <div className="space-y-6">
       <Card className="rounded-[34px] p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <WorkflowStepper jobId={jobId} currentStep="mapping" jobStatus={bundle.job.status} />
+        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
-            eyebrow="Column mapping"
+            eyebrow="Step 1 — Column mapping"
             title={bundle.job.job_name}
             description="Detected columns and a preview of the normalized import rows before manual matching begins."
           />
           <div className="flex flex-wrap gap-3">
             <Link href={`/catalogs/${jobId}/review`} className={buttonClassName("primary")}>
-              Go to review
+              Continue to review
             </Link>
             <Link
               href={`/catalogs/${jobId}/preview`}

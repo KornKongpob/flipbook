@@ -1,15 +1,38 @@
 import { redirect } from "next/navigation";
+import { BookOpen } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getSetupDiagnostics } from "@/lib/env";
 import { signInAction, signInAnonymouslyAction } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SectionHeading } from "@/components/ui/section-heading";
 
 const errorMap: Record<string, string> = {
-  missing_env: "Supabase environment variables are missing.",
+  missing_env: "Supabase environment variables are not configured.",
 };
+
+const steps = [
+  {
+    step: "01",
+    title: "Excel import",
+    description: "Upload your promo spreadsheet — prices and SKUs are validated automatically.",
+  },
+  {
+    step: "02",
+    title: "Image matching",
+    description: "SKUs are matched to Makro assets automatically. Uncertain items go to manual review.",
+  },
+  {
+    step: "03",
+    title: "Page preview",
+    description: "Arrange products, adjust names, and preview the 3×3 A4 grid before export.",
+  },
+  {
+    step: "04",
+    title: "PDF & flipbook",
+    description: "Generate a print-ready PDF and optionally push to Heyzine for a digital flipbook.",
+  },
+];
 
 export default async function LoginPage({
   searchParams,
@@ -31,81 +54,93 @@ export default async function LoginPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 lg:px-8">
-      <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="noise-grid overflow-hidden rounded-[36px] p-8 lg:p-10">
-          <SectionHeading
-            eyebrow="Internal catalog workflow"
-            title="Upload promotions, review images, publish clean PDFs."
-            description="Promo Catalog Studio is built for internal sales teams that need reliable Makro-style catalog generation with manual review where it matters."
-          />
+      <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_0.85fr]">
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {[
-              {
-                title: "Excel import",
-                description:
-                  "Validate columns, normalize prices, and lock the source workbook into storage.",
-              },
-              {
-                title: "Asset review",
-                description:
-                  "Auto-match by SKU first, then name similarity, with a manual rescue path for uncertain products.",
-              },
-              {
-                title: "A4 PDF output",
-                description:
-                  "Generate deterministic 3x3 printable pages and keep a flipbook-ready PDF workflow.",
-              },
-            ].map((item) => (
+        {/* Left panel — marketing / feature overview */}
+        <Card className="noise-grid overflow-hidden rounded-[36px] p-8 lg:p-10">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-brand shadow-[0_6px_18px_rgba(235,69,41,0.3)]">
+              <BookOpen className="size-5 text-white" />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand">Promo Studio</p>
+              <p className="font-display text-sm font-bold text-foreground">Catalog Workflow</p>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <h1 className="font-display text-3xl font-semibold leading-snug tracking-tight text-foreground lg:text-4xl">
+              Upload promotions,<br />review images,<br />
+              <span className="text-brand">publish clean PDFs.</span>
+            </h1>
+            <p className="mt-4 max-w-md text-sm leading-6 text-muted">
+              Promo Catalog Studio is built for internal sales teams that need reliable Makro-style catalog generation with a fast manual review path.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {steps.map((item) => (
               <div
-                key={item.title}
-                className="rounded-[28px] border border-line bg-white/75 p-5"
+                key={item.step}
+                className="rounded-[24px] border border-line bg-white/75 p-4"
               >
-                <h3 className="font-display text-xl font-semibold text-foreground">
-                  {item.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-muted">{item.description}</p>
+                <p className="font-display text-xs font-bold tracking-[0.18em] text-brand opacity-60">
+                  {item.step}
+                </p>
+                <p className="mt-1.5 text-sm font-semibold text-foreground">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted">{item.description}</p>
               </div>
             ))}
           </div>
         </Card>
 
+        {/* Right panel — sign in form */}
         <Card className="rounded-[36px] p-8 lg:p-10">
-          <SectionHeading
-            eyebrow="Secure access"
-            title="Sign in"
-            description="Use your Supabase-authenticated internal account to access catalog jobs and stored files."
-          />
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Internal access</p>
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">Sign in</h2>
+            <p className="text-sm text-muted">Use your team account to access catalog jobs.</p>
+          </div>
 
           <form action={signInAction} className="mt-8 space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="email">
+              <label className="text-sm font-semibold text-foreground" htmlFor="email">
                 Email
               </label>
               <Input id="email" name="email" type="email" required placeholder="team@company.com" />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="password">
+              <label className="text-sm font-semibold text-foreground" htmlFor="password">
                 Password
               </label>
-              <Input id="password" name="password" type="password" required />
+              <Input id="password" name="password" type="password" required placeholder="••••••••" />
             </div>
 
             {errorMessage ? (
-              <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {errorMessage}
-              </p>
+              <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <p className="font-semibold">Sign-in failed</p>
+                <p className="mt-0.5">{errorMessage}</p>
+              </div>
             ) : null}
 
             {!diagnostics.supabaseClient ? (
-              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Supabase is not configured yet. Fill in [`.env.example`](/Users/Teera/OneDrive/Documents/New%20project/.env.example) values before signing in.
-              </p>
+              <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <p className="font-semibold">Setup required</p>
+                <p className="mt-0.5">Fill in the <code className="rounded bg-amber-100 px-1">.env.local</code> environment variables before signing in.</p>
+              </div>
             ) : null}
 
-            <Button className="w-full">Sign in</Button>
+            <Button className="w-full" disabled={!diagnostics.supabaseClient}>
+              Sign in
+            </Button>
           </form>
+
+          <div className="mt-3 flex items-center gap-3">
+            <div className="h-px flex-1 bg-line" />
+            <span className="text-xs text-muted">or</span>
+            <div className="h-px flex-1 bg-line" />
+          </div>
 
           <form action={signInAnonymouslyAction} className="mt-3">
             <Button variant="secondary" className="w-full">
@@ -113,16 +148,9 @@ export default async function LoginPage({
             </Button>
           </form>
 
-          <div className="mt-8 rounded-[28px] border border-line bg-white/70 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-              Environment diagnostics
-            </p>
-            <div className="mt-3 space-y-2 text-sm text-muted-strong">
-              <p>Supabase client: {diagnostics.supabaseClient ? "configured" : "missing"}</p>
-              <p>Service role: {diagnostics.supabaseServiceRole ? "configured" : "missing"}</p>
-              <p>Heyzine client_id: {diagnostics.heyzineClientId ? "configured" : "optional"}</p>
-            </div>
-          </div>
+          <p className="mt-6 text-center text-xs text-muted">
+            Guest access has limited permissions. Sign in with a team account for full access.
+          </p>
         </Card>
       </div>
     </main>

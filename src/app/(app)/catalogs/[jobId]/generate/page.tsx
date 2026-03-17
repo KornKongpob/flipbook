@@ -1,4 +1,5 @@
 import { GenerationTimeline } from "@/components/catalog/generation-timeline";
+import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -23,9 +24,10 @@ export default async function CatalogGeneratePage({
   return (
     <div className="space-y-6">
       <Card className="rounded-[34px] p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <WorkflowStepper jobId={jobId} currentStep="generate" jobStatus={bundle.job.status} />
+        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
-            eyebrow="Generation"
+            eyebrow="Step 4 — Generation"
             title="Run the output pipeline."
             description="Generate the deterministic PDF first. If the job uses a flipbook mode, the PDF remains the source of truth and Heyzine stays optional."
           />

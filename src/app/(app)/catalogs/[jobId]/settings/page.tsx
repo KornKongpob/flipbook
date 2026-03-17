@@ -1,5 +1,6 @@
 import { saveStyleOptionsAction } from "@/app/(app)/actions";
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
+import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -31,10 +32,15 @@ export default async function CatalogSettingsPage({
   const sampleImageUrl = await resolveProductAssetPreviewUrl(sampleItem?.selectedAsset ?? null);
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+    <div className="space-y-6">
+      <Card className="rounded-[34px] p-6">
+        <WorkflowStepper jobId={jobId} currentStep="preview" jobStatus={bundle.job.status} />
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <Card className="rounded-[34px] p-8">
         <SectionHeading
-          eyebrow="Template settings"
+          eyebrow="Style settings"
           title="Tune the catalog style."
           description="Toggle commercial details on or off without changing the underlying data."
         />
@@ -122,6 +128,7 @@ export default async function CatalogSettingsPage({
           )}
         </div>
       </Card>
+      </div>
     </div>
   );
 }

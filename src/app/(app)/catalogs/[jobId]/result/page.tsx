@@ -1,4 +1,5 @@
 import { duplicateJobAction } from "@/app/(app)/actions";
+import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -24,11 +25,14 @@ export default async function CatalogResultPage({
   return (
     <div className="space-y-6">
       <Card className="rounded-[34px] p-8">
-        <SectionHeading
-          eyebrow="Result"
-          title="Exported files and next actions."
-          description="Download the PDF, duplicate the job, or trigger the optional flipbook conversion path."
-        />
+        <WorkflowStepper jobId={jobId} currentStep="result" jobStatus={bundle.job.status} />
+        <div className="mt-6">
+          <SectionHeading
+            eyebrow="Step 5 — Result"
+            title="Exported files and next actions."
+            description="Download the PDF, duplicate the job, or trigger the optional flipbook conversion path."
+          />
+        </div>
 
         {errorMessage ? (
           <p className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
