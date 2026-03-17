@@ -19,7 +19,10 @@ export async function createHeyzineFlipbook(pdfUrl: string) {
     return null;
   }
 
-  const response = await fetch(`${env.HEYZINE_API_BASE_URL}/rest`, {
+  const baseUrl = (env.HEYZINE_API_BASE_URL ?? "https://heyzine.com/api1").replace(/\/+$/, "");
+  const endpoint = `${baseUrl}/rest`;
+
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -29,12 +32,18 @@ export async function createHeyzineFlipbook(pdfUrl: string) {
       client_id: env.HEYZINE_CLIENT_ID,
       prev_next: true,
       show_info: false,
-      download: true,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Heyzine conversion failed with status ${response.status}.`);
+    let detail = "";
+    try {
+      const body = await response.text();
+      detail = body ? ` — ${body.slice(0, 200)}` : "";
+    } catch {
+      // ignore
+    }
+    throw new Error(`Heyzine conversion failed with status ${response.status}${detail}`);
   }
 
   return (await response.json()) as HeyzineFlipbookResponse;
