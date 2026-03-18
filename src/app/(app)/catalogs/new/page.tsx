@@ -79,28 +79,45 @@ export default async function NewCatalogPage({
               <Input id="jobName" name="jobName" placeholder="e.g. April 2026 Beverage Promotions" required />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground" htmlFor="templateId">Template</label>
-                <Select id="templateId" name="templateId" required defaultValue={templates[0]?.id}>
-                  {templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name} ({template.variant})
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground" htmlFor="flipbookMode">Flipbook mode</label>
-                <Select id="flipbookMode" name="flipbookMode" defaultValue="manual">
-                  {FLIPBOOK_MODE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </Select>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground" htmlFor="templateId">Template</label>
+              <Select id="templateId" name="templateId" required defaultValue={templates[0]?.id}>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} ({template.variant})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-foreground">Flipbook integration</label>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {FLIPBOOK_MODE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className="relative flex cursor-pointer flex-col rounded-xl border border-line bg-card p-4 shadow-sm hover:border-brand/50 hover:bg-brand-soft/10 has-[:checked]:border-brand has-[:checked]:bg-brand-soft/20 transition-all"
+                  >
+                    <input
+                      type="radio"
+                      name="flipbookMode"
+                      value={option.value}
+                      defaultChecked={option.value === "client_id"}
+                      className="peer sr-only"
+                    />
+                    <span className="text-sm font-semibold text-foreground mb-1">{option.label}</span>
+                    <span className="text-xs text-muted leading-relaxed">{option.description}</span>
+                    <div className="absolute right-4 top-4 hidden size-4 items-center justify-center rounded-full bg-brand text-white peer-checked:flex">
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </label>
+                ))}
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-2">
               <label className="text-sm font-medium text-foreground">
                 Excel file <span className="text-brand">*</span>
               </label>

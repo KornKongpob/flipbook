@@ -68,18 +68,18 @@ export const FLIPBOOK_MODE_OPTIONS: Array<{
   description: string;
 }> = [
   {
-    value: "manual",
-    label: "Manual upload",
-    description: "Generate the PDF and upload it to Heyzine manually.",
+    value: "client_id",
+    label: "Auto to Heyzine",
+    description: "Automatically upload and create a digital flipbook on Heyzine using your API key.",
   },
   {
-    value: "client_id",
-    label: "Heyzine client_id",
-    description: "Call Heyzine conversion endpoints only when a client ID is configured.",
+    value: "manual",
+    label: "Manual Upload",
+    description: "Generate the PDF only. You will download and upload it to Heyzine yourself.",
   },
   {
     value: "disabled",
-    label: "No flipbook",
-    description: "Skip flipbook handling and keep a PDF-only workflow.",
+    label: "Skip Flipbook",
+    description: "I only want the PDF. Don't show flipbook buttons in the result page.",
   },
 ];
