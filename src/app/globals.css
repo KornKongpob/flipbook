@@ -3,19 +3,19 @@
 :root {
   --background: #f4f6fb;
   --foreground: #111827;
-  --card: #ffffff;
-  --card-strong: #ffffff;
-  --line: #e5e7eb;
-  --line-strong: #d1d5db;
-  --muted: #9ca3af;
-  --muted-strong: #6b7280;
+  --card: rgba(255, 255, 255, 0.7);
+  --card-strong: rgba(255, 255, 255, 0.9);
+  --line: rgba(229, 231, 235, 0.6);
+  --line-strong: rgba(209, 213, 219, 0.8);
+  --muted: #64748b;
+  --muted-strong: #475569;
   --brand: #6366f1;
   --brand-strong: #4f46e5;
-  --brand-soft: #eef2ff;
+  --brand-soft: rgba(238, 242, 255, 0.7);
   --accent: #f59e0b;
   --success: #10b981;
   --danger: #ef4444;
-  --sidebar: #111827;
+  --sidebar: rgba(255, 255, 255, 0.8);
   --radius: 12px;
 }
 
@@ -45,7 +45,12 @@
 
 .app-body {
   min-height: 100vh;
-  background: var(--background);
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%), 
+    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.08) 0px, transparent 50%), 
+    radial-gradient(at 50% 100%, rgba(56, 189, 248, 0.08) 0px, transparent 50%);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-body), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -62,10 +67,16 @@ button, input, select, textarea { font: inherit; }
 
 /* ─── Utilities ─── */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px) saturate(1.6);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 24px -8px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bg-card {
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 .text-balance { text-wrap: balance; }

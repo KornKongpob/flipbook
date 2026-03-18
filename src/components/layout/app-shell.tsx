@@ -132,7 +132,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
 
       {/* ─── Mobile drawer ─── */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white border-r border-line transition-transform duration-200 ease-out lg:hidden",
+        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white/70 backdrop-blur-xl border-r border-line transition-transform duration-200 ease-out lg:hidden",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="flex h-14 items-center justify-between px-4 border-b border-line/50">
@@ -145,7 +145,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
               <p className="text-[11px] text-muted-strong">Promo workflow v2</p>
             </div>
           </div>
-          <button onClick={() => setMobileOpen(false)} className="p-1 rounded-md text-muted hover:bg-gray-100 hover:text-foreground transition-colors">
+          <button onClick={() => setMobileOpen(false)} className="p-1 rounded-md text-muted hover:bg-white/50 hover:text-foreground transition-colors">
             <X className="size-5" />
           </button>
         </div>
@@ -153,7 +153,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
       </div>
 
       {/* ─── Desktop sidebar ─── */}
-      <aside className="hidden w-64 shrink-0 flex-col bg-white border-r border-line lg:flex">
+      <aside className="hidden w-64 shrink-0 flex-col bg-white/60 backdrop-blur-xl border-r border-line/60 lg:flex">
         <div className="flex h-16 items-center gap-3 px-5 border-b border-line/50">
           <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-md shadow-brand/20">
             <BookOpen className="size-5 text-white" />
@@ -168,7 +168,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
       </aside>
 
       {/* ─── Main ─── */}
-      <main className="flex min-w-0 flex-1 flex-col bg-background pt-14 lg:pt-0">
+      <main className="flex min-w-0 flex-1 flex-col pt-14 lg:pt-0">
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-5 lg:p-8">
           {children}
         </div>
