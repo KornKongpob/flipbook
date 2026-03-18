@@ -9,7 +9,7 @@ const envSchema = z.object({
   MAKRO_BASE_URL: z.string().url().default("https://www.makro.pro"),
   MAKRO_SEARCH_URL_TEMPLATE: z
     .string()
-    .default("https://www.makro.pro/en/search?q={query}"),
+    .default("https://www.makro.pro/th/c/all?q={query}"),
   HEYZINE_API_BASE_URL: z.string().url().default("https://heyzine.com/api1"),
   HEYZINE_CLIENT_ID: z.string().optional(),
   HEYZINE_API_KEY: z.string().optional(),

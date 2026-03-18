@@ -144,7 +144,7 @@ export class MakroSearchProvider {
 
     const queryUrls = [
       env.MAKRO_SEARCH_URL_TEMPLATE.replace("{query}", encodeURIComponent(query)),
-      `${env.MAKRO_BASE_URL}/en/search?keyword=${encodeURIComponent(query)}`,
+      `${env.MAKRO_BASE_URL}/th/c/all?keyword=${encodeURIComponent(query)}`,
     ];
 
     const rawCandidates: ProviderAssetCandidate[] = [];
@@ -193,7 +193,7 @@ export class MakroSearchProvider {
         }
       });
 
-      $("a[href*='/p/']").each((_, element) => {
+      $("a[href*='/p/'], a[href*='/th/p/'], a[href*='/en/p/']").each((_, element) => {
         const anchor = $(element);
         const image = anchor.find("img").first();
         const title = image.attr("alt") ?? anchor.text().trim();
