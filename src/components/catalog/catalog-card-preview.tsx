@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 import { formatCurrency } from "@/lib/utils";
 
 interface CatalogCardPreviewProps {
@@ -34,6 +37,7 @@ export function CatalogCardPreview({
   imageUrl,
   options,
 }: CatalogCardPreviewProps) {
+  const [imgFailed, setImgFailed] = useState(false);
   const promoActive =
     promoPrice !== null &&
     promoPrice !== undefined &&
@@ -48,7 +52,7 @@ export function CatalogCardPreview({
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-[#f0dfd4] bg-white p-2">
       {/* Image: use flex-[2] so it takes proportional space, not a fixed height */}
       <div className="relative flex flex-[2] min-h-0 items-center justify-center rounded-lg bg-[#fff5ef]">
-        {imageUrl ? (
+        {imageUrl && !imgFailed ? (
           <Image
             src={imageUrl}
             alt={title}
@@ -56,6 +60,7 @@ export function CatalogCardPreview({
             className="object-contain p-2"
             sizes="200px"
             unoptimized
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <span className="text-[10px] font-medium text-[#b17c63]">No image</span>

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
 import { MATCH_THRESHOLDS } from "@/lib/catalog/constants";
+import { buildAssetCacheTarget } from "@/lib/catalog/storage";
 import { MakroSearchProvider } from "@/lib/catalog/matching/makro-provider";
 import { scoreMatch } from "@/lib/catalog/matching/scoring";
 import { normalizeName, normalizeSku } from "@/lib/utils";
@@ -80,6 +81,50 @@ async function getCachedAssets(admin: AdminClient, item: CatalogItemRow) {
   });
 }
 
+async function tryCacheImage(
+  admin: AdminClient,
+  imageUrl: string,
+  cacheKey: string,
+): Promise<{ bucket: string; path: string } | null> {
+  const response = await fetch(imageUrl, {
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      accept: "image/webp,image/avif,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8",
+      referer: "https://www.makro.pro/",
+      "accept-language": "th-TH,th;q=0.9,en;q=0.8",
+    },
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  const contentType = response.headers.get("content-type") ?? "image/jpeg";
+  if (!contentType.startsWith("image/")) {
+    return null;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length < 512) {
+    return null;
+  }
+
+  const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  const target = buildAssetCacheTarget(cacheKey, `asset.${ext}`);
+
+  const uploadResponse = await admin.storage
+    .from(target.bucket)
+    .upload(target.path, buffer, { contentType, upsert: false });
+
+  if (uploadResponse.error) {
+    console.warn(`[matching] Image cache upload failed for key=${cacheKey}: ${uploadResponse.error.message}`);
+    return null;
+  }
+
+  return { bucket: target.bucket, path: target.path };
+}
+
 async function getOrCreateAsset(
   admin: AdminClient,
   candidate: Awaited<ReturnType<MakroSearchProvider["search"]>>[number],
@@ -118,6 +163,24 @@ async function getOrCreateAsset(
 
   if (insertResponse.error || !inserted) {
     throw insertResponse.error ?? new Error("Could not create product asset.");
+  }
+
+  // Try to download and cache the image in Supabase storage so it loads reliably
+  if (inserted.image_url && !inserted.storage_bucket) {
+    const cacheKey = candidate.sourceProductId ?? candidate.sku ?? candidate.normalizedName;
+    const cached = await tryCacheImage(admin, inserted.image_url, cacheKey).catch(() => null);
+
+    if (cached) {
+      await admin
+        .from("product_assets")
+        .update({ storage_bucket: cached.bucket, storage_path: cached.path })
+        .eq("id", inserted.id);
+      inserted.storage_bucket = cached.bucket;
+      inserted.storage_path = cached.path;
+      console.log(`[matching] Cached image for ${cacheKey} → ${cached.path}`);
+    } else {
+      console.warn(`[matching] Could not cache image for ${cacheKey} from ${inserted.image_url}`);
+    }
   }
 
   return inserted;

@@ -759,10 +759,20 @@ export async function resolveProductAssetBuffer(asset: ProductAssetRow | null) {
   }
 
   if (asset.image_url) {
-    const response = await fetch(asset.image_url).catch(() => null);
+    const response = await fetch(asset.image_url, {
+      headers: {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        accept: "image/webp,image/avif,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8",
+        referer: "https://www.makro.pro/",
+        "accept-language": "th-TH,th;q=0.9,en;q=0.8",
+      },
+    }).catch(() => null);
 
     if (response?.ok) {
-      return Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.startsWith("image/")) {
+        return Buffer.from(await response.arrayBuffer());
+      }
     }
   }
 

@@ -23,10 +23,13 @@ export async function POST(
   const file = formData.get("asset");
   const jobId = String(formData.get("jobId") ?? "");
   const saveManualMapping = formData.get("saveManualMapping") === "on";
+  const returnTo = String(formData.get("returnTo") ?? "review");
+  const successPath = `/catalogs/${jobId}/${returnTo}`;
+  const errorPath = `/catalogs/${jobId}/${returnTo}`;
 
   if (!(file instanceof File)) {
     return NextResponse.redirect(
-      new URL(`/catalogs/${jobId}/review?error=${encodeURIComponent("Asset file is required.")}`, request.url),
+      new URL(`${errorPath}?error=${encodeURIComponent("Asset file is required.")}`, request.url),
       SEE_OTHER,
     );
   }
@@ -41,12 +44,12 @@ export async function POST(
       saveManualMapping,
     });
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/review`, request.url), SEE_OTHER);
+    return NextResponse.redirect(new URL(successPath, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Upload failed.";
 
     return NextResponse.redirect(
-      new URL(`/catalogs/${jobId}/review?error=${encodeURIComponent(message)}`, request.url),
+      new URL(`${errorPath}?error=${encodeURIComponent(message)}`, request.url),
       SEE_OTHER,
     );
   }
