@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 
 const ALLOWED_HOSTS = [
   "strapi-cdn.mango-prod.siammakro.cloud",
+  "images.mango-prod.siammakro.cloud",
   "images.makro.pro",
   "www.makro.pro",
   "makro.pro",
