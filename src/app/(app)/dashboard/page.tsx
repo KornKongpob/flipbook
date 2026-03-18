@@ -50,20 +50,20 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Hero section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sidebar via-gray-900 to-brand/80 px-6 py-8 text-white">
+      <div className="relative overflow-hidden rounded-2xl glass-panel px-6 py-8">
         <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm text-white/60 font-medium">Welcome back</p>
-            <h1 className="mt-1 text-2xl font-bold">Catalog Pipeline</h1>
-            <p className="mt-1 text-sm text-white/70">Manage your product catalogs and generate print-ready PDFs.</p>
+            <p className="text-sm font-medium text-brand-strong">Welcome back</p>
+            <h1 className="mt-1 text-2xl font-bold text-foreground">Catalog Pipeline</h1>
+            <p className="mt-1 text-sm text-muted-strong">Manage your product catalogs and generate print-ready PDFs.</p>
           </div>
-          <Link href="/catalogs/new" className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-gray-50 active:scale-[0.98]">
+          <Link href="/catalogs/new" className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white shadow-md shadow-brand/20 transition hover:bg-brand-strong active:scale-[0.98]">
             <FilePlus2 className="size-4" />
             New Catalog
           </Link>
         </div>
-        <div className="absolute -right-16 -top-16 size-48 rounded-full bg-white/5" />
-        <div className="absolute -bottom-20 -left-10 size-40 rounded-full bg-brand/20" />
+        <div className="absolute -right-16 -top-16 size-48 rounded-full bg-brand/5 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -left-10 size-40 rounded-full bg-purple-500/5 blur-3xl pointer-events-none" />
       </div>
 
       {/* Stats grid */}
