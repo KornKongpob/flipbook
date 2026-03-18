@@ -119,10 +119,12 @@ export class MakroSearchProvider {
         }
         // Name substring match
         if (normalizedQuery && candidate.normalizedName.includes(normalizedQuery)) return true;
-        // Token overlap: if at least half of query tokens appear in candidate name
-        if (queryTokens.size >= 2) {
+        // Token overlap: if at least some query tokens appear in candidate name
+        if (queryTokens.size >= 1) {
           const matches = [...queryTokens].filter((t) => candidate.normalizedName.includes(t)).length;
-          if (matches >= Math.ceil(queryTokens.size * 0.5)) return true;
+          // Accept if at least 1 token matches (Typesense already handles relevance and ranking,
+          // so we don't need to be too restrictive here and accidentally filter out good partial matches)
+          if (matches >= 1) return true;
         }
         // Since we are querying an API designed to return relevant results,
         // we can be slightly more lenient if it returned something at all,
