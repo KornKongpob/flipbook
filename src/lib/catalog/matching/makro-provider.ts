@@ -58,14 +58,15 @@ export class MakroSearchProvider {
         const hits = data?.hits ?? [];
 
         for (const hit of hits) {
-          const sku = hit.productCode || hit.sku || hit.makroId;
-          const productName = hit.title || hit.name || hit.titleEn || hit.productName || "Unknown product";
-          const imageUrl = hit.images?.[0] || hit.imageUrls?.[0] || hit.image;
+          const doc = hit.document || hit;
+          const sku = doc.productCode || doc.sku || doc.makroId;
+          const productName = doc.title || doc.name || doc.titleEn || doc.productName || "Unknown product";
+          const imageUrl = doc.images?.[0] || doc.imageUrls?.[0] || doc.image;
           
           if (!productName && !sku) continue;
 
           rawCandidates.push({
-            sourceProductId: hit.id || sku,
+            sourceProductId: doc.id || sku,
             sku,
             productName,
             productUrl: sku ? `${env.MAKRO_BASE_URL}/th/p/${sku}` : null,
@@ -73,10 +74,10 @@ export class MakroSearchProvider {
             normalizedSku: sku ? normalizeSku(sku) : null,
             normalizedName: normalizeName(productName),
             metadata: { 
-              originalPrice: hit.originalPrice,
-              displayPrice: hit.displayPrice,
-              unit: hit.unitType,
-              packSize: hit.unitSize,
+              originalPrice: doc.originalPrice,
+              displayPrice: doc.displayPrice,
+              unit: doc.unitType,
+              packSize: doc.unitSize,
             },
           });
         }
