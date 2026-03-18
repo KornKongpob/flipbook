@@ -82,24 +82,33 @@ export async function POST(
 
     await updateCatalogJobAfterPdf(jobId, user.id, pageCount);
 
+    // Heyzine flipbook conversion is decoupled: PDF success is preserved even if Heyzine fails
     if (bundle.job.flipbook_mode === "client_id") {
-      const pdfUrl = await getSignedFileUrl(pdfFile.id, user.id, 3600);
-      const flipbook = await createHeyzineFlipbook(pdfUrl);
+      try {
+        const pdfUrl = await getSignedFileUrl(pdfFile.id, user.id, 3600);
+        const flipbook = await createHeyzineFlipbook(pdfUrl);
 
-      if (flipbook) {
-        await upsertFlipbookRecord({
-          jobId,
-          userId: user.id,
-          pdfFileId: pdfFile.id,
-          provider: "heyzine",
-          mode: "client_id",
-          flipbookUrl: flipbook.url,
-          thumbnailUrl: flipbook.thumbnail ?? null,
-          providerState: flipbook.state ?? "created",
-          providerResponseJson: flipbook as unknown as Record<string, unknown>,
-        });
-
-        await markJobStatus(jobId, user.id, "completed");
+        if (flipbook) {
+          await upsertFlipbookRecord({
+            jobId,
+            userId: user.id,
+            pdfFileId: pdfFile.id,
+            provider: "heyzine",
+            mode: "client_id",
+            flipbookUrl: flipbook.url,
+            thumbnailUrl: flipbook.thumbnail ?? null,
+            providerState: flipbook.state ?? "created",
+            providerResponseJson: flipbook as unknown as Record<string, unknown>,
+          });
+          await markJobStatus(jobId, user.id, "completed");
+        } else {
+          console.warn(`[generate-pdf] Heyzine client_id not configured for job ${jobId}, staying at pdf_ready`);
+        }
+      } catch (heyzineError) {
+        // PDF was generated successfully — do NOT mark job as failed
+        const heyzineMessage = heyzineError instanceof Error ? heyzineError.message : "Flipbook conversion failed.";
+        console.error(`[generate-pdf] Heyzine conversion failed for job ${jobId}: ${heyzineMessage}`);
+        // Job stays at pdf_ready status (set by updateCatalogJobAfterPdf), user can retry flipbook from result page
       }
     }
 
