@@ -49,7 +49,12 @@ function extractImageUrl(value: unknown): string | null {
       asString(record.url) ??
       asString(record.src) ??
       asString(record.mediaUrl) ??
-      asString(record.image)
+      asString(record.image) ??
+      asString(record.thumbnailUrl) ??
+      asString(record.coverImage) ??
+      asString(record.primaryImage) ??
+      asString(record.imageUrl) ??
+      extractImageUrl(record.galleryImages)
     );
   }
 
@@ -148,12 +153,21 @@ export class MakroSearchProvider {
       const response = await fetch(url, {
         headers: {
           "user-agent":
-            "Mozilla/5.0 (compatible; PromoCatalogStudio/1.0; +https://vercel.com)",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "th-TH,th;q=0.9,en;q=0.8",
+          "referer": env.MAKRO_BASE_URL,
         },
         cache: "no-store",
-      }).catch(() => null);
+      }).catch((err) => {
+        console.warn(`[makro-provider] fetch failed for ${url}: ${err instanceof Error ? err.message : "unknown"}`);
+        return null;
+      });
 
       if (!response?.ok) {
+        if (response) {
+          console.warn(`[makro-provider] HTTP ${response.status} for ${url}`);
+        }
         continue;
       }
 
@@ -164,43 +178,72 @@ export class MakroSearchProvider {
       if (nextData) {
         try {
           walkCandidates(env.MAKRO_BASE_URL, JSON.parse(nextData), rawCandidates);
-        } catch {
-          // Ignore malformed JSON and fall back to DOM extraction.
+        } catch (err) {
+          console.warn(`[makro-provider] __NEXT_DATA__ parse error: ${err instanceof Error ? err.message : "unknown"}`);
         }
       }
+
+      // Also try extracting from <script> tags that contain JSON product data
+      $("script[type='application/ld+json']").each((_, el) => {
+        try {
+          const json = $(el).html();
+          if (json) walkCandidates(env.MAKRO_BASE_URL, JSON.parse(json), rawCandidates);
+        } catch {
+          // ignore
+        }
+      });
 
       $("a[href*='/p/']").each((_, element) => {
         const anchor = $(element);
         const image = anchor.find("img").first();
         const title = image.attr("alt") ?? anchor.text().trim();
+        const href = anchor.attr("href") ?? "";
 
         if (!title) {
           return;
         }
 
+        // Try to extract SKU from product URL pattern /p/XXXXXX
+        const skuFromUrl = href.match(/\/p\/(\d{5,})/)?.[1] ?? null;
+
         rawCandidates.push({
-          sourceProductId: null,
-          sku: null,
+          sourceProductId: skuFromUrl,
+          sku: skuFromUrl,
           productName: title,
-          productUrl: getAbsoluteUrl(env.MAKRO_BASE_URL, anchor.attr("href")),
-          imageUrl: getAbsoluteUrl(env.MAKRO_BASE_URL, image.attr("src")),
-          normalizedSku: null,
+          productUrl: getAbsoluteUrl(env.MAKRO_BASE_URL, href),
+          imageUrl: getAbsoluteUrl(env.MAKRO_BASE_URL, image.attr("src") ?? image.attr("data-src")),
+          normalizedSku: skuFromUrl ? normalizeSku(skuFromUrl) : null,
           normalizedName: normalizeName(title),
-          metadata: {
-            href: anchor.attr("href"),
-          },
+          metadata: { href },
         });
       });
+
+      if (rawCandidates.length > 0) {
+        break; // Got results from one URL, no need to try the next
+      }
     }
 
     const normalizedQuery = normalizeName(query);
+    const normalizedQuerySku = normalizeSku(query);
+    const queryTokens = new Set(normalizedQuery.split(" ").filter(Boolean));
 
     return dedupeCandidates(rawCandidates)
       .filter((candidate) => {
-        const skuMatch = candidate.normalizedSku?.includes(normalizeSku(query));
-        const nameMatch = candidate.normalizedName.includes(normalizedQuery);
-        return Boolean(skuMatch || nameMatch);
+        // Exact or partial SKU match
+        if (normalizedQuerySku && candidate.normalizedSku) {
+          if (candidate.normalizedSku === normalizedQuerySku) return true;
+          if (candidate.normalizedSku.includes(normalizedQuerySku)) return true;
+          if (normalizedQuerySku.includes(candidate.normalizedSku)) return true;
+        }
+        // Name substring match
+        if (normalizedQuery && candidate.normalizedName.includes(normalizedQuery)) return true;
+        // Token overlap: if at least half of query tokens appear in candidate name
+        if (queryTokens.size >= 2) {
+          const hits = [...queryTokens].filter((t) => candidate.normalizedName.includes(t)).length;
+          if (hits >= Math.ceil(queryTokens.size * 0.5)) return true;
+        }
+        return false;
       })
-      .slice(0, 8);
+      .slice(0, 12);
   }
 }

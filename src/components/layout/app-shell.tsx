@@ -36,8 +36,8 @@ function SidebarContent({
 }) {
   return (
     <>
-      <nav className="flex flex-1 flex-col gap-1 px-3 mt-2">
-        <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500">Menu</p>
+      <nav className="flex flex-1 flex-col gap-1 px-3 mt-3">
+        <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-gray-400">Menu</p>
         {navigation.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
@@ -47,17 +47,17 @@ function SidebarContent({
               href={item.href}
               onClick={onLinkClick}
               className={cn(
-                "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150",
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                 active
-                  ? "bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                  : "text-gray-400 hover:bg-white/[0.07] hover:text-gray-200",
+                  ? "bg-brand/90 text-white shadow-sm"
+                  : "text-gray-300 hover:bg-white/10 hover:text-white",
               )}
             >
               <span className={cn(
                 "flex size-7 items-center justify-center rounded-md transition-colors",
-                active ? "bg-brand text-white" : "bg-white/[0.06] text-gray-400 group-hover:text-gray-300",
+                active ? "bg-white/20 text-white" : "bg-white/[0.08] text-gray-400 group-hover:text-white",
               )}>
-                <Icon className="size-3.5" />
+                <Icon className="size-4" />
               </span>
               {item.label}
             </Link>
@@ -65,31 +65,31 @@ function SidebarContent({
         })}
       </nav>
 
-      <div className="mx-3 mt-auto mb-2 rounded-lg bg-gradient-to-r from-brand/20 to-purple-500/20 p-3">
+      <div className="mx-3 mt-auto mb-3 rounded-lg bg-gradient-to-r from-brand/25 to-purple-500/25 p-3.5">
         <div className="flex items-center gap-2 text-white">
           <Zap className="size-4 text-amber-400" />
-          <span className="text-xs font-semibold">Pro Tip</span>
+          <span className="text-sm font-semibold">Pro Tip</span>
         </div>
-        <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+        <p className="mt-1.5 text-xs leading-relaxed text-gray-300">
           Upload Excel files to auto-match product images from Makro.
         </p>
       </div>
 
-      <div className="border-t border-white/[0.08] p-3">
+      <div className="border-t border-white/10 p-3">
         <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-purple-500 text-[10px] font-bold text-white ring-2 ring-white/10">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-purple-500 text-[11px] font-bold text-white ring-2 ring-white/15">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-gray-300">{userLabel}</p>
+            <p className="truncate text-sm font-medium text-gray-200">{userLabel}</p>
           </div>
         </div>
-        <form action={signOutAction} className="mt-1">
+        <form action={signOutAction} className="mt-1.5">
           <button
             type="submit"
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-500 transition hover:bg-white/[0.06] hover:text-gray-300"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-gray-400 transition hover:bg-white/10 hover:text-white"
           >
-            <LogOut className="size-3" />
+            <LogOut className="size-3.5" />
             Sign out
           </button>
         </form>
@@ -154,7 +154,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
           </div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Catalog Studio</p>
-            <p className="text-[10px] text-gray-500">Promo workflow v2</p>
+            <p className="text-[11px] text-gray-400">Promo workflow v2</p>
           </div>
         </div>
 

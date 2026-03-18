@@ -45,53 +45,58 @@ export function CatalogCardPreview({
     .join(" • ");
 
   return (
-    <div className="flex h-full flex-col rounded-[26px] border border-[#f0dfd4] bg-white p-3 shadow-[0_16px_28px_rgba(68,39,21,0.06)]">
-      <div className="relative flex h-32 items-center justify-center rounded-[22px] bg-[#fff5ef]">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-[#f0dfd4] bg-white p-2">
+      {/* Image: use flex-[2] so it takes proportional space, not a fixed height */}
+      <div className="relative flex flex-[2] min-h-0 items-center justify-center rounded-lg bg-[#fff5ef]">
         {imageUrl ? (
           <Image
             src={imageUrl}
             alt={title}
             fill
-            className="object-contain p-3"
-            sizes="240px"
+            className="object-contain p-2"
+            sizes="200px"
+            unoptimized
           />
         ) : (
-          <span className="text-sm font-medium text-[#b17c63]">No image</span>
+          <span className="text-[10px] font-medium text-[#b17c63]">No image</span>
         )}
       </div>
 
       {promoActive && (options?.showDiscountAmount ?? true) ? (
-        <div className="mt-3 rounded-full bg-[#ffe27d] px-3 py-1 text-center text-xs font-semibold text-[#982c11]">
+        <div className="mt-1 shrink-0 truncate rounded-full bg-[#ffe27d] px-2 py-0.5 text-center text-[10px] font-semibold text-[#982c11]">
           ถูกลง {formatCurrency(discountAmount)}
         </div>
       ) : null}
 
-      <div className="mt-3 flex-1 space-y-2">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-[#241b15]">
-          {title}
-        </h3>
-        <p className="line-clamp-1 text-[11px] text-[#7b6758]">{meta || " "}</p>
-      </div>
+      {/* Text block: flex-[1] with min-h-0 to prevent overflow */}
+      <div className="mt-1 flex flex-[1] min-h-0 flex-col justify-between">
+        <div>
+          <h3 className="line-clamp-2 text-[11px] font-semibold leading-tight text-[#241b15]">
+            {title}
+          </h3>
+          <p className="mt-0.5 truncate text-[9px] text-[#7b6758]">{meta || "\u00A0"}</p>
+        </div>
 
-      <div className="mt-3 space-y-1">
-        {promoActive && (options?.showPromoPrice ?? true) ? (
-          <div className="text-2xl font-bold tracking-tight text-[#e64324]">
-            {formatCurrency(promoPrice)}
-          </div>
-        ) : (
-          <div className="text-2xl font-bold tracking-tight text-[#21354e]">
-            {formatCurrency(normalPrice ?? promoPrice)}
-          </div>
-        )}
+        <div className="mt-auto shrink-0">
+          {promoActive && (options?.showPromoPrice ?? true) ? (
+            <div className="truncate text-base font-bold leading-tight tracking-tight text-[#e64324]">
+              {formatCurrency(promoPrice)}
+            </div>
+          ) : (
+            <div className="truncate text-base font-bold leading-tight tracking-tight text-[#21354e]">
+              {formatCurrency(normalPrice ?? promoPrice)}
+            </div>
+          )}
 
-        {promoActive && (options?.showNormalPrice ?? true) ? (
-          <div className="flex items-center gap-3 text-xs text-[#8f7967]">
-            <span className="line-through">{formatCurrency(normalPrice)}</span>
-            {(options?.showDiscountPercent ?? false) && discountPercent ? (
-              <span>{discountPercent.toFixed(0)}% off</span>
-            ) : null}
-          </div>
-        ) : null}
+          {promoActive && (options?.showNormalPrice ?? true) ? (
+            <div className="flex items-center gap-2 text-[9px] text-[#8f7967]">
+              <span className="line-through">{formatCurrency(normalPrice)}</span>
+              {(options?.showDiscountPercent ?? false) && discountPercent ? (
+                <span>{discountPercent.toFixed(0)}% off</span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

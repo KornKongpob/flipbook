@@ -192,19 +192,6 @@ function isNormalizedCatalogRow(
   return Boolean(row);
 }
 
-function addHeaderComment(
-  sheet: XLSX.WorkSheet,
-  columnIndex: number,
-  header: string,
-  comment: string,
-) {
-  const cellRef = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
-  const existingCell = sheet[cellRef] ?? { t: "s", v: header };
-
-  existingCell.c = [{ a: "Promo Catalog Studio", t: comment }];
-  sheet[cellRef] = existingCell;
-}
-
 export function buildCatalogImportTemplateBuffer() {
   const workbook = XLSX.utils.book_new();
   workbook.Props = {
@@ -225,41 +212,7 @@ export function buildCatalogImportTemplateBuffer() {
     { wch: 16 },
   ];
 
-  CATALOG_IMPORT_TEMPLATE_COLUMNS.forEach((column, index) => {
-    addHeaderComment(
-      dataSheet,
-      index,
-      column.header,
-      `${column.required ? "Required" : "Optional"}. ${column.description}`,
-    );
-  });
-
-  const instructionsSheet = XLSX.utils.aoa_to_sheet([
-    ["Field", "Requirement", "Usage"],
-    ...CATALOG_IMPORT_TEMPLATE_COLUMNS.map((column) => [
-      column.header,
-      column.required ? "Required" : "Optional",
-      column.description,
-    ]),
-    [],
-    ["Notes", "", ""],
-    ["One row per product", "", "Enter one product per row in the Catalog Import sheet."],
-    [
-      "Keep headers unchanged",
-      "",
-      "Do not rename the header row before uploading the workbook back into the app.",
-    ],
-    [
-      "Makro matching",
-      "",
-      "Item number is the primary lookup key used for Makro Pro search and image matching.",
-    ],
-  ]);
-
-  instructionsSheet["!cols"] = [{ wch: 24 }, { wch: 14 }, { wch: 90 }];
-
   XLSX.utils.book_append_sheet(workbook, dataSheet, "Catalog Import");
-  XLSX.utils.book_append_sheet(workbook, instructionsSheet, "Instructions");
 
   const output = XLSX.write(workbook, {
     type: "buffer",

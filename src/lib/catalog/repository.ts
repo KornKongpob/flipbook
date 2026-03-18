@@ -774,19 +774,21 @@ export async function resolveProductAssetPreviewUrl(asset: ProductAssetRow | nul
     return null;
   }
 
-  if (asset.image_url) {
-    return `/api/images/proxy?url=${encodeURIComponent(asset.image_url)}`;
-  }
-
+  // Prefer stable storage path (cached/uploaded images) over raw external URLs
   if (asset.storage_bucket && asset.storage_path) {
     const admin = getAdminClientOrThrow();
     const signedUrlResponse = await admin.storage
       .from(asset.storage_bucket)
       .createSignedUrl(asset.storage_path, 3600);
 
-    if (!signedUrlResponse.error) {
-      return signedUrlResponse.data?.signedUrl ?? null;
+    if (!signedUrlResponse.error && signedUrlResponse.data?.signedUrl) {
+      return signedUrlResponse.data.signedUrl;
     }
+  }
+
+  // Fall back to proxied external URL
+  if (asset.image_url) {
+    return `/api/images/proxy?url=${encodeURIComponent(asset.image_url)}`;
   }
 
   return null;

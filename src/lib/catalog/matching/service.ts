@@ -244,56 +244,83 @@ export async function runMatchingForJob(params: {
       }
     }
 
-    const cachedAssets = await getCachedAssets(admin, {
-      ...item,
-      normalized_sku: normalizedSku,
-      normalized_name: normalizedName,
-    });
-    const primaryCandidates = item.sku
-      ? await provider.search(item.sku)
-      : await provider.search(item.product_name);
-    const fallbackCandidates =
-      primaryCandidates.length < 3 ? await provider.search(item.product_name) : [];
-    const providerAssets = await Promise.all(
-      [...primaryCandidates, ...fallbackCandidates].map((candidate) =>
-        getOrCreateAsset(admin, candidate),
-      ),
-    );
+    try {
+      const cachedAssets = await getCachedAssets(admin, {
+        ...item,
+        normalized_sku: normalizedSku,
+        normalized_name: normalizedName,
+      });
+      const primaryCandidates = item.sku
+        ? await provider.search(item.sku)
+        : await provider.search(item.product_name);
+      const fallbackCandidates =
+        primaryCandidates.length < 3 ? await provider.search(item.product_name) : [];
 
-    const assets = [...cachedAssets, ...providerAssets].filter(
-      (asset, index, values) => values.findIndex((entry) => entry.id === asset.id) === index,
-    );
+      if (primaryCandidates.length === 0 && fallbackCandidates.length === 0) {
+        console.warn(`[matching] No provider results for item ${item.sku ?? item.product_name}`);
+      }
 
-    const scored = assets
-      .map((asset) => {
-        const result = scoreMatch(
-          {
-            sku: item.sku,
-            normalizedSku,
-            productName: item.product_name,
-            normalizedName,
-            packSize: item.pack_size,
-          },
-          {
-            sku: asset.sku,
-            normalizedSku: asset.normalized_sku,
-            productName: asset.product_name,
-            normalizedName: asset.normalized_name,
-          },
+      const providerAssets = await Promise.all(
+        [...primaryCandidates, ...fallbackCandidates].map((candidate) =>
+          getOrCreateAsset(admin, candidate).catch((err) => {
+            console.warn(`[matching] getOrCreateAsset failed for candidate ${candidate.sku}: ${err instanceof Error ? err.message : "unknown"}`);
+            return null;
+          }),
+        ),
+      );
+
+      const assets = [...cachedAssets, ...providerAssets]
+        .filter((asset): asset is ProductAssetRow => asset !== null)
+        .filter(
+          (asset, index, values) => values.findIndex((entry) => entry.id === asset.id) === index,
         );
 
-        return {
-          asset,
-          confidence: result.confidence,
-          reasons: result.reasons,
-        };
-      })
-      .filter((entry) => entry.confidence > 0.2)
-      .sort((left, right) => right.confidence - left.confidence)
-      .slice(0, 6);
+      const scored = assets
+        .map((asset) => {
+          const result = scoreMatch(
+            {
+              sku: item.sku,
+              normalizedSku,
+              productName: item.product_name,
+              normalizedName,
+              packSize: item.pack_size,
+            },
+            {
+              sku: asset.sku,
+              normalizedSku: asset.normalized_sku,
+              productName: asset.product_name,
+              normalizedName: asset.normalized_name,
+            },
+          );
 
-    await upsertCandidateRows(admin, item.id, scored);
-    await updateItemDecision(admin, item, scored);
+          return {
+            asset,
+            confidence: result.confidence,
+            reasons: result.reasons,
+          };
+        })
+        .filter((entry) => entry.confidence > 0.2)
+        .sort((left, right) => right.confidence - left.confidence)
+        .slice(0, 6);
+
+      await upsertCandidateRows(admin, item.id, scored);
+      await updateItemDecision(admin, item, scored);
+    } catch (itemError) {
+      console.error(`[matching] Failed to match item ${item.id} (${item.sku}): ${itemError instanceof Error ? itemError.message : "unknown"}`);
+      await appendEvent(admin, jobId, "matching", `Failed to match item ${item.sku ?? item.product_name}: ${itemError instanceof Error ? itemError.message : "unknown"}`, {
+        itemId: item.id,
+        sku: item.sku,
+      });
+      await admin
+        .from("catalog_items")
+        .update({
+          selected_asset_id: null,
+          confidence: 0,
+          match_status: "needs_review",
+          review_note: "Matching failed. Manual review required.",
+        })
+        .eq("id", item.id);
+    }
   }
 
   const refreshedResponse = await admin
