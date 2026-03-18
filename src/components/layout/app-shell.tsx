@@ -37,7 +37,7 @@ function SidebarContent({
   return (
     <>
       <nav className="flex flex-1 flex-col gap-1.5 px-3 mt-4">
-        <p className="px-3 mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: "#94a3b8" }}>
+        <p className="px-3 mb-2 text-xs font-bold uppercase tracking-wider text-muted-strong">
           Menu
         </p>
         {navigation.map((item) => {
@@ -51,16 +51,15 @@ function SidebarContent({
               className={cn(
                 "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-150",
                 active
-                  ? "bg-brand text-white shadow-md shadow-brand/30"
-                  : "hover:bg-[rgba(255,255,255,0.1)]",
+                  ? "bg-brand-soft text-brand shadow-sm"
+                  : "text-muted-strong hover:bg-gray-50 hover:text-foreground",
               )}
-              style={active ? undefined : { color: "#e2e8f0" }}
             >
               <span className={cn(
-                "flex size-7 items-center justify-center rounded-md",
-                active ? "bg-white/25" : "bg-[rgba(255,255,255,0.08)]",
+                "flex size-7 items-center justify-center rounded-md transition-colors",
+                active ? "bg-white shadow-sm" : "bg-gray-100 group-hover:bg-white group-hover:shadow-sm",
               )}>
-                <Icon className="size-4" style={active ? { color: "#ffffff" } : { color: "#cbd5e1" }} />
+                <Icon className={cn("size-4 transition-colors", active ? "text-brand" : "text-muted-strong group-hover:text-foreground")} />
               </span>
               {item.label}
             </Link>
@@ -68,30 +67,30 @@ function SidebarContent({
         })}
       </nav>
 
-      <div className="mx-3 mt-auto mb-3 rounded-lg p-3.5" style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.25), rgba(168,85,247,0.2))" }}>
-        <div className="flex items-center gap-2">
-          <Zap className="size-4" style={{ color: "#fbbf24" }} />
-          <span className="text-sm font-bold" style={{ color: "#ffffff" }}>Pro Tip</span>
+      <div className="mx-3 mt-auto mb-3 rounded-lg p-4 border border-brand/20 bg-brand-soft/50 shadow-sm relative overflow-hidden">
+        <div className="absolute -right-6 -top-6 size-24 rounded-full bg-brand/10 blur-xl"></div>
+        <div className="flex items-center gap-2 relative z-10">
+          <Zap className="size-4 text-brand" />
+          <span className="text-sm font-bold text-brand-strong">Pro Tip</span>
         </div>
-        <p className="mt-1.5 text-xs leading-relaxed" style={{ color: "#cbd5e1" }}>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-strong relative z-10">
           Upload Excel files to auto-match product images from Makro.
         </p>
       </div>
 
-      <div className="p-3" style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+      <div className="p-3 border-t border-line/50 bg-gray-50/50">
         <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: "linear-gradient(135deg, #6366f1, #a855f7)", color: "#ffffff", boxShadow: "0 0 0 2px rgba(255,255,255,0.15)" }}>
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold bg-white text-brand shadow-sm border border-line">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" style={{ color: "#e2e8f0" }}>{userLabel}</p>
+            <p className="truncate text-sm font-semibold text-foreground">{userLabel}</p>
           </div>
         </div>
         <form action={signOutAction} className="mt-1">
           <button
             type="submit"
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors hover:bg-[rgba(255,255,255,0.08)]"
-            style={{ color: "#94a3b8" }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-muted-strong transition-colors hover:bg-white hover:text-danger hover:shadow-sm"
           >
             <LogOut className="size-4" />
             Sign out
@@ -133,20 +132,20 @@ export function AppShell({ children, userLabel }: AppShellProps) {
 
       {/* ─── Mobile drawer ─── */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col transition-transform duration-200 ease-out lg:hidden",
+        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white border-r border-line transition-transform duration-200 ease-out lg:hidden",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
-      )} style={{ backgroundColor: "#111827" }}>
-        <div className="flex h-14 items-center justify-between px-4">
+      )}>
+        <div className="flex h-14 items-center justify-between px-4 border-b border-line/50">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-sm">
               <BookOpen className="size-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold" style={{ color: "#ffffff" }}>Catalog Studio</p>
-              <p className="text-[11px]" style={{ color: "#94a3b8" }}>Promo workflow v2</p>
+              <p className="text-sm font-bold text-foreground">Catalog Studio</p>
+              <p className="text-[11px] text-muted-strong">Promo workflow v2</p>
             </div>
           </div>
-          <button onClick={() => setMobileOpen(false)} className="p-1 rounded transition-colors hover:bg-[rgba(255,255,255,0.1)]" style={{ color: "#94a3b8" }}>
+          <button onClick={() => setMobileOpen(false)} className="p-1 rounded-md text-muted hover:bg-gray-100 hover:text-foreground transition-colors">
             <X className="size-5" />
           </button>
         </div>
@@ -154,14 +153,14 @@ export function AppShell({ children, userLabel }: AppShellProps) {
       </div>
 
       {/* ─── Desktop sidebar ─── */}
-      <aside className="hidden w-64 shrink-0 flex-col lg:flex" style={{ backgroundColor: "#111827" }}>
-        <div className="flex h-16 items-center gap-3 px-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-lg shadow-brand/25">
+      <aside className="hidden w-64 shrink-0 flex-col bg-white border-r border-line lg:flex">
+        <div className="flex h-16 items-center gap-3 px-5 border-b border-line/50">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-md shadow-brand/20">
             <BookOpen className="size-5 text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold" style={{ color: "#ffffff" }}>Catalog Studio</p>
-            <p className="text-xs" style={{ color: "#94a3b8" }}>Promo workflow v2</p>
+            <p className="text-sm font-bold text-foreground">Catalog Studio</p>
+            <p className="text-xs text-muted-strong">Promo workflow v2</p>
           </div>
         </div>
 

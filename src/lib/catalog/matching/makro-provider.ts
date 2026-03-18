@@ -108,10 +108,13 @@ export class MakroSearchProvider {
       })
       .filter((candidate) => {
         // Exact or partial SKU match
-        if (normalizedQuerySku && candidate.normalizedSku) {
-          if (candidate.normalizedSku === normalizedQuerySku) return true;
-          if (candidate.normalizedSku.includes(normalizedQuerySku)) return true;
-          if (normalizedQuerySku.includes(candidate.normalizedSku)) return true;
+        const qSkuStr = query.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const cSkuStr = candidate.sku?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || '';
+        const mSkuStr = candidate.sourceProductId?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || '';
+        
+        if (qSkuStr) {
+          if (cSkuStr === qSkuStr || cSkuStr.includes(qSkuStr) || qSkuStr.includes(cSkuStr)) return true;
+          if (mSkuStr === qSkuStr || mSkuStr.includes(qSkuStr) || qSkuStr.includes(mSkuStr)) return true;
         }
         // Name substring match
         if (normalizedQuery && candidate.normalizedName.includes(normalizedQuery)) return true;

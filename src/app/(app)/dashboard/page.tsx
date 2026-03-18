@@ -57,7 +57,7 @@ export default async function DashboardPage() {
             <h1 className="mt-1 text-2xl font-bold">Catalog Pipeline</h1>
             <p className="mt-1 text-sm text-white/70">Manage your product catalogs and generate print-ready PDFs.</p>
           </div>
-          <Link href="/catalogs/new" className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-sidebar shadow-lg transition hover:bg-gray-50 active:scale-[0.98]">
+          <Link href="/catalogs/new" className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-gray-50 active:scale-[0.98]">
             <FilePlus2 className="size-4" />
             New Catalog
           </Link>
