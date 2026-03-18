@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { approveCandidateAction } from "@/app/(app)/actions";
+import { ImageWithFallback } from "@/components/ui/image-with-fallback";
 import { ManualSearchPanel } from "@/components/catalog/manual-search-panel";
 import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +106,7 @@ export default async function CatalogReviewPage({
                   <div className="rounded-lg border-2 border-brand/30 bg-brand-soft/20 p-2">
                     <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand">Current</p>
                     <div className="relative h-28 overflow-hidden rounded-md bg-white">
-                      <Image src={item.selectedPreviewUrl} alt={item.product_name} fill className="object-contain p-1" sizes="180px" unoptimized />
+                      <ImageWithFallback src={item.selectedPreviewUrl} alt={item.product_name} fill className="object-contain p-1" sizes="180px" />
                     </div>
                   </div>
                 )}
@@ -115,7 +115,7 @@ export default async function CatalogReviewPage({
                   <div key={candidate.row.id} className="rounded-lg border border-line bg-white p-2">
                     <div className="relative h-28 overflow-hidden rounded-md bg-background">
                       {candidate.previewUrl ? (
-                        <Image src={candidate.previewUrl} alt={candidate.asset?.product_name ?? "Candidate"} fill className="object-contain p-1" sizes="180px" unoptimized />
+                        <ImageWithFallback src={candidate.previewUrl} alt={candidate.asset?.product_name ?? "Candidate"} fill className="object-contain p-1" sizes="180px" />
                       ) : (
                         <div className="flex h-full items-center justify-center text-xs text-muted">No image</div>
                       )}
