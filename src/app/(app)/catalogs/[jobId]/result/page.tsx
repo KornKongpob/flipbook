@@ -159,7 +159,7 @@ export default async function CatalogResultPage({
             <div className="space-y-3">
               <form action={duplicateJobAction}>
                 <input type="hidden" name="jobId" value={jobId} />
-                <Button variant="outline" className="w-full justify-start gap-2 h-10 border-line hover:bg-gray-50">
+                <Button variant="secondary" className="w-full justify-start gap-2 h-10 border-line hover:bg-gray-50">
                   <Copy className="size-4 text-muted-strong" />
                   <span className="text-foreground font-medium">Duplicate Catalog</span>
                 </Button>
