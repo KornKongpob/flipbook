@@ -87,16 +87,19 @@ function drawCard(
     );
   }
 
+  // Y-coordinate tracking to manage layout dynamically from top to bottom
+  let currentY = originY + padding + imageHeight + 8;
+
   if (promoActive && item.discountAmount && showDiscountAmount) {
     doc
       .roundedRect(
         originX + padding,
-        originY + padding + imageHeight + 8, // slight spacing after image
+        currentY,
         width - padding * 2,
         22,
         11,
       )
-      .fill("#ffc107"); // Hardcoded yellow-orange background so theme doesn't override it
+      .fill("#ffc107"); // Hardcoded yellow-orange background
 
     doc
       .fillColor("#a81a05") // Hardcoded dark red text inside pill
@@ -105,43 +108,58 @@ function drawCard(
       .text(
         `ถูกลง ${formatCurrency(item.discountAmount)}`,
         originX + padding,
-        originY + padding + imageHeight + 12.5,
+        currentY + 4.5,
         {
           width: width - padding * 2,
           align: "center",
         },
       );
+      
+    currentY += 32; // advance past pill
+  } else {
+    currentY += 8; // standard spacing if no pill
   }
 
-  const textY = originY + padding + imageHeight + (promoActive && item.discountAmount && showDiscountAmount ? 38 : 10);
   doc.fillColor(theme.text ?? "#211914").font("Sarabun-SemiBold").fontSize(13);
-  doc.text(item.displayName, originX + padding, textY, {
+  doc.text(item.displayName, originX + padding, currentY, {
     width: width - padding * 2,
     height: 32,
     ellipsis: true,
     lineGap: 0,
   });
 
+  // Calculate roughly how many lines the title took to advance Y appropriately
+  const textHeight = doc.heightOfString(item.displayName, {
+    width: width - padding * 2,
+    lineGap: 0,
+  });
+  
+  // Cap at 32 (roughly 2 lines) just in case
+  currentY += Math.min(textHeight, 32) + 6; 
+
   const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
     .filter(Boolean)
     .join(" • ");
-  doc.fillColor("#75675a").font("Sarabun-Regular").fontSize(9.5);
-  doc.text(meta || " ", originX + padding, textY + 34, {
+    
+  // Increased font size for SKU from 9.5 to 11
+  doc.fillColor("#75675a").font("Sarabun-Regular").fontSize(11);
+  doc.text(meta || " ", originX + padding, currentY, {
     width: width - padding * 2,
-    height: 14,
+    height: 16,
     ellipsis: true,
   });
 
   if (showPromoLine) {
     // Promo price in bold RED and larger font size (28)
-    doc.fillColor("#e60000").font("Sarabun-Bold").fontSize(28); // Hardcoded red so theme doesn't override
-    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 44, {
+    doc.fillColor("#e60000").font("Sarabun-Bold").fontSize(28); 
+    // Shifted prices slightly higher so they don't clip the bottom
+    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 50, {
       width: width - padding * 2,
     });
 
     if (showNormalPrice) {
       doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(10);
-      const normalY = originY + height - 16;
+      const normalY = originY + height - 20;
       const normalText = formatCurrency(item.normalPrice);
       doc.text(normalText, originX + padding, normalY, {
         width: width - padding * 2,
@@ -175,7 +193,7 @@ function drawCard(
     doc.text(
       formatCurrency(item.normalPrice ?? item.promoPrice),
       originX + padding,
-      originY + height - 34,
+      originY + height - 40,
       {
         width: width - padding * 2,
       },
