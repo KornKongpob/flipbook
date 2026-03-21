@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ChangeEvent } from "react";
+import { useEffect, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Eye,
@@ -165,10 +165,29 @@ export function EditorPanel({
   const [previewPage, setPreviewPage] = useState(0);
   const [backgroundUploading, setBackgroundUploading] = useState(false);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<"products" | "design">("products");
+  const [productFilter, setProductFilter] = useState<"all" | "visible" | "hidden">("all");
 
   const visibleItems = items.filter((i) => i.isVisible);
+  const hiddenCount = items.length - visibleItems.length;
   const pages = chunk(visibleItems, ITEMS_PER_PAGE);
   const currentPageItems = pages[previewPage] ?? [];
+  const editingItem = items.find((item) => item.id === editingId) ?? null;
+  const filteredItems = items.filter((item) => {
+    if (productFilter === "visible") {
+      return item.isVisible;
+    }
+
+    if (productFilter === "hidden") {
+      return !item.isVisible;
+    }
+
+    return true;
+  });
+
+  useEffect(() => {
+    setPreviewPage((current) => Math.min(current, Math.max(pages.length - 1, 0)));
+  }, [pages.length]);
 
   function updateStyle(
     key: keyof EditorCatalogStyleOptions,
@@ -295,169 +314,226 @@ export function EditorPanel({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-      {/* ── Left: product list + style panel ── */}
+    <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
       <div className="space-y-4">
-        {/* Style options */}
-        <CatalogStyleControls
-          jobId={jobId}
-          style={style}
-          styleTransition={styleTransition}
-          backgroundUploading={backgroundUploading}
-          backgroundError={backgroundError}
-          onStyleChange={updateStyle}
-          onApplyPreset={applyPreset}
-          onReset={resetStyle}
-          onBackgroundUpload={handleBackgroundUpload}
-          formAction={(fd) => {
-            startStyleTransition(async () => {
-              await saveStyleOptionsAction(fd);
-              router.refresh();
-            });
-          }}
-        />
-
-        {/* Product list */}
         <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
-          <div className="border-b border-line bg-gray-50/50 px-4 py-2.5 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Products ({items.length})
-            </p>
-            <span className="text-xs text-muted">{visibleItems.length} visible</span>
+          <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Editor workspace</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">Manage products and visual design</p>
+              </div>
+              <span className="rounded-full border border-line bg-white/80 px-2.5 py-1 text-[11px] text-muted-strong">
+                {visibleItems.length} visible
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { key: "products", label: "Products", description: `${items.length} items` },
+                { key: "design", label: "Design", description: "Theme + layout" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setSidebarMode(tab.key as "products" | "design")}
+                  className={`rounded-xl border px-3 py-2 text-left transition ${sidebarMode === tab.key ? "border-brand/30 bg-brand-soft/15 text-brand shadow-sm" : "border-line bg-white text-muted-strong hover:border-brand/20 hover:text-foreground"}`}
+                >
+                  <p className="text-sm font-semibold">{tab.label}</p>
+                  <p className="mt-0.5 text-[11px] opacity-80">{tab.description}</p>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="divide-y divide-line max-h-[600px] overflow-y-auto thin-scrollbar">
-            {items.map((item) => (
-              <div key={item.id}>
-                <div
-                  className={`flex items-center gap-2 px-3 py-2 transition ${
-                    !item.isVisible ? "opacity-50" : ""
-                  }`}
-                >
-                  {/* Order badge */}
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded bg-brand-soft text-[10px] font-bold text-brand">
-                    {item.displayOrder + 1}
-                  </span>
+          {sidebarMode === "design" ? (
+            <div className="p-4">
+              <CatalogStyleControls
+                jobId={jobId}
+                style={style}
+                styleTransition={styleTransition}
+                backgroundUploading={backgroundUploading}
+                backgroundError={backgroundError}
+                onStyleChange={updateStyle}
+                onApplyPreset={applyPreset}
+                onReset={resetStyle}
+                onBackgroundUpload={handleBackgroundUpload}
+                formAction={(fd) => {
+                  startStyleTransition(async () => {
+                    await saveStyleOptionsAction(fd);
+                    router.refresh();
+                  });
+                }}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="border-b border-line bg-white/60 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: "all", label: `All (${items.length})` },
+                    { key: "visible", label: `Visible (${visibleItems.length})` },
+                    { key: "hidden", label: `Hidden (${hiddenCount})` },
+                  ].map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setProductFilter(filter.key as "all" | "visible" | "hidden")}
+                      className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${productFilter === filter.key ? "border-brand/30 bg-brand-soft/15 text-brand" : "border-line bg-white text-muted-strong hover:border-brand/20 hover:text-foreground"}`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                  {editingId ? (
+                    <span className="rounded-full border border-brand/20 bg-brand-soft/15 px-3 py-1 text-[11px] font-medium text-brand">
+                      Editing item #{editingItem ? editingItem.displayOrder + 1 : "—"}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
 
-                  {/* Thumbnail */}
-                  <div className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-gray-50">
-                    {item.previewUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.previewUrl} alt="" className="h-full w-full object-contain" />
-                    ) : (
-                      <ImageOff className="size-3 text-muted" />
+              <div className="max-h-[740px] space-y-3 overflow-y-auto p-4 thin-scrollbar">
+                {filteredItems.map((item) => (
+                  <div key={item.id} className={`overflow-hidden rounded-2xl border bg-white/80 shadow-sm transition ${editingId === item.id ? "border-brand/30 ring-2 ring-brand/10" : "border-line hover:border-brand/20"} ${!item.isVisible ? "opacity-60" : ""}`}>
+                    <div className="flex items-start gap-3 px-4 py-4">
+                      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-[11px] font-bold text-brand">
+                        {item.displayOrder + 1}
+                      </span>
+
+                      <div className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-gray-50">
+                        {item.previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.previewUrl} alt="" className="h-full w-full object-contain" />
+                        ) : (
+                          <ImageOff className="size-4 text-muted" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {item.displayName ?? item.productName}
+                          </p>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${item.isVisible ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-muted-strong"}`}>
+                            {item.isVisible ? "Visible" : "Hidden"}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-[11px] text-muted">{item.sku ?? "No SKU"}</p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-strong">
+                          <span>Normal: {item.normalPrice != null ? item.normalPrice.toFixed(2) : "—"}</span>
+                          <span>Promo: {item.promoPrice != null ? item.promoPrice.toFixed(2) : "—"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                          className={`flex size-8 items-center justify-center rounded-lg transition ${editingId === item.id ? "bg-brand-soft text-brand" : "text-muted hover:text-brand hover:bg-brand-soft"}`}
+                        >
+                          {saving === item.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Pencil className="size-3.5" />
+                          )}
+                        </button>
+
+                        <form action={moveItemAction}>
+                          <input type="hidden" name="jobId" value={jobId} />
+                          <input type="hidden" name="itemId" value={item.id} />
+                          <input type="hidden" name="direction" value="up" />
+                          <button
+                            type="submit"
+                            className="flex size-8 items-center justify-center rounded-lg text-muted hover:bg-gray-100 hover:text-foreground transition"
+                          >
+                            <ChevronUp className="size-3.5" />
+                          </button>
+                        </form>
+
+                        <form action={moveItemAction}>
+                          <input type="hidden" name="jobId" value={jobId} />
+                          <input type="hidden" name="itemId" value={item.id} />
+                          <input type="hidden" name="direction" value="down" />
+                          <button
+                            type="submit"
+                            className="flex size-8 items-center justify-center rounded-lg text-muted hover:bg-gray-100 hover:text-foreground transition"
+                          >
+                            <ChevronDown className="size-3.5" />
+                          </button>
+                        </form>
+
+                        <form action={toggleItemVisibilityAction}>
+                          <input type="hidden" name="jobId" value={jobId} />
+                          <input type="hidden" name="itemId" value={item.id} />
+                          <input type="hidden" name="nextVisible" value={String(!item.isVisible)} />
+                          <button
+                            type="submit"
+                            className={`flex size-8 items-center justify-center rounded-lg transition ${item.isVisible ? "text-muted hover:bg-rose-50 hover:text-rose-500" : "text-emerald-500 hover:bg-emerald-50"}`}
+                          >
+                            {item.isVisible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+
+                    {editingId === item.id && (
+                      <ItemEditPanel
+                        item={item}
+                        onSave={(fields) => handleSaveItem(item.id, fields)}
+                        onCancel={() => setEditingId(null)}
+                      />
                     )}
                   </div>
+                ))}
 
-                  {/* Name */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-foreground">
-                      {item.displayName ?? item.productName}
-                    </p>
-                    <p className="truncate text-[10px] text-muted">{item.sku ?? "No SKU"}</p>
+                {!filteredItems.length ? (
+                  <div className="rounded-2xl border border-dashed border-line px-4 py-10 text-center text-sm text-muted">
+                    No items match the current filter.
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    {/* Edit */}
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(editingId === item.id ? null : item.id)}
-                      className={`flex size-6 items-center justify-center rounded transition ${
-                        editingId === item.id
-                          ? "bg-brand-soft text-brand"
-                          : "text-muted hover:text-brand hover:bg-brand-soft"
-                      }`}
-                    >
-                      {saving === item.id ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <Pencil className="size-3" />
-                      )}
-                    </button>
-
-                    {/* Move up */}
-                    <form action={moveItemAction}>
-                      <input type="hidden" name="jobId" value={jobId} />
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="direction" value="up" />
-                      <button
-                        type="submit"
-                        className="flex size-6 items-center justify-center rounded text-muted hover:bg-gray-100 hover:text-foreground transition"
-                      >
-                        <ChevronUp className="size-3" />
-                      </button>
-                    </form>
-
-                    {/* Move down */}
-                    <form action={moveItemAction}>
-                      <input type="hidden" name="jobId" value={jobId} />
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="direction" value="down" />
-                      <button
-                        type="submit"
-                        className="flex size-6 items-center justify-center rounded text-muted hover:bg-gray-100 hover:text-foreground transition"
-                      >
-                        <ChevronDown className="size-3" />
-                      </button>
-                    </form>
-
-                    {/* Toggle visibility */}
-                    <form action={toggleItemVisibilityAction}>
-                      <input type="hidden" name="jobId" value={jobId} />
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="nextVisible" value={String(!item.isVisible)} />
-                      <button
-                        type="submit"
-                        className={`flex size-6 items-center justify-center rounded transition ${
-                          item.isVisible
-                            ? "text-muted hover:bg-rose-50 hover:text-rose-500"
-                            : "text-emerald-500 hover:bg-emerald-50"
-                        }`}
-                      >
-                        {item.isVisible ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
-                      </button>
-                    </form>
-                  </div>
-                </div>
-
-                {/* Inline edit form */}
-                {editingId === item.id && (
-                  <ItemEditPanel
-                    item={item}
-                    onSave={(fields) => handleSaveItem(item.id, fields)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                )}
+                ) : null}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── Right: Live preview ── */}
       <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
-        <div className="border-b border-line bg-gray-50/50 px-4 py-2.5 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            A4 Preview — Page {previewPage + 1} of {Math.max(1, pages.length)}
-          </p>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              disabled={previewPage === 0}
-              onClick={() => setPreviewPage((p) => p - 1)}
-              className="flex h-6 w-6 items-center justify-center rounded border border-line bg-white text-muted hover:text-foreground disabled:opacity-30 transition"
-            >
-              <ChevronUp className="size-3" />
-            </button>
-            <button
-              type="button"
-              disabled={previewPage >= pages.length - 1}
-              onClick={() => setPreviewPage((p) => p + 1)}
-              className="flex h-6 w-6 items-center justify-center rounded border border-line bg-white text-muted hover:text-foreground disabled:opacity-30 transition"
-            >
-              <ChevronDown className="size-3" />
-            </button>
+        <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">A4 live preview</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">Page {previewPage + 1} of {Math.max(1, pages.length)}</p>
+            </div>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                disabled={previewPage === 0}
+                onClick={() => setPreviewPage((p) => p - 1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted hover:text-foreground disabled:opacity-30 transition"
+              >
+                <ChevronUp className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={previewPage >= pages.length - 1}
+                onClick={() => setPreviewPage((p) => p + 1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted hover:text-foreground disabled:opacity-30 transition"
+              >
+                <ChevronDown className="size-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {visibleItems.length} visible items
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {hiddenCount} hidden items
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {style.pageBackgroundPreviewUrl ? "Image background active" : "Color background only"}
+            </span>
           </div>
         </div>
 

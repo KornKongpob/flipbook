@@ -974,11 +974,14 @@ export async function getJobStatus(jobId: string, userId: string) {
   const items = asRows<Pick<CatalogItemRow, "id" | "match_status">>(itemsResponse.data);
   const events = asRows<Pick<EventRow, "step" | "message" | "created_at">>(eventsResponse.data);
   const matchedCount = items.filter((i) => i.match_status !== "pending").length;
+  const reviewCount = items.filter((i) => i.match_status === "needs_review").length;
 
   return {
+    jobName: job.job_name,
     status: job.status,
     totalCount: items.length,
     matchedCount,
+    reviewCount,
     events,
   };
 }

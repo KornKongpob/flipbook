@@ -89,7 +89,6 @@ export class MakroSearchProvider {
     }
 
     const normalizedQuery = normalizeName(query);
-    const normalizedQuerySku = normalizeSku(query);
     const queryTokens = new Set(normalizedQuery.split(" ").filter(Boolean));
 
     const seen = new Set<string>();

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
+import { CatalogJobHeader } from "@/components/catalog/catalog-job-header";
 import { EditorPanel } from "@/components/catalog/editor-panel";
 import { buttonClassName } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
@@ -48,10 +48,14 @@ export default async function CatalogEditorPage({
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Header */}
-      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
-          <WorkflowStepper jobId={jobId} currentStep="editor" jobStatus={bundle.job.status} />
+      <CatalogJobHeader
+        jobId={jobId}
+        jobName={bundle.job.job_name}
+        currentStep="editor"
+        jobStatus={bundle.job.status}
+        title="Design and prepare export"
+        description="Fine-tune product content, adjust the page style system, and preview the A4 layout before exporting the final PDF."
+        actions={
           <div className="flex shrink-0 items-center gap-2">
             {pendingReview > 0 && (
               <Link
@@ -65,14 +69,13 @@ export default async function CatalogEditorPage({
               Generate PDF →
             </Link>
           </div>
-        </div>
-        <div className="mt-2">
-          <h1 className="text-base font-semibold text-foreground">{bundle.job.job_name}</h1>
-          <p className="text-xs text-muted mt-0.5">
-            {items.filter((i) => i.isVisible).length} visible · {items.length} total items
-          </p>
-        </div>
-      </div>
+        }
+        metrics={[
+          { label: "Visible on page", value: `${items.filter((i) => i.isVisible).length} item(s)` },
+          { label: "Total products", value: `${items.length} item(s)` },
+          { label: "Pending review", value: pendingReview ? `${pendingReview} blocker(s)` : "No blockers" },
+        ]}
+      />
 
       <EditorPanel
         initialItems={items}

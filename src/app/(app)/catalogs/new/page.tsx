@@ -2,9 +2,12 @@ import { Download, ChevronRight } from "lucide-react";
 import { FLIPBOOK_MODE_OPTIONS } from "@/lib/catalog/constants";
 import { getActiveTemplates } from "@/lib/catalog/repository";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { FileDropzone } from "@/components/ui/file-dropzone";
+import { StatusBanner } from "@/components/ui/status-banner";
+import { SurfaceCard, SurfaceCardBody, SurfaceCardHeader } from "@/components/ui/surface-card";
 
 const steps = ["Upload Excel", "Auto-match", "Review", "Generate PDF"];
 
@@ -18,20 +21,34 @@ export default async function NewCatalogPage({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">New Catalog</h1>
-          <p className="mt-0.5 text-sm text-muted">Upload a product spreadsheet to start a new catalog job.</p>
+      <PageHeader
+        eyebrow="Catalog workflow"
+        title="Create a new catalog"
+        description="Set up the job, choose the export mode, and upload the workbook that starts the matching pipeline."
+        actions={
+          <a href="/api/templates/catalog-import" className={`${buttonClassName("secondary")} gap-1.5`}>
+            <Download className="size-3.5" />
+            Download template
+          </a>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/60 bg-white/70 px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Workflow</p>
+            <p className="mt-2 text-sm font-semibold text-foreground">Upload → Match → Review → Export</p>
+          </div>
+          <div className="rounded-xl border border-white/60 bg-white/70 px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Templates</p>
+            <p className="mt-2 text-sm font-semibold text-foreground">{templates.length} active layout option(s)</p>
+          </div>
+          <div className="rounded-xl border border-white/60 bg-white/70 px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Source</p>
+            <p className="mt-2 text-sm font-semibold text-foreground">Excel workbook (.xlsx)</p>
+          </div>
         </div>
-        <a href="/api/templates/catalog-import" className={`${buttonClassName("secondary")} gap-1.5`}>
-          <Download className="size-3.5" />
-          Download template
-        </a>
-      </div>
+      </PageHeader>
 
-      {/* Step pipeline */}
-      <div className="flex items-center gap-1 rounded-xl border border-line bg-card p-3 shadow-sm">
+      <div className="flex items-center gap-1 rounded-2xl border border-line bg-card p-3 shadow-sm">
         {steps.map((step, i) => (
           <div key={step} className="flex items-center gap-1">
             {i > 0 && <ChevronRight className="size-3.5 text-muted shrink-0" />}
@@ -44,28 +61,37 @@ export default async function NewCatalogPage({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
-        {/* Column guide */}
-        <div className="rounded-xl border border-line bg-card p-5 shadow-sm">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-4">Required columns</p>
-          <ul className="space-y-3 text-sm">
-            {[["Item number", "SKU / Makro lookup key"], ["Normal price", "Regular retail price"], ["Promo price", "Promotional price"]].map(([name, desc]) => (
-              <li key={name} className="flex items-start gap-2.5">
-                <span className="mt-1.5 status-dot status-dot-brand" />
-                <div>
-                  <span className="font-medium text-foreground">{name}</span>
-                  <span className="block text-xs text-muted mt-0.5">{desc}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-5 rounded-lg bg-gray-50 p-3">
-            <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Optional</p>
-            <p className="text-sm text-muted-strong">Item name — fallback for ambiguous SKU</p>
-          </div>
-        </div>
+        <SurfaceCard>
+          <SurfaceCardHeader>
+            <h2 className="text-sm font-semibold text-foreground">Spreadsheet checklist</h2>
+            <p className="mt-1 text-xs text-muted">Make sure the workbook has the minimum columns we expect.</p>
+          </SurfaceCardHeader>
+          <SurfaceCardBody>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-4">Required columns</p>
+            <ul className="space-y-3 text-sm">
+              {[["Item number", "SKU / Makro lookup key"], ["Normal price", "Regular retail price"], ["Promo price", "Promotional price"]].map(([name, desc]) => (
+                <li key={name} className="flex items-start gap-2.5">
+                  <span className="mt-1.5 status-dot status-dot-brand" />
+                  <div>
+                    <span className="font-medium text-foreground">{name}</span>
+                    <span className="block text-xs text-muted mt-0.5">{desc}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 rounded-xl bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Optional</p>
+              <p className="text-sm text-muted-strong">Item name — fallback for ambiguous SKU</p>
+            </div>
+          </SurfaceCardBody>
+        </SurfaceCard>
 
-        {/* Import form */}
-        <div className="rounded-xl border border-line bg-card p-6 shadow-sm">
+        <SurfaceCard>
+          <SurfaceCardHeader>
+            <h2 className="text-sm font-semibold text-foreground">Job setup</h2>
+            <p className="mt-1 text-xs text-muted">Define the catalog, choose the output mode, and upload the workbook.</p>
+          </SurfaceCardHeader>
+          <SurfaceCardBody>
           <form
             action="/api/jobs/import"
             method="post"
@@ -130,14 +156,13 @@ export default async function NewCatalogPage({
             </label>
 
             {params.error && (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {decodeURIComponent(params.error)}
-              </div>
+              <StatusBanner tone="danger" title="Could not create the catalog job" description={decodeURIComponent(params.error)} />
             )}
 
             <Button className="w-full h-10 text-base">Create catalog job</Button>
           </form>
-        </div>
+          </SurfaceCardBody>
+        </SurfaceCard>
       </div>
     </div>
   );
