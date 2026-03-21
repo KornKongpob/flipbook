@@ -166,9 +166,10 @@ function drawCard(
       });
 
       const measured = doc.widthOfString(normalText);
+      const strikeY = normalY + 8;
       doc
-        .moveTo(originX + padding, normalY + 6)
-        .lineTo(originX + padding + measured, normalY + 6)
+        .moveTo(originX + padding, strikeY)
+        .lineTo(originX + padding + measured, strikeY)
         .lineWidth(1)
         .strokeColor("#98816a")
         .stroke();
