@@ -153,12 +153,12 @@ function drawCard(
     // Promo price in bold RED and larger font size (28)
     doc.fillColor("#e60000").font("Sarabun-Bold").fontSize(28); 
     // Shifted prices slightly higher so they don't clip the bottom
-    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 50, {
+    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 58, {
       width: width - padding * 2,
     });
 
     if (showNormalPrice) {
-      doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(10);
+      doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(12);
       const normalY = originY + height - 20;
       const normalText = formatCurrency(item.normalPrice);
       doc.text(normalText, originX + padding, normalY, {
