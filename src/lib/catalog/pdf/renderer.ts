@@ -53,8 +53,8 @@ function drawCard(
   theme: Record<string, string>,
   options: Record<string, unknown>,
 ) {
-  const padding = 14;
-  const imageHeight = 96; // reduced from 104 to give more space for text below
+  const padding = 12;
+  const imageHeight = 88; // Reduced to give more space below
   const promoActive =
     item.promoPrice !== null &&
     item.normalPrice !== null &&
@@ -96,24 +96,24 @@ function drawCard(
         22,
         11,
       )
-      .fill(theme.highlight ?? "#ffc107"); // Yellowish-orange hex
+      .fill("#ffc107"); // Hardcoded yellow-orange background so theme doesn't override it
 
     doc
-      .fillColor(theme.accentStrong ?? "#a81a05") // Dark red text inside pill
+      .fillColor("#a81a05") // Hardcoded dark red text inside pill
       .font("Sarabun-Bold")
       .fontSize(11)
       .text(
         `ถูกลง ${formatCurrency(item.discountAmount)}`,
-        originX + padding + 10,
+        originX + padding,
         originY + padding + imageHeight + 12.5,
         {
-          width: width - padding * 2 - 20,
+          width: width - padding * 2,
           align: "center",
         },
       );
   }
 
-  const textY = originY + padding + imageHeight + (promoActive && item.discountAmount && showDiscountAmount ? 40 : 12);
+  const textY = originY + padding + imageHeight + (promoActive && item.discountAmount && showDiscountAmount ? 38 : 10);
   doc.fillColor(theme.text ?? "#211914").font("Sarabun-SemiBold").fontSize(13);
   doc.text(item.displayName, originX + padding, textY, {
     width: width - padding * 2,
@@ -134,14 +134,14 @@ function drawCard(
 
   if (showPromoLine) {
     // Promo price in bold RED and larger font size (28)
-    doc.fillColor(theme.accent ?? "#d32f2f").font("Sarabun-Bold").fontSize(28);
-    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 46, {
+    doc.fillColor("#e60000").font("Sarabun-Bold").fontSize(28); // Hardcoded red so theme doesn't override
+    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 44, {
       width: width - padding * 2,
     });
 
     if (showNormalPrice) {
       doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(10);
-      const normalY = originY + height - 15;
+      const normalY = originY + height - 16;
       const normalText = formatCurrency(item.normalPrice);
       doc.text(normalText, originX + padding, normalY, {
         width: width - padding * 2,
@@ -149,8 +149,8 @@ function drawCard(
 
       const measured = doc.widthOfString(normalText);
       doc
-        .moveTo(originX + padding, normalY + 7)
-        .lineTo(originX + padding + measured, normalY + 7)
+        .moveTo(originX + padding, normalY + 6)
+        .lineTo(originX + padding + measured, normalY + 6)
         .lineWidth(1)
         .strokeColor("#98816a")
         .stroke();
@@ -169,13 +169,13 @@ function drawCard(
     }
   } else {
     doc.fillColor(
-      variant === "clean" ? theme.accentStrong ?? "#22344d" : theme.accent ?? "#d32f2f",
+      variant === "clean" ? (theme.accentStrong ?? "#22344d") : "#e60000",
     );
-    doc.font("Sarabun-Bold").fontSize(26); // Larger normal price too if no promo
+    doc.font("Sarabun-Bold").fontSize(24);
     doc.text(
       formatCurrency(item.normalPrice ?? item.promoPrice),
       originX + padding,
-      originY + height - 36,
+      originY + height - 34,
       {
         width: width - padding * 2,
       },
