@@ -3,8 +3,12 @@ import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { EditorPanel } from "@/components/catalog/editor-panel";
 import { buttonClassName } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
-import { getCatalogJobBundle, resolveProductAssetPreviewUrl } from "@/lib/catalog/repository";
-import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import {
+  getCatalogJobBundle,
+  resolveCatalogBackgroundPreviewUrl,
+  resolveProductAssetPreviewUrl,
+} from "@/lib/catalog/repository";
+import { withCatalogBackgroundPreview } from "@/lib/catalog/style-options";
 
 export default async function CatalogEditorPage({
   params,
@@ -14,11 +18,13 @@ export default async function CatalogEditorPage({
   const { jobId } = await params;
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
-
-  const styleOptions = {
-    ...DEFAULT_STYLE_OPTIONS,
-    ...(bundle.job.style_options_json as Record<string, unknown>),
-  };
+  const backgroundPreviewUrl = await resolveCatalogBackgroundPreviewUrl(
+    bundle.job.style_options_json as Record<string, unknown>,
+  );
+  const styleOptions = withCatalogBackgroundPreview(
+    bundle.job.style_options_json as Record<string, unknown>,
+    backgroundPreviewUrl,
+  );
 
   const items = await Promise.all(
     bundle.items.map(async (item) => ({
@@ -71,15 +77,7 @@ export default async function CatalogEditorPage({
       <EditorPanel
         initialItems={items}
         jobId={jobId}
-        initialStyle={{
-          variant: String(styleOptions.variant ?? "promo"),
-          showNormalPrice: Boolean(styleOptions.showNormalPrice ?? true),
-          showPromoPrice: Boolean(styleOptions.showPromoPrice ?? true),
-          showDiscountAmount: Boolean(styleOptions.showDiscountAmount ?? true),
-          showDiscountPercent: Boolean(styleOptions.showDiscountPercent ?? false),
-          showSku: Boolean(styleOptions.showSku ?? true),
-          showPackSize: Boolean(styleOptions.showPackSize ?? true),
-        }}
+        initialStyle={styleOptions}
       />
     </div>
   );

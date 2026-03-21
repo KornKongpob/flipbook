@@ -1,7 +1,8 @@
 import PDFDocument from "pdfkit";
 import { chunk, formatCurrency } from "@/lib/utils";
 import { PDF_FONT_PATHS } from "@/lib/catalog/pdf/fonts";
-import { PRODUCTS_PER_PAGE } from "@/lib/catalog/constants";
+import { DEFAULT_STYLE_OPTIONS, PRODUCTS_PER_PAGE } from "@/lib/catalog/constants";
+import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export interface RenderableCatalogItem {
   id: string;
@@ -22,7 +23,8 @@ export interface RenderCatalogPdfInput {
   variant: string;
   theme: Record<string, string>;
   items: RenderableCatalogItem[];
-  options?: Record<string, unknown>;
+  options?: CatalogStyleOptions;
+  pageBackgroundBuffer?: Buffer | null;
 }
 
 function drawFallbackImage(
@@ -31,10 +33,13 @@ function drawFallbackImage(
   y: number,
   width: number,
   height: number,
+  backgroundColor: string,
+  textColor: string,
+  radius: number,
 ) {
   doc.save();
-  doc.roundedRect(x, y, width, height, 18).fill("#fff4ef");
-  doc.fillColor("#d4795d").font("Sarabun-SemiBold").fontSize(12);
+  doc.roundedRect(x, y, width, height, radius).fill(backgroundColor);
+  doc.fillColor(textColor).font("Sarabun-SemiBold").fontSize(12);
   doc.text("No image", x, y + height / 2 - 8, {
     width,
     align: "center",
@@ -51,25 +56,27 @@ function drawCard(
   height: number,
   variant: string,
   theme: Record<string, string>,
-  options: Record<string, unknown>,
+  options: CatalogStyleOptions,
 ) {
-  const padding = 12;
-  const imageHeight = 88; // Reduced to give more space below
+  const padding = options.cardPadding;
+  const imageHeight = options.imageAreaHeight;
   const promoActive =
     item.promoPrice !== null &&
     item.normalPrice !== null &&
     item.promoPrice > 0 &&
     item.promoPrice < item.normalPrice;
-  const showDiscountAmount = options.showDiscountAmount !== false;
-  const showDiscountPercent = options.showDiscountPercent === true;
-  const showNormalPrice = options.showNormalPrice !== false;
-  const showPromoPrice = options.showPromoPrice !== false;
-  const showSku = options.showSku !== false;
-  const showPackSize = options.showPackSize !== false;
+  const showDiscountAmount = options.showDiscountAmount;
+  const showDiscountPercent = options.showDiscountPercent;
+  const showNormalPrice = options.showNormalPrice;
+  const showPromoPrice = options.showPromoPrice;
+  const showSku = options.showSku;
+  const showPackSize = options.showPackSize;
   const showPromoLine = promoActive && showPromoPrice;
 
   doc.save();
-  doc.roundedRect(originX, originY, width, height, 18).fillAndStroke("#ffffff", "#eedbcf");
+  doc
+    .roundedRect(originX, originY, width, height, options.cardRadius)
+    .fillAndStroke(options.cardBackgroundColor, options.cardBorderColor);
 
   if (item.imageBuffer) {
     doc.image(item.imageBuffer, originX + padding, originY + padding, {
@@ -84,10 +91,12 @@ function drawCard(
       originY + padding,
       width - padding * 2,
       imageHeight,
+      options.imageBackgroundColor,
+      options.metaColor,
+      Math.max(options.cardRadius - 6, 8),
     );
   }
 
-  // Y-coordinate tracking to manage layout dynamically from top to bottom
   let currentY = originY + padding + imageHeight + 8;
 
   if (promoActive && item.discountAmount && showDiscountAmount) {
@@ -99,12 +108,12 @@ function drawCard(
         22,
         11,
       )
-      .fill("#ffc107"); // Hardcoded yellow-orange background
+      .fill(options.discountBadgeBackgroundColor);
 
     doc
-      .fillColor("#a81a05") // Hardcoded dark red text inside pill
+      .fillColor(options.discountBadgeTextColor)
       .font("Sarabun-Bold")
-      .fontSize(11)
+      .fontSize(Math.max(options.skuFontSize, 10))
       .text(
         `ถูกลง ${formatCurrency(item.discountAmount)}`,
         originX + padding,
@@ -114,68 +123,65 @@ function drawCard(
           align: "center",
         },
       );
-      
-    currentY += 32; // advance past pill
+
+    currentY += 32;
   } else {
-    currentY += 8; // standard spacing if no pill
+    currentY += 8;
   }
 
-  doc.fillColor(theme.text ?? "#211914").font("Sarabun-SemiBold").fontSize(13);
+  doc.fillColor(options.titleColor).font("Sarabun-SemiBold").fontSize(options.titleFontSize);
   doc.text(item.displayName, originX + padding, currentY, {
     width: width - padding * 2,
-    height: 32,
+    height: Math.max(options.titleFontSize * 2.5, 30),
     ellipsis: true,
     lineGap: 0,
   });
 
-  // Calculate roughly how many lines the title took to advance Y appropriately
   const textHeight = doc.heightOfString(item.displayName, {
     width: width - padding * 2,
     lineGap: 0,
   });
-  
-  // Cap at 32 (roughly 2 lines) just in case
-  currentY += Math.min(textHeight, 32) + 6; 
+
+  currentY += Math.min(textHeight, Math.max(options.titleFontSize * 2.5, 30)) + 6;
 
   const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
     .filter(Boolean)
     .join(" • ");
-    
-  // Increased font size for SKU from 9.5 to 11
-  doc.fillColor("#75675a").font("Sarabun-Regular").fontSize(11);
+
+  doc.fillColor(options.metaColor).font("Sarabun-Regular").fontSize(options.skuFontSize);
   doc.text(meta || " ", originX + padding, currentY, {
     width: width - padding * 2,
-    height: 16,
+    height: Math.max(options.skuFontSize + 4, 14),
     ellipsis: true,
   });
 
   if (showPromoLine) {
-    // Promo price in bold RED and larger font size (28)
-    doc.fillColor("#e60000").font("Sarabun-Bold").fontSize(28); 
-    // Shifted prices slightly higher so they don't clip the bottom
-    doc.text(formatCurrency(item.promoPrice), originX + padding, originY + height - 58, {
+    const normalY = originY + height - Math.max(options.normalPriceFontSize + 10, 22);
+    const promoY = normalY - Math.max(options.promoPriceFontSize + 8, 28);
+
+    doc.fillColor(options.promoPriceColor).font("Sarabun-Bold").fontSize(options.promoPriceFontSize);
+    doc.text(formatCurrency(item.promoPrice), originX + padding, promoY, {
       width: width - padding * 2,
     });
 
     if (showNormalPrice) {
-      doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(12);
-      const normalY = originY + height - 20;
+      doc.fillColor(options.normalPriceColor).font("Sarabun-Regular").fontSize(options.normalPriceFontSize);
       const normalText = formatCurrency(item.normalPrice);
       doc.text(normalText, originX + padding, normalY, {
         width: width - padding * 2,
       });
 
       const measured = doc.widthOfString(normalText);
-      const strikeY = normalY + 8;
+      const strikeY = normalY + Math.max(options.normalPriceFontSize * 0.55, 6);
       doc
         .moveTo(originX + padding, strikeY)
         .lineTo(originX + padding + measured, strikeY)
         .lineWidth(1)
-        .strokeColor("#98816a")
+        .strokeColor(options.normalPriceColor)
         .stroke();
 
       if (showDiscountPercent && item.discountPercent) {
-        doc.fillColor("#98816a").font("Sarabun-Regular").fontSize(9);
+        doc.fillColor(options.normalPriceColor).font("Sarabun-Regular").fontSize(Math.max(options.normalPriceFontSize - 2, 9));
         doc.text(
           `${item.discountPercent.toFixed(0)}% off`,
           originX + padding + measured + 8,
@@ -188,13 +194,13 @@ function drawCard(
     }
   } else {
     doc.fillColor(
-      variant === "clean" ? (theme.accentStrong ?? "#22344d") : "#e60000",
+      variant === "clean" ? options.titleColor : options.promoPriceColor,
     );
-    doc.font("Sarabun-Bold").fontSize(24);
+    doc.font("Sarabun-Bold").fontSize(Math.max(options.promoPriceFontSize - 4, options.normalPriceFontSize + 6));
     doc.text(
       formatCurrency(item.normalPrice ?? item.promoPrice),
       originX + padding,
-      originY + height - 40,
+      originY + height - Math.max(options.promoPriceFontSize, 32),
       {
         width: width - padding * 2,
       },
@@ -219,8 +225,14 @@ export async function renderCatalogPdf({
   variant,
   theme,
   items,
-  options = {},
+  options,
+  pageBackgroundBuffer = null,
 }: RenderCatalogPdfInput) {
+  const style: CatalogStyleOptions = {
+    ...DEFAULT_STYLE_OPTIONS,
+    ...options,
+    variant: options?.variant ?? (variant === "clean" ? "clean" : "promo"),
+  };
   const document = new PDFDocument({
     size: "A4",
     margin: 0,
@@ -239,8 +251,8 @@ export async function renderCatalogPdf({
 
   const bufferPromise = createDocumentBuffer(document);
   const pages = chunk(items, PRODUCTS_PER_PAGE);
-  const margin = 18;
-  const gap = 12;
+  const margin = style.pagePadding;
+  const gap = style.pageGap;
   const columns = 3;
   const rows = 3;
 
@@ -252,24 +264,35 @@ export async function renderCatalogPdf({
     const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
     const cardHeight = (pageHeight - margin * 2 - gap * (rows - 1)) / rows;
 
-    document.rect(0, 0, pageWidth, pageHeight).fill(theme.background ?? "#fff8f2");
+    document.rect(0, 0, pageWidth, pageHeight).fill(style.pageBackgroundColor);
 
-    document
-      .fillColor(theme.accentStrong ?? "#bb2d12")
-      .font("Sarabun-Bold")
-      .fontSize(10)
-      .text(jobName, margin, 10, {
-        width: pageWidth - margin * 2,
-        align: "left",
-      });
+    if (pageBackgroundBuffer) {
+      document.save();
+      document.opacity(style.pageBackgroundOpacity);
+
+      if (style.pageBackgroundFit === "contain") {
+        document.image(pageBackgroundBuffer, 0, 0, {
+          fit: [pageWidth, pageHeight],
+          align: "center",
+          valign: "center",
+        });
+      } else {
+        document.image(pageBackgroundBuffer, 0, 0, {
+          width: pageWidth,
+          height: pageHeight,
+        });
+      }
+
+      document.restore();
+    }
 
     pageItems.forEach((item, itemIndex) => {
       const column = itemIndex % columns;
       const row = Math.floor(itemIndex / columns);
       const x = margin + column * (cardWidth + gap);
-      const y = margin + row * (cardHeight + gap) + 18;
+      const y = margin + row * (cardHeight + gap);
 
-      drawCard(document, item, x, y, cardWidth, cardHeight - 18, variant, theme, options);
+      drawCard(document, item, x, y, cardWidth, cardHeight, variant, theme, style);
     });
   });
 

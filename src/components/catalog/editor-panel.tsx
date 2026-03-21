@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Eye,
@@ -14,9 +14,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { moveItemAction, toggleItemVisibilityAction, saveStyleOptionsAction } from "@/app/(app)/actions";
-import { Button } from "@/components/ui/button";
+import { CatalogStyleControls } from "@/components/catalog/catalog-style-controls";
 import { Input } from "@/components/ui/input";
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
+import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import {
+  CATALOG_STYLE_PRESETS,
+  type EditorCatalogStyleOptions,
+} from "@/lib/catalog/style-options";
 
 interface EditorItem {
   id: string;
@@ -32,16 +37,6 @@ interface EditorItem {
   previewUrl: string | null;
   isVisible: boolean;
   displayOrder: number;
-}
-
-interface StyleOptions {
-  variant: string;
-  showNormalPrice: boolean;
-  showPromoPrice: boolean;
-  showDiscountAmount: boolean;
-  showDiscountPercent: boolean;
-  showSku: boolean;
-  showPackSize: boolean;
 }
 
 interface EditState {
@@ -159,19 +154,97 @@ export function EditorPanel({
 }: {
   initialItems: EditorItem[];
   jobId: string;
-  initialStyle: StyleOptions;
+  initialStyle: EditorCatalogStyleOptions;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<EditorItem[]>(initialItems);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [style, setStyle] = useState<StyleOptions>(initialStyle);
+  const [style, setStyle] = useState<EditorCatalogStyleOptions>(initialStyle);
   const [styleTransition, startStyleTransition] = useTransition();
   const [previewPage, setPreviewPage] = useState(0);
+  const [backgroundUploading, setBackgroundUploading] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
 
   const visibleItems = items.filter((i) => i.isVisible);
   const pages = chunk(visibleItems, ITEMS_PER_PAGE);
   const currentPageItems = pages[previewPage] ?? [];
+
+  function updateStyle(
+    key: keyof EditorCatalogStyleOptions,
+    value: string | number | boolean | null,
+  ) {
+    setStyle((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
+  }
+
+  function applyPreset(presetId: string) {
+    const preset = CATALOG_STYLE_PRESETS.find((entry) => entry.id === presetId);
+
+    if (!preset) {
+      return;
+    }
+
+    setStyle((previous) => ({
+      ...previous,
+      ...preset.options,
+    }));
+  }
+
+  function resetStyle() {
+    setStyle({
+      ...DEFAULT_STYLE_OPTIONS,
+      pageBackgroundPreviewUrl: null,
+    });
+    setBackgroundError(null);
+  }
+
+  async function handleBackgroundUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setBackgroundUploading(true);
+    setBackgroundError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("background", file);
+
+      const response = await fetch(`/api/jobs/${jobId}/background`, {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            storageBucket?: string;
+            storagePath?: string;
+            previewUrl?: string | null;
+          }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Background upload failed.");
+      }
+
+      setStyle((previous) => ({
+        ...previous,
+        pageBackgroundImageBucket: payload?.storageBucket ?? null,
+        pageBackgroundImagePath: payload?.storagePath ?? null,
+        pageBackgroundPreviewUrl: payload?.previewUrl ?? null,
+      }));
+    } catch (error) {
+      setBackgroundError(error instanceof Error ? error.message : "Background upload failed.");
+    } finally {
+      event.target.value = "";
+      setBackgroundUploading(false);
+    }
+  }
 
   async function handleSaveItem(itemId: string, fields: Partial<EditState>) {
     setSaving(itemId);
@@ -226,84 +299,23 @@ export function EditorPanel({
       {/* ── Left: product list + style panel ── */}
       <div className="space-y-4">
         {/* Style options */}
-        <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
-          <div className="border-b border-line bg-gray-50/50 px-4 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Style Options</p>
-          </div>
-          <form
-            action={async (fd) => {
-              startStyleTransition(async () => {
-                await saveStyleOptionsAction(fd);
-                router.refresh();
-              });
-            }}
-            className="p-4 space-y-4"
-          >
-            <input type="hidden" name="jobId" value={jobId} />
-
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted">Layout variant</p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { value: "promo", label: "Promo flyer" },
-                  { value: "clean", label: "Clean grid" },
-                ].map((v) => (
-                  <label
-                    key={v.value}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white p-2.5 text-xs has-[:checked]:border-brand has-[:checked]:bg-brand-soft/10 transition"
-                  >
-                    <input
-                      type="radio"
-                      name="variant"
-                      value={v.value}
-                      defaultChecked={style.variant === v.value}
-                      onChange={() => setStyle((p) => ({ ...p, variant: v.value }))}
-                      className="accent-brand"
-                    />
-                    {v.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted">Display options</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(
-                  [
-                    ["showNormalPrice", "Normal price"],
-                    ["showPromoPrice", "Promo price"],
-                    ["showDiscountAmount", "Discount amount"],
-                    ["showDiscountPercent", "Percent off"],
-                    ["showSku", "SKU"],
-                    ["showPackSize", "Pack size"],
-                  ] as [keyof StyleOptions, string][]
-                ).map(([key, label]) => (
-                  <label
-                    key={key}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-muted-strong has-[:checked]:border-brand/30 transition"
-                  >
-                    <input
-                      type="checkbox"
-                      name={key}
-                      defaultChecked={Boolean(style[key])}
-                      onChange={(e) =>
-                        setStyle((p) => ({ ...p, [key]: e.target.checked }))
-                      }
-                      className="accent-brand"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full h-8 text-xs gap-1.5" disabled={styleTransition}>
-              {styleTransition && <Loader2 className="size-3 animate-spin" />}
-              Save style
-            </Button>
-          </form>
-        </div>
+        <CatalogStyleControls
+          jobId={jobId}
+          style={style}
+          styleTransition={styleTransition}
+          backgroundUploading={backgroundUploading}
+          backgroundError={backgroundError}
+          onStyleChange={updateStyle}
+          onApplyPreset={applyPreset}
+          onReset={resetStyle}
+          onBackgroundUpload={handleBackgroundUpload}
+          formAction={(fd) => {
+            startStyleTransition(async () => {
+              await saveStyleOptionsAction(fd);
+              router.refresh();
+            });
+          }}
+        />
 
         {/* Product list */}
         <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
@@ -451,8 +463,26 @@ export function EditorPanel({
 
         <div className="p-4">
           {currentPageItems.length > 0 ? (
-            <div className="catalog-page overflow-hidden p-3">
-              <div className="grid h-full grid-cols-3 grid-rows-3 gap-2">
+            <div
+              className="catalog-page relative overflow-hidden"
+              style={{
+                backgroundColor: style.pageBackgroundColor,
+                padding: `${style.pagePadding}px`,
+              }}
+            >
+              {style.pageBackgroundPreviewUrl ? (
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: `url(${style.pageBackgroundPreviewUrl})`,
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: style.pageBackgroundFit,
+                    opacity: style.pageBackgroundOpacity,
+                  }}
+                />
+              ) : null}
+              <div className="relative grid h-full grid-cols-3 grid-rows-3" style={{ gap: `${style.pageGap}px` }}>
                 {currentPageItems.map((item) => (
                   <div key={item.id} className="min-h-0 min-w-0 overflow-hidden">
                     <CatalogCardPreview

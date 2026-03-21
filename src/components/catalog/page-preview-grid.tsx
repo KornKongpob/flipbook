@@ -2,6 +2,7 @@ import { chunk } from "@/lib/utils";
 import { PRODUCTS_PER_PAGE } from "@/lib/catalog/constants";
 import type { CatalogItemView } from "@/lib/catalog/repository";
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
+import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 interface PagePreviewGridProps {
   items: Array<
@@ -9,15 +10,7 @@ interface PagePreviewGridProps {
       previewUrl?: string | null;
     }
   >;
-  options?: {
-    variant?: string;
-    showNormalPrice?: boolean;
-    showPromoPrice?: boolean;
-    showDiscountAmount?: boolean;
-    showDiscountPercent?: boolean;
-    showSku?: boolean;
-    showPackSize?: boolean;
-  };
+  options?: Partial<CatalogStyleOptions>;
 }
 
 export function PagePreviewGrid({ items, options }: PagePreviewGridProps) {
@@ -35,8 +28,15 @@ export function PagePreviewGrid({ items, options }: PagePreviewGridProps) {
   return (
     <div className="space-y-6">
       {pages.map((pageItems, pageIndex) => (
-        <div key={pageIndex} className="catalog-page overflow-hidden p-3">
-          <div className="grid h-full grid-cols-3 grid-rows-3 gap-2">
+        <div
+          key={pageIndex}
+          className="catalog-page overflow-hidden"
+          style={{
+            backgroundColor: options?.pageBackgroundColor,
+            padding: `${options?.pagePadding ?? 18}px`,
+          }}
+        >
+          <div className="grid h-full grid-cols-3 grid-rows-3" style={{ gap: `${options?.pageGap ?? 12}px` }}>
             {pageItems.map((item) => (
               <div key={item.id} className="min-h-0 min-w-0 overflow-hidden">
                 <CatalogCardPreview

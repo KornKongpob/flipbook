@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
 
 interface CatalogCardPreviewProps {
@@ -14,15 +16,7 @@ interface CatalogCardPreviewProps {
   discountAmount?: number | null;
   discountPercent?: number | null;
   imageUrl?: string | null;
-  options?: {
-    variant?: string;
-    showNormalPrice?: boolean;
-    showPromoPrice?: boolean;
-    showDiscountAmount?: boolean;
-    showDiscountPercent?: boolean;
-    showSku?: boolean;
-    showPackSize?: boolean;
-  };
+  options?: Partial<CatalogStyleOptions>;
 }
 
 export function CatalogCardPreview({
@@ -38,20 +32,39 @@ export function CatalogCardPreview({
   options,
 }: CatalogCardPreviewProps) {
   const [imgFailed, setImgFailed] = useState(false);
+  const style = {
+    ...DEFAULT_STYLE_OPTIONS,
+    ...options,
+  };
   const promoActive =
     promoPrice !== null &&
     promoPrice !== undefined &&
     normalPrice !== null &&
     normalPrice !== undefined &&
     promoPrice < normalPrice;
-  const meta = [options?.showSku !== false ? sku : null, options?.showPackSize !== false ? packSize : null, unit]
+  const showDiscountBadge = promoActive && style.showDiscountAmount && discountAmount != null;
+  const meta = [style.showSku ? sku : null, style.showPackSize ? packSize : null, unit]
     .filter(Boolean)
     .join(" • ");
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-[#f0dfd4] bg-white p-2">
-      {/* Image: use flex-[2] so it takes proportional space, not a fixed height */}
-      <div className="relative flex flex-[2] min-h-0 items-center justify-center rounded-lg bg-[#fff5ef]">
+    <div
+      className="flex h-full flex-col overflow-hidden border"
+      style={{
+        borderRadius: `${style.cardRadius}px`,
+        borderColor: style.cardBorderColor,
+        backgroundColor: style.cardBackgroundColor,
+        padding: `${style.cardPadding}px`,
+      }}
+    >
+      <div
+        className="relative flex shrink-0 items-center justify-center overflow-hidden"
+        style={{
+          height: `${style.imageAreaHeight}px`,
+          borderRadius: `${Math.max(style.cardRadius - 6, 8)}px`,
+          backgroundColor: style.imageBackgroundColor,
+        }}
+      >
         {imageUrl && !imgFailed ? (
           <Image
             src={imageUrl}
@@ -63,40 +76,84 @@ export function CatalogCardPreview({
             onError={() => setImgFailed(true)}
           />
         ) : (
-          <span className="text-[10px] font-medium text-[#b17c63]">No image</span>
+          <span className="text-[10px] font-medium" style={{ color: style.metaColor }}>No image</span>
         )}
       </div>
 
-      {promoActive && (options?.showDiscountAmount ?? true) ? (
-        <div className="mt-1 shrink-0 truncate rounded-full bg-[#ffe27d] px-2 py-0.5 text-center text-[10px] font-semibold text-[#982c11]">
+      {showDiscountBadge ? (
+        <div
+          className="mt-2 shrink-0 truncate rounded-full px-2 py-0.5 text-center font-semibold"
+          style={{
+            backgroundColor: style.discountBadgeBackgroundColor,
+            color: style.discountBadgeTextColor,
+            fontSize: `${Math.max(style.skuFontSize, 10)}px`,
+          }}
+        >
           ถูกลง {formatCurrency(discountAmount)}
         </div>
       ) : null}
 
-      {/* Text block: flex-[1] with min-h-0 to prevent overflow */}
-      <div className="mt-1 flex flex-[1] min-h-0 flex-col justify-between">
+      <div className="mt-2 flex min-h-0 flex-1 flex-col justify-between">
         <div>
-          <h3 className="line-clamp-2 text-[11px] font-semibold leading-tight text-[#241b15]">
+          <h3
+            className="line-clamp-2 font-semibold"
+            style={{
+              color: style.titleColor,
+              fontSize: `${style.titleFontSize}px`,
+              lineHeight: 1.15,
+            }}
+          >
             {title}
           </h3>
-          <p className="mt-0.5 truncate text-[9px] text-[#7b6758]">{meta || "\u00A0"}</p>
+          <p
+            className="mt-1 truncate"
+            style={{
+              color: style.metaColor,
+              fontSize: `${style.skuFontSize}px`,
+              lineHeight: 1.15,
+            }}
+          >
+            {meta || "\u00A0"}
+          </p>
         </div>
 
         <div className="mt-auto shrink-0">
-          {promoActive && (options?.showPromoPrice ?? true) ? (
-            <div className="truncate text-base font-bold leading-tight tracking-tight text-[#e64324]">
+          {promoActive && style.showPromoPrice ? (
+            <div
+              className="truncate font-bold tracking-tight"
+              style={{
+                color: style.promoPriceColor,
+                fontSize: `${style.promoPriceFontSize}px`,
+                lineHeight: 1,
+              }}
+            >
               {formatCurrency(promoPrice)}
             </div>
           ) : (
-            <div className="truncate text-base font-bold leading-tight tracking-tight text-[#21354e]">
+            <div
+              className="truncate font-bold tracking-tight"
+              style={{
+                color: style.variant === "clean" ? style.titleColor : style.promoPriceColor,
+                fontSize: `${Math.max(style.promoPriceFontSize - 4, style.normalPriceFontSize + 6)}px`,
+                lineHeight: 1,
+              }}
+            >
               {formatCurrency(normalPrice ?? promoPrice)}
             </div>
           )}
 
-          {promoActive && (options?.showNormalPrice ?? true) ? (
-            <div className="flex items-center gap-2 text-[9px] text-[#8f7967]">
+          {promoActive && style.showNormalPrice ? (
+            <div
+              className="flex items-center gap-2"
+              style={{
+                color: style.normalPriceColor,
+                fontSize: `${style.normalPriceFontSize}px`,
+                lineHeight: 1.1,
+                marginTop: 4,
+              }}
+            >
               <span className="line-through">{formatCurrency(normalPrice)}</span>
-              {(options?.showDiscountPercent ?? false) && discountPercent ? (
+              {style.showDiscountPercent && discountPercent ? (
                 <span>{discountPercent.toFixed(0)}% off</span>
               ) : null}
             </div>

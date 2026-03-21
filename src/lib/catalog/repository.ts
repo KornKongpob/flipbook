@@ -5,11 +5,13 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { parseWorkbookBuffer } from "@/lib/catalog/excel";
 import { runMatchingForJob } from "@/lib/catalog/matching/service";
 import {
+  buildCatalogBackgroundTarget,
   buildGeneratedPdfTarget,
   buildManualAssetTarget,
   buildRawUploadTarget,
 } from "@/lib/catalog/storage";
 import { FILE_BUCKETS } from "@/lib/catalog/constants";
+import { mergeCatalogStyleOptions, type CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { normalizeSku } from "@/lib/utils";
 
 type AdminClient = SupabaseClient<Database>;
@@ -358,7 +360,7 @@ export async function createCatalogJobFromUpload(args: {
 export async function updateJobStyleOptions(
   jobId: string,
   userId: string,
-  styleOptions: Record<string, unknown>,
+  styleOptions: CatalogStyleOptions | Record<string, unknown>,
 ) {
   const admin = getAdminClientOrThrow();
   await ensureJobAccess(admin, jobId, userId);
@@ -370,7 +372,7 @@ export async function updateJobStyleOptions(
     })
     .eq("id", jobId);
 
-  await appendJobEvent(jobId, "style", "Updated catalog style options.", styleOptions);
+  await appendJobEvent(jobId, "style", "Updated catalog style options.", styleOptions as Record<string, unknown>);
 }
 
 export async function approveCatalogItem(args: {
@@ -742,19 +744,38 @@ export async function getLibraryData(userId: string) {
   };
 }
 
+async function downloadStorageBuffer(bucket: string, path: string) {
+  const admin = getAdminClientOrThrow();
+  const downloadResponse = await admin.storage.from(bucket).download(path);
+
+  if (downloadResponse.error || !downloadResponse.data) {
+    return null;
+  }
+
+  return Buffer.from(await downloadResponse.data.arrayBuffer());
+}
+
+async function createSignedStorageUrl(bucket: string, path: string, expiresIn = 3600) {
+  const admin = getAdminClientOrThrow();
+  const signedUrlResponse = await admin.storage.from(bucket).createSignedUrl(path, expiresIn);
+
+  if (signedUrlResponse.error || !signedUrlResponse.data?.signedUrl) {
+    return null;
+  }
+
+  return signedUrlResponse.data.signedUrl;
+}
+
 export async function resolveProductAssetBuffer(asset: ProductAssetRow | null) {
   if (!asset) {
     return null;
   }
 
   if (asset.storage_bucket && asset.storage_path) {
-    const admin = getAdminClientOrThrow();
-    const downloadResponse = await admin.storage
-      .from(asset.storage_bucket)
-      .download(asset.storage_path);
+    const buffer = await downloadStorageBuffer(asset.storage_bucket, asset.storage_path);
 
-    if (!downloadResponse.error && downloadResponse.data) {
-      return Buffer.from(await downloadResponse.data.arrayBuffer());
+    if (buffer) {
+      return buffer;
     }
   }
 
@@ -784,24 +805,68 @@ export async function resolveProductAssetPreviewUrl(asset: ProductAssetRow | nul
     return null;
   }
 
-  // Prefer stable storage path (cached/uploaded images) over raw external URLs
   if (asset.storage_bucket && asset.storage_path) {
-    const admin = getAdminClientOrThrow();
-    const signedUrlResponse = await admin.storage
-      .from(asset.storage_bucket)
-      .createSignedUrl(asset.storage_path, 3600);
+    const signedUrl = await createSignedStorageUrl(asset.storage_bucket, asset.storage_path, 3600);
 
-    if (!signedUrlResponse.error && signedUrlResponse.data?.signedUrl) {
-      return signedUrlResponse.data.signedUrl;
+    if (signedUrl) {
+      return signedUrl;
     }
   }
 
-  // Fall back to proxied external URL
   if (asset.image_url) {
     return `/api/images/proxy?url=${encodeURIComponent(asset.image_url)}`;
   }
 
   return null;
+}
+
+export async function resolveCatalogBackgroundBuffer(
+  styleOptions: Record<string, unknown> | null | undefined,
+) {
+  const style = mergeCatalogStyleOptions(styleOptions);
+
+  if (!style.pageBackgroundImageBucket || !style.pageBackgroundImagePath) {
+    return null;
+  }
+
+  return downloadStorageBuffer(style.pageBackgroundImageBucket, style.pageBackgroundImagePath);
+}
+
+export async function resolveCatalogBackgroundPreviewUrl(
+  styleOptions: Record<string, unknown> | null | undefined,
+) {
+  const style = mergeCatalogStyleOptions(styleOptions);
+
+  if (!style.pageBackgroundImageBucket || !style.pageBackgroundImagePath) {
+    return null;
+  }
+
+  return createSignedStorageUrl(style.pageBackgroundImageBucket, style.pageBackgroundImagePath, 3600);
+}
+
+export async function uploadCatalogBackgroundAsset(args: {
+  jobId: string;
+  userId: string;
+  fileName: string;
+  fileBuffer: Buffer;
+  contentType: string;
+}) {
+  const admin = getAdminClientOrThrow();
+  const job = await ensureJobAccess(admin, args.jobId, args.userId);
+  const target = buildCatalogBackgroundTarget(args.userId, job.id, args.fileName);
+  const uploadResponse = await admin.storage.from(target.bucket).upload(target.path, args.fileBuffer, {
+    contentType: args.contentType,
+    upsert: false,
+  });
+
+  if (uploadResponse.error) {
+    throw uploadResponse.error;
+  }
+
+  return {
+    storageBucket: target.bucket,
+    storagePath: target.path,
+  };
 }
 
 export async function attachManualAssetToItem(args: {
@@ -914,7 +979,6 @@ export async function getJobStatus(jobId: string, userId: string) {
     status: job.status,
     totalCount: items.length,
     matchedCount,
-    reviewCount: job.review_required_count,
     events,
   };
 }
@@ -928,7 +992,7 @@ export async function bulkApproveCatalogItems(args: {
   const admin = getAdminClientOrThrow();
   await ensureJobAccess(admin, args.jobId, args.userId);
 
-  let query = admin
+  const query = admin
     .from("catalog_items")
     .select("id, selected_asset_id, match_status, confidence, job_id")
     .eq("job_id", args.jobId)
@@ -936,13 +1000,15 @@ export async function bulkApproveCatalogItems(args: {
     .not("selected_asset_id", "is", null);
 
   const itemsResponse = await query;
-  let candidates = asRows<Pick<CatalogItemRow, "id" | "selected_asset_id" | "match_status" | "confidence" | "job_id">>(itemsResponse.data);
+  let candidates = asRows<
+    Pick<CatalogItemRow, "id" | "selected_asset_id" | "match_status" | "confidence" | "job_id">
+  >(itemsResponse.data);
 
   if (args.itemIds?.length) {
-    candidates = candidates.filter((c) => args.itemIds!.includes(c.id));
+    candidates = candidates.filter((candidate) => args.itemIds!.includes(candidate.id));
   }
   if (args.minConfidence != null) {
-    candidates = candidates.filter((c) => (c.confidence ?? 0) >= args.minConfidence!);
+    candidates = candidates.filter((candidate) => (candidate.confidence ?? 0) >= args.minConfidence!);
   }
 
   if (!candidates.length) return { approved: 0 };
@@ -950,14 +1016,14 @@ export async function bulkApproveCatalogItems(args: {
   await admin
     .from("catalog_items")
     .update({ match_status: "approved", review_note: "Bulk approved." })
-    .in("id", candidates.map((c) => c.id));
+    .in("id", candidates.map((candidate) => candidate.id));
 
   const remainingResponse = await admin
     .from("catalog_items")
     .select("id, match_status")
     .eq("job_id", args.jobId);
   const remaining = asRows<Pick<CatalogItemRow, "id" | "match_status">>(remainingResponse.data);
-  const reviewRequiredCount = remaining.filter((i) => i.match_status === "needs_review").length;
+  const reviewRequiredCount = remaining.filter((item) => item.match_status === "needs_review").length;
 
   await admin
     .from("catalog_jobs")

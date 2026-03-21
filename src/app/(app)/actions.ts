@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { mergeCatalogStyleOptions } from "@/lib/catalog/style-options";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   approveCatalogItem,
@@ -74,15 +75,42 @@ export async function saveStyleOptionsAction(formData: FormData) {
   const user = await requireUser();
   const jobId = String(formData.get("jobId"));
 
-  await updateJobStyleOptions(jobId, user.id, {
-    variant: String(formData.get("variant") ?? "promo"),
-    showNormalPrice: formData.get("showNormalPrice") === "on",
-    showPromoPrice: formData.get("showPromoPrice") === "on",
-    showDiscountAmount: formData.get("showDiscountAmount") === "on",
-    showDiscountPercent: formData.get("showDiscountPercent") === "on",
-    showSku: formData.get("showSku") === "on",
-    showPackSize: formData.get("showPackSize") === "on",
-  });
+  await updateJobStyleOptions(
+    jobId,
+    user.id,
+    mergeCatalogStyleOptions({
+      variant: String(formData.get("variant") ?? "promo"),
+      showNormalPrice: formData.get("showNormalPrice") === "on",
+      showPromoPrice: formData.get("showPromoPrice") === "on",
+      showDiscountAmount: formData.get("showDiscountAmount") === "on",
+      showDiscountPercent: formData.get("showDiscountPercent") === "on",
+      showSku: formData.get("showSku") === "on",
+      showPackSize: formData.get("showPackSize") === "on",
+      pageBackgroundColor: formData.get("pageBackgroundColor"),
+      pageBackgroundImageBucket: formData.get("pageBackgroundImageBucket"),
+      pageBackgroundImagePath: formData.get("pageBackgroundImagePath"),
+      pageBackgroundFit: formData.get("pageBackgroundFit"),
+      pageBackgroundOpacity: formData.get("pageBackgroundOpacity"),
+      pagePadding: formData.get("pagePadding"),
+      pageGap: formData.get("pageGap"),
+      cardPadding: formData.get("cardPadding"),
+      cardRadius: formData.get("cardRadius"),
+      imageAreaHeight: formData.get("imageAreaHeight"),
+      titleFontSize: formData.get("titleFontSize"),
+      skuFontSize: formData.get("skuFontSize"),
+      promoPriceFontSize: formData.get("promoPriceFontSize"),
+      normalPriceFontSize: formData.get("normalPriceFontSize"),
+      cardBackgroundColor: formData.get("cardBackgroundColor"),
+      cardBorderColor: formData.get("cardBorderColor"),
+      imageBackgroundColor: formData.get("imageBackgroundColor"),
+      titleColor: formData.get("titleColor"),
+      metaColor: formData.get("metaColor"),
+      promoPriceColor: formData.get("promoPriceColor"),
+      normalPriceColor: formData.get("normalPriceColor"),
+      discountBadgeBackgroundColor: formData.get("discountBadgeBackgroundColor"),
+      discountBadgeTextColor: formData.get("discountBadgeTextColor"),
+    }),
+  );
 
   revalidatePath(`/catalogs/${jobId}/editor`);
 }

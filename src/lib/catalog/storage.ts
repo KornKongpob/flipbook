@@ -41,6 +41,13 @@ export function buildManualAssetTarget(
   };
 }
 
+export function buildCatalogBackgroundTarget(userId: string, jobId: string, fileName: string) {
+  return {
+    bucket: FILE_BUCKETS.manualAssets,
+    path: `${userId}/${jobId}/page-background/${randomUUID()}-${sanitizeUploadName(fileName)}`,
+  };
+}
+
 export function buildAssetCacheTarget(key: string, fileName = "asset.jpg") {
   return {
     bucket: FILE_BUCKETS.assetCache,

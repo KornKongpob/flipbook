@@ -3,6 +3,7 @@ import type {
   CatalogJobStatus,
   FlipbookMode,
 } from "@/lib/database.types";
+import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export const FILE_BUCKETS = {
   rawUploads: "raw-uploads",
@@ -22,7 +23,7 @@ export const MATCH_THRESHOLDS = {
   needsReview: 0.65,
 };
 
-export const DEFAULT_STYLE_OPTIONS = {
+export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   variant: "promo",
   showNormalPrice: true,
   showPromoPrice: true,
@@ -30,7 +31,30 @@ export const DEFAULT_STYLE_OPTIONS = {
   showDiscountPercent: false,
   showSku: true,
   showPackSize: true,
-} as const;
+  pageBackgroundColor: "#fff8f2",
+  pageBackgroundImageBucket: null,
+  pageBackgroundImagePath: null,
+  pageBackgroundFit: "cover",
+  pageBackgroundOpacity: 0.22,
+  pagePadding: 18,
+  pageGap: 12,
+  cardPadding: 12,
+  cardRadius: 18,
+  imageAreaHeight: 88,
+  titleFontSize: 13,
+  skuFontSize: 11,
+  promoPriceFontSize: 28,
+  normalPriceFontSize: 12,
+  cardBackgroundColor: "#ffffff",
+  cardBorderColor: "#eedbcf",
+  imageBackgroundColor: "#fff5ef",
+  titleColor: "#211914",
+  metaColor: "#75675a",
+  promoPriceColor: "#e60000",
+  normalPriceColor: "#98816a",
+  discountBadgeBackgroundColor: "#ffc107",
+  discountBadgeTextColor: "#a81a05",
+};
 
 export const JOB_STATUS_META: Record<
   CatalogJobStatus,
