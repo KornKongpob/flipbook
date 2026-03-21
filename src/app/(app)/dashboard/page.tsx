@@ -10,16 +10,17 @@ import { formatCompactNumber } from "@/lib/utils";
 function getJobHref(job: { id: string; status: string }) {
   if (job.status === "pdf_ready" || job.status === "completed") return `/catalogs/${job.id}/result`;
   if (job.status === "needs_review") return `/catalogs/${job.id}/review`;
-  if (job.status === "ready_to_generate" || job.status === "generating_pdf") return `/catalogs/${job.id}/generate`;
-  if (job.status === "parsing" || job.status === "matching" || job.status === "uploaded") return `/catalogs/${job.id}/mapping`;
-  return `/catalogs/${job.id}/preview`;
+  if (job.status === "ready_to_generate" || job.status === "generating_pdf") return `/catalogs/${job.id}/result`;
+  if (job.status === "parsing" || job.status === "matching" || job.status === "uploaded") return `/catalogs/${job.id}/matching`;
+  return `/catalogs/${job.id}/editor`;
 }
 
 function getJobActionLabel(status: string): string {
   if (status === "pdf_ready" || status === "completed") return "View result";
   if (status === "needs_review") return "Review now";
-  if (status === "ready_to_generate") return "Generate";
-  if (status === "generating_pdf") return "Progress";
+  if (status === "ready_to_generate") return "Generate PDF";
+  if (status === "generating_pdf") return "Generating…";
+  if (status === "parsing" || status === "matching") return "Matching…";
   return "Continue";
 }
 

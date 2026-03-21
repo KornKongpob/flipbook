@@ -10,10 +10,9 @@ interface WorkflowStep {
 }
 
 const STEPS: WorkflowStep[] = [
-  { key: "mapping", label: "Mapping", href: "mapping" },
+  { key: "matching", label: "Matching", href: "matching" },
   { key: "review", label: "Review", href: "review" },
-  { key: "preview", label: "Preview", href: "preview" },
-  { key: "generate", label: "Generate", href: "generate" },
+  { key: "editor", label: "Editor", href: "editor" },
   { key: "result", label: "Result", href: "result" },
 ];
 
@@ -24,10 +23,10 @@ const STATUS_STEP_INDEX: Record<CatalogJobStatus, number> = {
   matching: 0,
   needs_review: 1,
   ready_to_generate: 2,
-  generating_pdf: 3,
-  pdf_ready: 4,
-  converting_flipbook: 4,
-  completed: 4,
+  generating_pdf: 2,
+  pdf_ready: 3,
+  converting_flipbook: 3,
+  completed: 3,
   failed: -1,
   cancelled: -1,
 };

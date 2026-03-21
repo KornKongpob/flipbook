@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       reuseManualMappings,
     });
 
-    return NextResponse.redirect(new URL(`/catalogs/${jobId}/mapping`, request.url), SEE_OTHER);
+    return NextResponse.redirect(new URL(`/catalogs/${jobId}/matching`, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Import failed.";
 

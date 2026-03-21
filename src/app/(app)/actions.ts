@@ -34,7 +34,7 @@ export async function approveCandidateAction(formData: FormData) {
   });
 
   revalidatePath(`/catalogs/${jobId}/review`);
-  revalidatePath(`/catalogs/${jobId}/preview`);
+  revalidatePath(`/catalogs/${jobId}/editor`);
 }
 
 export async function saveDisplayNameAction(formData: FormData) {
@@ -45,7 +45,7 @@ export async function saveDisplayNameAction(formData: FormData) {
 
   await updateCatalogItemDisplayName(user.id, itemId, displayName || null);
 
-  revalidatePath(`/catalogs/${jobId}/preview`);
+  revalidatePath(`/catalogs/${jobId}/editor`);
 }
 
 export async function moveItemAction(formData: FormData) {
@@ -56,7 +56,7 @@ export async function moveItemAction(formData: FormData) {
 
   await moveCatalogItem(user.id, itemId, direction);
 
-  revalidatePath(`/catalogs/${jobId}/preview`);
+  revalidatePath(`/catalogs/${jobId}/editor`);
 }
 
 export async function toggleItemVisibilityAction(formData: FormData) {
@@ -67,7 +67,7 @@ export async function toggleItemVisibilityAction(formData: FormData) {
 
   await toggleCatalogItemVisibility(user.id, itemId, nextVisible);
 
-  revalidatePath(`/catalogs/${jobId}/preview`);
+  revalidatePath(`/catalogs/${jobId}/editor`);
 }
 
 export async function saveStyleOptionsAction(formData: FormData) {
@@ -84,8 +84,7 @@ export async function saveStyleOptionsAction(formData: FormData) {
     showPackSize: formData.get("showPackSize") === "on",
   });
 
-  revalidatePath(`/catalogs/${jobId}/settings`);
-  revalidatePath(`/catalogs/${jobId}/preview`);
+  revalidatePath(`/catalogs/${jobId}/editor`);
 }
 
 export async function duplicateJobAction(formData: FormData) {
@@ -93,5 +92,5 @@ export async function duplicateJobAction(formData: FormData) {
   const jobId = String(formData.get("jobId"));
   const newJobId = await duplicateCatalogJob(jobId, user.id);
 
-  redirect(`/catalogs/${newJobId}/preview`);
+  redirect(`/catalogs/${newJobId}/editor`);
 }

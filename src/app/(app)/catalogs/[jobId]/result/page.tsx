@@ -3,7 +3,7 @@ import { WorkflowStepper } from "@/components/catalog/workflow-stepper";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { getCatalogJobBundle, getLatestPdfFile } from "@/lib/catalog/repository";
-import { Download, FileText, ExternalLink, RefreshCw, AlertCircle, Copy } from "lucide-react";
+import { Download, FileText, ExternalLink, RefreshCw, AlertCircle, Copy, Play } from "lucide-react";
 
 export default async function CatalogResultPage({
   params,
@@ -21,15 +21,39 @@ export default async function CatalogResultPage({
     ? decodeURIComponent(resolvedSearchParams.error)
     : bundle.job.error_message;
 
+  const isPdfReady = ["pdf_ready", "completed", "converting_flipbook"].includes(bundle.job.status);
+  const isGenerating = bundle.job.status === "generating_pdf";
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="rounded-xl border border-line bg-card p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Catalog Generated</h1>
-          <p className="mt-1 text-sm text-muted">Your PDF catalog is ready to download or publish.</p>
+      <div className="rounded-xl border border-line bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <WorkflowStepper jobId={jobId} currentStep="result" jobStatus={bundle.job.status} />
+          <div className="flex shrink-0 items-center gap-2">
+            <a href={`/catalogs/${jobId}/editor`} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-muted-strong hover:text-foreground transition">
+              ← Back to Editor
+            </a>
+            {!isPdfReady && (
+              <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
+                <Button className="h-8 gap-1.5 text-xs" disabled={isGenerating}>
+                  {isGenerating ? (
+                    <RefreshCw className="size-3.5 animate-spin" />
+                  ) : (
+                    <Play className="size-3.5" />
+                  )}
+                  {isGenerating ? "Generating…" : "Generate PDF"}
+                </Button>
+              </form>
+            )}
+          </div>
         </div>
-        <WorkflowStepper jobId={jobId} currentStep="result" jobStatus={bundle.job.status} />
+        <div className="mt-2">
+          <h1 className="text-base font-semibold text-foreground">{bundle.job.job_name}</h1>
+          <p className="text-xs text-muted mt-0.5">
+            {isPdfReady ? "PDF catalog is ready to download or publish." : "Generate the PDF catalog when you're ready."}
+          </p>
+        </div>
       </div>
 
       {errorMessage && (

@@ -892,6 +892,126 @@ export async function markJobStatus(
     .eq("id", jobId);
 }
 
+export async function getJobStatus(jobId: string, userId: string) {
+  const admin = getAdminClientOrThrow();
+  const job = await ensureJobAccess(admin, jobId, userId);
+
+  const [itemsResponse, eventsResponse] = await Promise.all([
+    admin.from("catalog_items").select("id, match_status").eq("job_id", jobId),
+    admin
+      .from("catalog_job_events")
+      .select("step, message, created_at")
+      .eq("job_id", jobId)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+
+  const items = asRows<Pick<CatalogItemRow, "id" | "match_status">>(itemsResponse.data);
+  const events = asRows<Pick<EventRow, "step" | "message" | "created_at">>(eventsResponse.data);
+  const matchedCount = items.filter((i) => i.match_status !== "pending").length;
+
+  return {
+    status: job.status,
+    totalCount: items.length,
+    matchedCount,
+    reviewCount: job.review_required_count,
+    events,
+  };
+}
+
+export async function bulkApproveCatalogItems(args: {
+  userId: string;
+  jobId: string;
+  minConfidence?: number;
+  itemIds?: string[];
+}) {
+  const admin = getAdminClientOrThrow();
+  await ensureJobAccess(admin, args.jobId, args.userId);
+
+  let query = admin
+    .from("catalog_items")
+    .select("id, selected_asset_id, match_status, confidence, job_id")
+    .eq("job_id", args.jobId)
+    .eq("match_status", "needs_review")
+    .not("selected_asset_id", "is", null);
+
+  const itemsResponse = await query;
+  let candidates = asRows<Pick<CatalogItemRow, "id" | "selected_asset_id" | "match_status" | "confidence" | "job_id">>(itemsResponse.data);
+
+  if (args.itemIds?.length) {
+    candidates = candidates.filter((c) => args.itemIds!.includes(c.id));
+  }
+  if (args.minConfidence != null) {
+    candidates = candidates.filter((c) => (c.confidence ?? 0) >= args.minConfidence!);
+  }
+
+  if (!candidates.length) return { approved: 0 };
+
+  await admin
+    .from("catalog_items")
+    .update({ match_status: "approved", review_note: "Bulk approved." })
+    .in("id", candidates.map((c) => c.id));
+
+  const remainingResponse = await admin
+    .from("catalog_items")
+    .select("id, match_status")
+    .eq("job_id", args.jobId);
+  const remaining = asRows<Pick<CatalogItemRow, "id" | "match_status">>(remainingResponse.data);
+  const reviewRequiredCount = remaining.filter((i) => i.match_status === "needs_review").length;
+
+  await admin
+    .from("catalog_jobs")
+    .update({
+      review_required_count: reviewRequiredCount,
+      status: reviewRequiredCount > 0 ? "needs_review" : "ready_to_generate",
+    })
+    .eq("id", args.jobId);
+
+  await appendJobEvent(args.jobId, "review", `Bulk approved ${candidates.length} item(s).`, {
+    approved: candidates.length,
+    minConfidence: args.minConfidence,
+  });
+
+  return { approved: candidates.length };
+}
+
+export async function updateCatalogItemFields(
+  userId: string,
+  itemId: string,
+  fields: {
+    displayName?: string | null;
+    normalPrice?: number | null;
+    promoPrice?: number | null;
+    discountAmount?: number | null;
+    discountPercent?: number | null;
+    packSize?: string | null;
+    unit?: string | null;
+  },
+) {
+  const admin = getAdminClientOrThrow();
+  const itemResponse = await admin
+    .from("catalog_items")
+    .select("id, job_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  const item = asRow<Pick<CatalogItemRow, "id" | "job_id"> | null>(itemResponse.data);
+
+  if (!item) throw new Error("Catalog item not found.");
+
+  await ensureJobAccess(admin, item.job_id, userId);
+
+  const update: Record<string, unknown> = {};
+  if ("displayName" in fields) update.display_name_override = fields.displayName?.trim() || null;
+  if ("normalPrice" in fields) update.normal_price = fields.normalPrice;
+  if ("promoPrice" in fields) update.promo_price = fields.promoPrice;
+  if ("discountAmount" in fields) update.discount_amount = fields.discountAmount;
+  if ("discountPercent" in fields) update.discount_percent = fields.discountPercent;
+  if ("packSize" in fields) update.pack_size = fields.packSize?.trim() || null;
+  if ("unit" in fields) update.unit = fields.unit?.trim() || null;
+
+  await admin.from("catalog_items").update(update).eq("id", itemId);
+}
+
 export function getChecksum(buffer: Buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
