@@ -2,6 +2,10 @@ export type CatalogLayoutPreset = "3x3" | "4x3" | "2x3";
 export type CatalogMediaFit = "cover" | "contain";
 export type CatalogBackgroundAnchor = "page" | "safeArea";
 
+export const CATALOG_A4_PAGE_WIDTH = (210 / 25.4) * 72;
+export const CATALOG_A4_PAGE_HEIGHT = (297 / 25.4) * 72;
+export const CATALOG_A4_PAGE_SIZE: [number, number] = [CATALOG_A4_PAGE_WIDTH, CATALOG_A4_PAGE_HEIGHT];
+
 export interface CatalogRect {
   x: number;
   y: number;
@@ -232,4 +236,13 @@ export function offsetRectByPercent(rect: CatalogRect, offsetX: number, offsetY:
     x: rect.x + rect.width * (offsetX / 100),
     y: rect.y + rect.height * (offsetY / 100),
   };
+}
+
+export function getCatalogMediaRenderRect(
+  rect: CatalogRect,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+): CatalogRect {
+  return offsetRectByPercent(scaleRectFromCenter(rect, scale), offsetX, offsetY);
 }

@@ -69,6 +69,9 @@ export function CatalogCardPreview({
   const meta = [style.showSku ? sku : null, style.showPackSize ? packSize : null, unit]
     .filter(Boolean)
     .join(" • ");
+  const normalPriceLabel = formatCurrency(normalPrice);
+  const promoPriceLabel = formatCurrency(promoPrice);
+  const singlePriceLabel = formatCurrency(normalPrice ?? promoPrice);
 
   useEffect(() => {
     const element = cardRef.current;
@@ -78,8 +81,13 @@ export function CatalogCardPreview({
     }
 
     const updateSize = () => {
-      const nextWidth = element.clientWidth;
-      const nextHeight = element.clientHeight;
+      const styles = window.getComputedStyle(element);
+      const nextWidth = Number.parseFloat(styles.width);
+      const nextHeight = Number.parseFloat(styles.height);
+
+      if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight)) {
+        return;
+      }
 
       setCardSize((previous) => {
         if (previous.width === nextWidth && previous.height === nextHeight) {
@@ -128,12 +136,12 @@ export function CatalogCardPreview({
   return (
     <div
       ref={cardRef}
-      className="flex h-full flex-col overflow-hidden border"
+      className="flex h-full flex-col overflow-hidden"
       style={{
         borderRadius: `${style.cardRadius}px`,
-        borderColor: style.cardBorderColor,
         backgroundColor: style.cardBackgroundColor,
         position: "relative",
+        boxShadow: `inset 0 0 0 1px ${style.cardBorderColor}`,
       }}
     >
       {cardLayout ? (
@@ -165,7 +173,7 @@ export function CatalogCardPreview({
 
           {showDiscountBadge && cardLayout.badgeRect ? (
             <div
-              className="absolute flex items-center justify-center overflow-hidden rounded-full px-2 text-center font-semibold"
+              className="absolute flex items-center justify-center overflow-hidden rounded-full text-center font-bold"
               style={{
                 ...rectStyle(cardLayout.badgeRect),
                 backgroundColor: style.discountBadgeBackgroundColor,
@@ -189,7 +197,6 @@ export function CatalogCardPreview({
                 display: "-webkit-box",
                 WebkitBoxOrient: "vertical",
                 WebkitLineClamp: 2,
-                overflowWrap: "anywhere",
               }}
             >
               {title}
@@ -212,7 +219,7 @@ export function CatalogCardPreview({
 
           {showPromoLine && cardLayout.promoPriceRect ? (
             <div
-              className="absolute overflow-hidden font-bold tracking-tight"
+              className="absolute overflow-hidden font-bold"
               style={{
                 ...rectStyle(cardLayout.promoPriceRect),
                 color: style.promoPriceColor,
@@ -220,13 +227,13 @@ export function CatalogCardPreview({
                 lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
               }}
             >
-              {formatCurrency(promoPrice)}
+              {promoPriceLabel}
             </div>
           ) : null}
 
           {showPromoLine && showNormalPrice && cardLayout.normalPriceRowRect ? (
             <div
-              className="absolute flex items-center gap-2 overflow-hidden whitespace-nowrap"
+              className="absolute overflow-hidden whitespace-nowrap"
               style={{
                 ...rectStyle(cardLayout.normalPriceRowRect),
                 color: style.normalPriceColor,
@@ -234,16 +241,30 @@ export function CatalogCardPreview({
                 lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
               }}
             >
-              <span className="line-through">{formatCurrency(normalPrice)}</span>
+              <span className="inline-flex items-start gap-2">
+                <span className="relative inline-block">
+                  <span>{normalPriceLabel}</span>
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-0 right-0"
+                    style={{
+                      top: `${Math.max(style.normalPriceFontSize * 0.55, 6)}px`,
+                      borderTop: `1px solid ${style.normalPriceColor}`,
+                    }}
+                  />
+                </span>
               {style.showDiscountPercent && discountPercent ? (
-                <span>{discountPercent.toFixed(0)}% off</span>
+                <span style={{ fontSize: `${Math.max(style.normalPriceFontSize - 2, 9)}px` }}>
+                  {discountPercent.toFixed(0)}% off
+                </span>
               ) : null}
+              </span>
             </div>
           ) : null}
 
           {!showPromoLine && cardLayout.singlePriceRect ? (
             <div
-              className="absolute overflow-hidden font-bold tracking-tight"
+              className="absolute overflow-hidden font-bold"
               style={{
                 ...rectStyle(cardLayout.singlePriceRect),
                 color: style.variant === "clean" ? style.titleColor : style.promoPriceColor,
@@ -251,7 +272,7 @@ export function CatalogCardPreview({
                 lineHeight: 1,
               }}
             >
-              {formatCurrency(normalPrice ?? promoPrice)}
+              {singlePriceLabel}
             </div>
           ) : null}
         </>

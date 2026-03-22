@@ -63,39 +63,62 @@ export function resolveCatalogCardLayout(args: {
   showDiscountBadge: boolean;
   showPromoLine: boolean;
   showNormalPrice: boolean;
+  metricScale?: number;
 }) {
-  const { cardWidth, cardHeight, options, showDiscountBadge, showPromoLine, showNormalPrice } = args;
-  const padding = Math.max(options.cardPadding, 0);
+  const {
+    cardWidth,
+    cardHeight,
+    options,
+    showDiscountBadge,
+    showPromoLine,
+    showNormalPrice,
+    metricScale = 1,
+  } = args;
+  const scale = Math.max(metricScale, 0);
+  const scaledCardPadding = options.cardPadding * scale;
+  const scaledImageAreaHeight = options.imageAreaHeight * scale;
+  const scaledTitleFontSize = options.titleFontSize * scale;
+  const scaledSkuFontSize = options.skuFontSize * scale;
+  const scaledPromoPriceFontSize = options.promoPriceFontSize * scale;
+  const scaledNormalPriceFontSize = options.normalPriceFontSize * scale;
+  const scaledBadgeHeight = CATALOG_CARD_BADGE_HEIGHT * scale;
+  const scaledImageGap = CATALOG_CARD_IMAGE_GAP * scale;
+  const scaledBadgeGap = CATALOG_CARD_BADGE_GAP * scale;
+  const scaledTitleMetaGap = CATALOG_CARD_TITLE_META_GAP * scale;
+  const padding = Math.max(scaledCardPadding, 0);
   const innerRect = rect(padding, padding, cardWidth - padding * 2, cardHeight - padding * 2);
   const innerBottom = innerRect.y + innerRect.height;
-  const imageHeight = clamp(options.imageAreaHeight, 0, innerRect.height);
+  const imageHeight = clamp(scaledImageAreaHeight, 0, innerRect.height);
   const imageRect = rect(innerRect.x, innerRect.y, innerRect.width, imageHeight);
   const badgeRect = showDiscountBadge
     ? optionalRect(
         innerRect.x,
-        imageRect.y + imageRect.height + CATALOG_CARD_IMAGE_GAP,
+        imageRect.y + imageRect.height + scaledImageGap,
         innerRect.width,
-        CATALOG_CARD_BADGE_HEIGHT,
+        scaledBadgeHeight,
       )
     : null;
-  const contentTop = imageRect.y + imageRect.height + CATALOG_CARD_IMAGE_GAP + (badgeRect ? CATALOG_CARD_BADGE_HEIGHT + CATALOG_CARD_BADGE_GAP : 0);
-  const singlePriceFontSize = Math.max(options.promoPriceFontSize - 4, options.normalPriceFontSize + 6);
-  const promoPriceLineHeight = options.promoPriceFontSize * CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT;
-  const normalPriceLineHeight = options.normalPriceFontSize * CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT;
+  const contentTop = imageRect.y + imageRect.height + scaledImageGap + (badgeRect ? scaledBadgeHeight + scaledBadgeGap : 0);
+  const singlePriceFontSize = Math.max(
+    scaledPromoPriceFontSize - 4 * scale,
+    scaledNormalPriceFontSize + 6 * scale,
+  );
+  const promoPriceLineHeight = scaledPromoPriceFontSize * CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT;
+  const normalPriceLineHeight = scaledNormalPriceFontSize * CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT;
   const singlePriceLineHeight = singlePriceFontSize * CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT;
   const priceBlockHeight = showPromoLine
-    ? promoPriceLineHeight + (showNormalPrice ? CATALOG_CARD_TITLE_META_GAP + normalPriceLineHeight : 0)
+    ? promoPriceLineHeight + (showNormalPrice ? scaledTitleMetaGap + normalPriceLineHeight : 0)
     : singlePriceLineHeight;
   const priceBlockTop = Math.max(contentTop, innerBottom - priceBlockHeight);
   const availablePriceHeight = Math.max(innerBottom - priceBlockTop, 0);
   const availableContentHeight = Math.max(priceBlockTop - contentTop, 0);
-  const metaHeight = options.skuFontSize * CATALOG_CARD_META_LINE_HEIGHT;
-  const reservedMetaHeight = metaHeight > 0 ? metaHeight + CATALOG_CARD_TITLE_META_GAP : 0;
-  const titleLineHeight = options.titleFontSize * CATALOG_CARD_TITLE_LINE_HEIGHT;
+  const metaHeight = scaledSkuFontSize * CATALOG_CARD_META_LINE_HEIGHT;
+  const reservedMetaHeight = metaHeight > 0 ? metaHeight + scaledTitleMetaGap : 0;
+  const titleLineHeight = scaledTitleFontSize * CATALOG_CARD_TITLE_LINE_HEIGHT;
   const titleMaxHeight = titleLineHeight * CATALOG_CARD_TITLE_MAX_LINES;
   const titleHeight = Math.min(Math.max(availableContentHeight - reservedMetaHeight, 0), titleMaxHeight);
   const titleRect = optionalRect(innerRect.x, contentTop, innerRect.width, titleHeight);
-  const metaTop = contentTop + titleHeight + (titleRect ? CATALOG_CARD_TITLE_META_GAP : 0);
+  const metaTop = contentTop + titleHeight + (titleRect ? scaledTitleMetaGap : 0);
   const metaRect = optionalRect(innerRect.x, metaTop, innerRect.width, Math.min(metaHeight, Math.max(priceBlockTop - metaTop, 0)));
 
   return {
@@ -115,12 +138,12 @@ export function resolveCatalogCardLayout(args: {
     normalPriceRowRect: showPromoLine && showNormalPrice
       ? optionalRect(
           innerRect.x,
-          priceBlockTop + promoPriceLineHeight + CATALOG_CARD_TITLE_META_GAP,
+          priceBlockTop + promoPriceLineHeight + scaledTitleMetaGap,
           innerRect.width,
           Math.min(
             normalPriceLineHeight,
             Math.max(
-              innerBottom - (priceBlockTop + promoPriceLineHeight + CATALOG_CARD_TITLE_META_GAP),
+              innerBottom - (priceBlockTop + promoPriceLineHeight + scaledTitleMetaGap),
               0,
             ),
           ),
