@@ -1,4 +1,12 @@
 import PDFDocument from "pdfkit";
+import {
+  CATALOG_CARD_META_LINE_HEIGHT,
+  CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
+  CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
+  CATALOG_CARD_TITLE_LINE_HEIGHT,
+  getCatalogLineGap,
+  resolveCatalogCardLayout,
+} from "@/lib/catalog/card-layout";
 import { chunk, formatCurrency } from "@/lib/utils";
 import { PDF_FONT_PATHS } from "@/lib/catalog/pdf/fonts";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
@@ -67,11 +75,8 @@ function drawCard(
   width: number,
   height: number,
   variant: string,
-  theme: Record<string, string>,
   options: CatalogStyleOptions,
 ) {
-  const padding = options.cardPadding;
-  const imageHeight = options.imageAreaHeight;
   const promoActive =
     item.promoPrice !== null &&
     item.normalPrice !== null &&
@@ -83,7 +88,17 @@ function drawCard(
   const showPromoPrice = options.showPromoPrice;
   const showSku = options.showSku;
   const showPackSize = options.showPackSize;
+  const showDiscountBadge = promoActive && showDiscountAmount && item.discountAmount != null;
   const showPromoLine = promoActive && showPromoPrice;
+  const cardLayout = resolveCatalogCardLayout({
+    cardWidth: width,
+    cardHeight: height,
+    options,
+    showDiscountBadge,
+    showPromoLine,
+    showNormalPrice,
+  });
+  const imageRect = cardLayout.imageRect;
 
   doc.save();
   doc
@@ -91,34 +106,32 @@ function drawCard(
     .fillAndStroke(options.cardBackgroundColor, options.cardBorderColor);
 
   if (item.imageBuffer) {
-    doc.image(item.imageBuffer, originX + padding, originY + padding, {
-      fit: [width - padding * 2, imageHeight],
+    doc.image(item.imageBuffer, originX + imageRect.x, originY + imageRect.y, {
+      fit: [imageRect.width, imageRect.height],
       align: "center",
       valign: "center",
     });
   } else {
     drawFallbackImage(
       doc,
-      originX + padding,
-      originY + padding,
-      width - padding * 2,
-      imageHeight,
+      originX + imageRect.x,
+      originY + imageRect.y,
+      imageRect.width,
+      imageRect.height,
       options.imageBackgroundColor,
       options.metaColor,
       Math.max(options.cardRadius - 6, 8),
     );
   }
 
-  let currentY = originY + padding + imageHeight + 8;
-
-  if (promoActive && item.discountAmount && showDiscountAmount) {
+  if (showDiscountBadge && cardLayout.badgeRect) {
     doc
       .roundedRect(
-        originX + padding,
-        currentY,
-        width - padding * 2,
-        22,
-        11,
+        originX + cardLayout.badgeRect.x,
+        originY + cardLayout.badgeRect.y,
+        cardLayout.badgeRect.width,
+        cardLayout.badgeRect.height,
+        cardLayout.badgeRect.height / 2,
       )
       .fill(options.discountBadgeBackgroundColor);
 
@@ -128,66 +141,71 @@ function drawCard(
       .fontSize(Math.max(options.skuFontSize, 10))
       .text(
         `ถูกลง ${formatCurrency(item.discountAmount)}`,
-        originX + padding,
-        currentY + 4.5,
+        originX + cardLayout.badgeRect.x,
+        originY + cardLayout.badgeRect.y + Math.max((cardLayout.badgeRect.height - Math.max(options.skuFontSize, 10)) / 2 - 1, 0),
         {
-          width: width - padding * 2,
+          width: cardLayout.badgeRect.width,
           align: "center",
         },
       );
-
-    currentY += 32;
-  } else {
-    currentY += 8;
   }
-
-  doc.fillColor(options.titleColor).font("Sarabun-SemiBold").fontSize(options.titleFontSize);
-  doc.text(item.displayName, originX + padding, currentY, {
-    width: width - padding * 2,
-    height: Math.max(options.titleFontSize * 2.5, 30),
-    ellipsis: true,
-    lineGap: 0,
-  });
-
-  const textHeight = doc.heightOfString(item.displayName, {
-    width: width - padding * 2,
-    lineGap: 0,
-  });
-
-  currentY += Math.min(textHeight, Math.max(options.titleFontSize * 2.5, 30)) + 6;
 
   const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
     .filter(Boolean)
     .join(" • ");
 
-  doc.fillColor(options.metaColor).font("Sarabun-Regular").fontSize(options.skuFontSize);
-  doc.text(meta || " ", originX + padding, currentY, {
-    width: width - padding * 2,
-    height: Math.max(options.skuFontSize + 4, 14),
-    ellipsis: true,
-  });
-
-  if (showPromoLine) {
-    const normalY = originY + height - Math.max(options.normalPriceFontSize + 10, 22);
-    const promoY = normalY - Math.max(options.promoPriceFontSize + 8, 28);
-
-    doc.fillColor(options.promoPriceColor).font("Sarabun-Bold").fontSize(options.promoPriceFontSize);
-    doc.text(formatCurrency(item.promoPrice), originX + padding, promoY, {
-      width: width - padding * 2,
+  if (cardLayout.titleRect) {
+    doc.fillColor(options.titleColor).font("Sarabun-SemiBold").fontSize(options.titleFontSize);
+    doc.text(item.displayName, originX + cardLayout.titleRect.x, originY + cardLayout.titleRect.y, {
+      width: cardLayout.titleRect.width,
+      height: cardLayout.titleRect.height,
+      ellipsis: true,
+      lineGap: getCatalogLineGap(options.titleFontSize, CATALOG_CARD_TITLE_LINE_HEIGHT),
     });
+  }
 
-    if (showNormalPrice) {
+  if (cardLayout.metaRect) {
+    doc.fillColor(options.metaColor).font("Sarabun-Regular").fontSize(options.skuFontSize);
+    doc.text(meta || " ", originX + cardLayout.metaRect.x, originY + cardLayout.metaRect.y, {
+      width: cardLayout.metaRect.width,
+      height: cardLayout.metaRect.height,
+      ellipsis: true,
+      lineGap: getCatalogLineGap(options.skuFontSize, CATALOG_CARD_META_LINE_HEIGHT),
+    });
+  }
+
+  if (showPromoLine && cardLayout.promoPriceRect) {
+    doc.fillColor(options.promoPriceColor).font("Sarabun-Bold").fontSize(options.promoPriceFontSize);
+    doc.text(
+      formatCurrency(item.promoPrice),
+      originX + cardLayout.promoPriceRect.x,
+      originY + cardLayout.promoPriceRect.y,
+      {
+        width: cardLayout.promoPriceRect.width,
+        height: cardLayout.promoPriceRect.height,
+        ellipsis: true,
+        lineGap: getCatalogLineGap(options.promoPriceFontSize, CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT),
+      },
+    );
+
+    if (showNormalPrice && cardLayout.normalPriceRowRect) {
+      const normalY = originY + cardLayout.normalPriceRowRect.y;
+      const normalX = originX + cardLayout.normalPriceRowRect.x;
+
       doc.fillColor(options.normalPriceColor).font("Sarabun-Regular").fontSize(options.normalPriceFontSize);
       const normalText = formatCurrency(item.normalPrice);
-      doc.text(normalText, originX + padding, normalY, {
-        width: width - padding * 2,
+      doc.text(normalText, normalX, normalY, {
+        width: cardLayout.normalPriceRowRect.width,
+        height: cardLayout.normalPriceRowRect.height,
+        ellipsis: true,
+        lineGap: getCatalogLineGap(options.normalPriceFontSize, CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT),
       });
 
       const measured = doc.widthOfString(normalText);
       const strikeY = normalY + Math.max(options.normalPriceFontSize * 0.55, 6);
       doc
-        .moveTo(originX + padding, strikeY)
-        .lineTo(originX + padding + measured, strikeY)
+        .moveTo(normalX, strikeY)
+        .lineTo(normalX + measured, strikeY)
         .lineWidth(1)
         .strokeColor(options.normalPriceColor)
         .stroke();
@@ -196,25 +214,30 @@ function drawCard(
         doc.fillColor(options.normalPriceColor).font("Sarabun-Regular").fontSize(Math.max(options.normalPriceFontSize - 2, 9));
         doc.text(
           `${item.discountPercent.toFixed(0)}% off`,
-          originX + padding + measured + 8,
+          normalX + measured + 8,
           normalY,
           {
-            width: Math.max(width - padding * 2 - measured - 8, 0),
+            width: Math.max(cardLayout.normalPriceRowRect.width - measured - 8, 0),
+            height: cardLayout.normalPriceRowRect.height,
+            ellipsis: true,
           },
         );
       }
     }
-  } else {
+  } else if (cardLayout.singlePriceRect) {
     doc.fillColor(
       variant === "clean" ? options.titleColor : options.promoPriceColor,
     );
-    doc.font("Sarabun-Bold").fontSize(Math.max(options.promoPriceFontSize - 4, options.normalPriceFontSize + 6));
+    doc.font("Sarabun-Bold").fontSize(cardLayout.singlePriceFontSize);
     doc.text(
       formatCurrency(item.normalPrice ?? item.promoPrice),
-      originX + padding,
-      originY + height - Math.max(options.promoPriceFontSize, 32),
+      originX + cardLayout.singlePriceRect.x,
+      originY + cardLayout.singlePriceRect.y,
       {
-        width: width - padding * 2,
+        width: cardLayout.singlePriceRect.width,
+        height: cardLayout.singlePriceRect.height,
+        ellipsis: true,
+        lineGap: getCatalogLineGap(cardLayout.singlePriceFontSize, CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT),
       },
     );
   }
@@ -270,13 +293,14 @@ function createDocumentBuffer(doc: PDFKit.PDFDocument) {
 export async function renderCatalogPdf({
   jobName,
   variant,
-  theme,
+  theme: _theme,
   items,
   options,
   pageBackgroundBuffer = null,
   headerMediaBuffer = null,
   footerMediaBuffer = null,
 }: RenderCatalogPdfInput) {
+  void _theme;
   const style: CatalogStyleOptions = {
     ...DEFAULT_STYLE_OPTIONS,
     ...options,
@@ -364,7 +388,6 @@ export async function renderCatalogPdf({
         pageLayout.cardWidth,
         pageLayout.cardHeight,
         variant,
-        theme,
         style,
       );
     });

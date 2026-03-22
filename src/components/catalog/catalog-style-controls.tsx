@@ -1,7 +1,7 @@
 "use client";
 
-import type { ChangeEvent, ReactNode } from "react";
-import { Loader2, RotateCcw, Upload } from "lucide-react";
+import { useState, type ChangeEvent, type ReactNode } from "react";
+import { ChevronDown, Loader2, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -122,6 +122,7 @@ function MediaPanel({
   onOffsetYChange,
   onScaleChange,
   extraControls,
+  showTitle = true,
 }: {
   title: string;
   previewUrl: string | null;
@@ -150,13 +151,16 @@ function MediaPanel({
   onOffsetYChange: (value: number) => void;
   onScaleChange: (value: number) => void;
   extraControls?: ReactNode;
+  showTitle?: boolean;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-muted">{title}</p>
-        {uploading ? <Loader2 className="size-3 animate-spin text-muted" /> : null}
-      </div>
+      {showTitle ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted">{title}</p>
+          {uploading ? <Loader2 className="size-3 animate-spin text-muted" /> : null}
+        </div>
+      ) : null}
       <div className="rounded-xl border border-line bg-white p-3 space-y-3">
         <MediaPreview previewUrl={previewUrl} alt={alt} emptyLabel={emptyLabel} />
         <div className="flex flex-wrap items-center gap-2">
@@ -264,6 +268,37 @@ function MediaPanel({
   );
 }
 
+function StyleSection({
+  title,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  description: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-line bg-white/70">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+      >
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-[11px] text-muted-strong">{description}</p>
+        </div>
+        <ChevronDown className={`size-4 shrink-0 text-muted transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? <div className="border-t border-line px-3 py-3">{children}</div> : null}
+    </section>
+  );
+}
+
 export function CatalogStyleControls({
   jobId,
   style,
@@ -302,85 +337,95 @@ export function CatalogStyleControls({
         <input type="hidden" name="footerMediaBucket" value={style.footerMediaBucket ?? ""} />
         <input type="hidden" name="footerMediaPath" value={style.footerMediaPath ?? ""} />
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted">Style presets</p>
-            <button
-              type="button"
-              onClick={onReset}
-              className="flex items-center gap-1 rounded-lg border border-line bg-white px-2.5 py-1 text-[11px] text-muted hover:text-foreground"
-            >
-              <RotateCcw className="size-3" /> Reset
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {CATALOG_STYLE_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onApplyPreset(preset.id)}
-                className="rounded-lg border border-line bg-white px-2 py-2 text-[11px] font-medium text-foreground transition hover:border-brand/40 hover:bg-brand-soft/10"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <StyleSection
+          title="Layout & presets"
+          description="Choose the overall page structure first, then fine tune details."
+          defaultOpen
+        >
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted">Style presets</p>
+                <button
+                  type="button"
+                  onClick={onReset}
+                  className="flex items-center gap-1 rounded-lg border border-line bg-white px-2.5 py-1 text-[11px] text-muted hover:text-foreground"
+                >
+                  <RotateCcw className="size-3" /> Reset
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {CATALOG_STYLE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => onApplyPreset(preset.id)}
+                    className="rounded-lg border border-line bg-white px-2 py-2 text-[11px] font-medium text-foreground transition hover:border-brand/40 hover:bg-brand-soft/10"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted">Layout preset</p>
-            <span className="text-[11px] text-muted">Applies to the whole catalog job</span>
-          </div>
-          <div className="grid gap-2">
-            {CATALOG_LAYOUT_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onStyleChange("layoutPreset", preset.id)}
-                className={`rounded-xl border px-3 py-3 text-left transition ${style.layoutPreset === preset.id ? "border-brand/30 bg-brand-soft/15 shadow-sm" : "border-line bg-white hover:border-brand/20"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{preset.label}</p>
-                    <p className="mt-1 text-[11px] text-muted-strong">{preset.description}</p>
-                  </div>
-                  <span className="rounded-full border border-line bg-white/80 px-2 py-1 text-[10px] font-semibold text-muted-strong">
-                    {preset.columns}×{preset.rows}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted">Layout preset</p>
+                <span className="text-[11px] text-muted">Applies to the whole catalog job</span>
+              </div>
+              <div className="grid gap-2">
+                {CATALOG_LAYOUT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => onStyleChange("layoutPreset", preset.id)}
+                    className={`rounded-xl border px-3 py-3 text-left transition ${style.layoutPreset === preset.id ? "border-brand/30 bg-brand-soft/15 shadow-sm" : "border-line bg-white hover:border-brand/20"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{preset.label}</p>
+                        <p className="mt-1 text-[11px] text-muted-strong">{preset.description}</p>
+                      </div>
+                      <span className="rounded-full border border-line bg-white/80 px-2 py-1 text-[10px] font-semibold text-muted-strong">
+                        {preset.columns}×{preset.rows}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted">Layout variant</p>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { value: "promo", label: "Promo flyer" },
-              { value: "clean", label: "Clean grid" },
-            ].map((variant) => (
-              <label
-                key={variant.value}
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white p-2.5 text-xs has-[:checked]:border-brand has-[:checked]:bg-brand-soft/10 transition"
-              >
-                <input
-                  type="radio"
-                  name="variant"
-                  value={variant.value}
-                  checked={style.variant === variant.value}
-                  onChange={() => onStyleChange("variant", variant.value)}
-                  className="accent-brand"
-                />
-                {variant.label}
-              </label>
-            ))}
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted">Layout variant</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "promo", label: "Promo flyer" },
+                  { value: "clean", label: "Clean grid" },
+                ].map((variant) => (
+                  <label
+                    key={variant.value}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white p-2.5 text-xs has-[:checked]:border-brand has-[:checked]:bg-brand-soft/10 transition"
+                  >
+                    <input
+                      type="radio"
+                      name="variant"
+                      value={variant.value}
+                      checked={style.variant === variant.value}
+                      onChange={() => onStyleChange("variant", variant.value)}
+                      className="accent-brand"
+                    />
+                    {variant.label}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        </StyleSection>
 
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted">Display options</p>
+        <StyleSection
+          title="Content visibility"
+          description="Show or hide the main product details displayed on each card."
+        >
           <div className="grid grid-cols-2 gap-1.5">
             {DISPLAY_FIELDS.map((field) => (
               <label
@@ -398,150 +443,170 @@ export function CatalogStyleControls({
               </label>
             ))}
           </div>
-        </div>
+        </StyleSection>
 
-        <MediaPanel
+        <StyleSection
           title="A4 background"
-          previewUrl={style.pageBackgroundPreviewUrl}
-          alt="Background preview"
-          emptyLabel="No background image"
-          uploadLabel="Upload background"
-          fitName="pageBackgroundFit"
-          fitValue={style.pageBackgroundFit}
-          opacityName="pageBackgroundOpacity"
-          opacityValue={style.pageBackgroundOpacity}
-          offsetXName="pageBackgroundOffsetX"
-          offsetXValue={style.pageBackgroundOffsetX}
-          offsetYName="pageBackgroundOffsetY"
-          offsetYValue={style.pageBackgroundOffsetY}
-          scaleName="pageBackgroundScale"
-          scaleValue={style.pageBackgroundScale}
-          uploading={mediaUploading.background}
-          error={mediaErrors.background}
-          onUpload={onBackgroundUpload}
-          onClear={() => onClearMedia("background")}
-          onCenter={() => {
-            onStyleChange("pageBackgroundOffsetX", 0);
-            onStyleChange("pageBackgroundOffsetY", 0);
-          }}
-          onFitToZone={() => {
-            onStyleChange("pageBackgroundAnchor", "safeArea");
-            onStyleChange("pageBackgroundOffsetX", 0);
-            onStyleChange("pageBackgroundOffsetY", 0);
-            onStyleChange("pageBackgroundScale", 1);
-          }}
-          onFitChange={(value) => onStyleChange("pageBackgroundFit", value)}
-          onOpacityChange={(value) => onStyleChange("pageBackgroundOpacity", value)}
-          onOffsetXChange={(value) => onStyleChange("pageBackgroundOffsetX", value)}
-          onOffsetYChange={(value) => onStyleChange("pageBackgroundOffsetY", value)}
-          onScaleChange={(value) => onStyleChange("pageBackgroundScale", value)}
-          extraControls={(
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="space-y-1 text-[11px] text-muted">
-                <span>Background color</span>
-                <div className="flex items-center gap-2 rounded-lg border border-line bg-white px-2 py-1.5">
-                  <input
-                    type="color"
-                    name="pageBackgroundColor"
-                    value={style.pageBackgroundColor}
-                    onChange={(event) => onStyleChange("pageBackgroundColor", event.target.value)}
-                    className="h-8 w-10 rounded border-0 bg-transparent p-0"
-                  />
-                  <span className="font-mono text-[11px] text-foreground">{style.pageBackgroundColor}</span>
-                </div>
-              </label>
-              <label className="space-y-1 text-[11px] text-muted">
-                <span>Anchor</span>
-                <select
-                  name="pageBackgroundAnchor"
-                  value={style.pageBackgroundAnchor}
-                  onChange={(event) => onStyleChange("pageBackgroundAnchor", event.target.value)}
-                  className="h-10 w-full rounded-lg border border-line bg-white px-3 text-xs text-foreground"
-                >
-                  <option value="page">Full page</option>
-                  <option value="safeArea">Safe area</option>
-                </select>
-              </label>
-            </div>
-          )}
-        />
+          description="Manage the full-page artwork and safe-area anchoring."
+        >
+          <MediaPanel
+            title="A4 background"
+            previewUrl={style.pageBackgroundPreviewUrl}
+            alt="Background preview"
+            emptyLabel="No background image"
+            uploadLabel="Upload background"
+            fitName="pageBackgroundFit"
+            fitValue={style.pageBackgroundFit}
+            opacityName="pageBackgroundOpacity"
+            opacityValue={style.pageBackgroundOpacity}
+            offsetXName="pageBackgroundOffsetX"
+            offsetXValue={style.pageBackgroundOffsetX}
+            offsetYName="pageBackgroundOffsetY"
+            offsetYValue={style.pageBackgroundOffsetY}
+            scaleName="pageBackgroundScale"
+            scaleValue={style.pageBackgroundScale}
+            uploading={mediaUploading.background}
+            error={mediaErrors.background}
+            onUpload={onBackgroundUpload}
+            onClear={() => onClearMedia("background")}
+            onCenter={() => {
+              onStyleChange("pageBackgroundOffsetX", 0);
+              onStyleChange("pageBackgroundOffsetY", 0);
+            }}
+            onFitToZone={() => {
+              onStyleChange("pageBackgroundAnchor", "safeArea");
+              onStyleChange("pageBackgroundOffsetX", 0);
+              onStyleChange("pageBackgroundOffsetY", 0);
+              onStyleChange("pageBackgroundScale", 1);
+            }}
+            onFitChange={(value) => onStyleChange("pageBackgroundFit", value)}
+            onOpacityChange={(value) => onStyleChange("pageBackgroundOpacity", value)}
+            onOffsetXChange={(value) => onStyleChange("pageBackgroundOffsetX", value)}
+            onOffsetYChange={(value) => onStyleChange("pageBackgroundOffsetY", value)}
+            onScaleChange={(value) => onStyleChange("pageBackgroundScale", value)}
+            extraControls={(
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1 text-[11px] text-muted">
+                  <span>Background color</span>
+                  <div className="flex items-center gap-2 rounded-lg border border-line bg-white px-2 py-1.5">
+                    <input
+                      type="color"
+                      name="pageBackgroundColor"
+                      value={style.pageBackgroundColor}
+                      onChange={(event) => onStyleChange("pageBackgroundColor", event.target.value)}
+                      className="h-8 w-10 rounded border-0 bg-transparent p-0"
+                    />
+                    <span className="font-mono text-[11px] text-foreground">{style.pageBackgroundColor}</span>
+                  </div>
+                </label>
+                <label className="space-y-1 text-[11px] text-muted">
+                  <span>Anchor</span>
+                  <select
+                    name="pageBackgroundAnchor"
+                    value={style.pageBackgroundAnchor}
+                    onChange={(event) => onStyleChange("pageBackgroundAnchor", event.target.value)}
+                    className="h-10 w-full rounded-lg border border-line bg-white px-3 text-xs text-foreground"
+                  >
+                    <option value="page">Full page</option>
+                    <option value="safeArea">Safe area</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            showTitle={false}
+          />
+        </StyleSection>
 
-        <MediaPanel
+        <StyleSection
           title="Header media"
-          previewUrl={style.headerMediaPreviewUrl}
-          alt="Header media preview"
-          emptyLabel="No header media"
-          uploadLabel="Upload header media"
-          fitName="headerMediaFit"
-          fitValue={style.headerMediaFit}
-          opacityName="headerMediaOpacity"
-          opacityValue={style.headerMediaOpacity}
-          offsetXName="headerMediaOffsetX"
-          offsetXValue={style.headerMediaOffsetX}
-          offsetYName="headerMediaOffsetY"
-          offsetYValue={style.headerMediaOffsetY}
-          scaleName="headerMediaScale"
-          scaleValue={style.headerMediaScale}
-          uploading={mediaUploading.header}
-          error={mediaErrors.header}
-          onUpload={onHeaderMediaUpload}
-          onClear={() => onClearMedia("header")}
-          onCenter={() => {
-            onStyleChange("headerMediaOffsetX", 0);
-            onStyleChange("headerMediaOffsetY", 0);
-          }}
-          onFitToZone={() => {
-            onStyleChange("headerMediaFit", "cover");
-            onStyleChange("headerMediaOffsetX", 0);
-            onStyleChange("headerMediaOffsetY", 0);
-            onStyleChange("headerMediaScale", 1);
-          }}
-          onFitChange={(value) => onStyleChange("headerMediaFit", value)}
-          onOpacityChange={(value) => onStyleChange("headerMediaOpacity", value)}
-          onOffsetXChange={(value) => onStyleChange("headerMediaOffsetX", value)}
-          onOffsetYChange={(value) => onStyleChange("headerMediaOffsetY", value)}
-          onScaleChange={(value) => onStyleChange("headerMediaScale", value)}
-        />
+          description="Control the top media strip without losing sight of the A4 preview."
+        >
+          <MediaPanel
+            title="Header media"
+            previewUrl={style.headerMediaPreviewUrl}
+            alt="Header media preview"
+            emptyLabel="No header media"
+            uploadLabel="Upload header media"
+            fitName="headerMediaFit"
+            fitValue={style.headerMediaFit}
+            opacityName="headerMediaOpacity"
+            opacityValue={style.headerMediaOpacity}
+            offsetXName="headerMediaOffsetX"
+            offsetXValue={style.headerMediaOffsetX}
+            offsetYName="headerMediaOffsetY"
+            offsetYValue={style.headerMediaOffsetY}
+            scaleName="headerMediaScale"
+            scaleValue={style.headerMediaScale}
+            uploading={mediaUploading.header}
+            error={mediaErrors.header}
+            onUpload={onHeaderMediaUpload}
+            onClear={() => onClearMedia("header")}
+            onCenter={() => {
+              onStyleChange("headerMediaOffsetX", 0);
+              onStyleChange("headerMediaOffsetY", 0);
+            }}
+            onFitToZone={() => {
+              onStyleChange("headerMediaFit", "cover");
+              onStyleChange("headerMediaOffsetX", 0);
+              onStyleChange("headerMediaOffsetY", 0);
+              onStyleChange("headerMediaScale", 1);
+            }}
+            onFitChange={(value) => onStyleChange("headerMediaFit", value)}
+            onOpacityChange={(value) => onStyleChange("headerMediaOpacity", value)}
+            onOffsetXChange={(value) => onStyleChange("headerMediaOffsetX", value)}
+            onOffsetYChange={(value) => onStyleChange("headerMediaOffsetY", value)}
+            onScaleChange={(value) => onStyleChange("headerMediaScale", value)}
+            showTitle={false}
+          />
+        </StyleSection>
 
-        <MediaPanel
+        <StyleSection
           title="Footer media"
-          previewUrl={style.footerMediaPreviewUrl}
-          alt="Footer media preview"
-          emptyLabel="No footer media"
-          uploadLabel="Upload footer media"
-          fitName="footerMediaFit"
-          fitValue={style.footerMediaFit}
-          opacityName="footerMediaOpacity"
-          opacityValue={style.footerMediaOpacity}
-          offsetXName="footerMediaOffsetX"
-          offsetXValue={style.footerMediaOffsetX}
-          offsetYName="footerMediaOffsetY"
-          offsetYValue={style.footerMediaOffsetY}
-          scaleName="footerMediaScale"
-          scaleValue={style.footerMediaScale}
-          uploading={mediaUploading.footer}
-          error={mediaErrors.footer}
-          onUpload={onFooterMediaUpload}
-          onClear={() => onClearMedia("footer")}
-          onCenter={() => {
-            onStyleChange("footerMediaOffsetX", 0);
-            onStyleChange("footerMediaOffsetY", 0);
-          }}
-          onFitToZone={() => {
-            onStyleChange("footerMediaFit", "cover");
-            onStyleChange("footerMediaOffsetX", 0);
-            onStyleChange("footerMediaOffsetY", 0);
-            onStyleChange("footerMediaScale", 1);
-          }}
-          onFitChange={(value) => onStyleChange("footerMediaFit", value)}
-          onOpacityChange={(value) => onStyleChange("footerMediaOpacity", value)}
-          onOffsetXChange={(value) => onStyleChange("footerMediaOffsetX", value)}
-          onOffsetYChange={(value) => onStyleChange("footerMediaOffsetY", value)}
-          onScaleChange={(value) => onStyleChange("footerMediaScale", value)}
-        />
+          description="Manage the bottom media strip and its reserved space."
+        >
+          <MediaPanel
+            title="Footer media"
+            previewUrl={style.footerMediaPreviewUrl}
+            alt="Footer media preview"
+            emptyLabel="No footer media"
+            uploadLabel="Upload footer media"
+            fitName="footerMediaFit"
+            fitValue={style.footerMediaFit}
+            opacityName="footerMediaOpacity"
+            opacityValue={style.footerMediaOpacity}
+            offsetXName="footerMediaOffsetX"
+            offsetXValue={style.footerMediaOffsetX}
+            offsetYName="footerMediaOffsetY"
+            offsetYValue={style.footerMediaOffsetY}
+            scaleName="footerMediaScale"
+            scaleValue={style.footerMediaScale}
+            uploading={mediaUploading.footer}
+            error={mediaErrors.footer}
+            onUpload={onFooterMediaUpload}
+            onClear={() => onClearMedia("footer")}
+            onCenter={() => {
+              onStyleChange("footerMediaOffsetX", 0);
+              onStyleChange("footerMediaOffsetY", 0);
+            }}
+            onFitToZone={() => {
+              onStyleChange("footerMediaFit", "cover");
+              onStyleChange("footerMediaOffsetX", 0);
+              onStyleChange("footerMediaOffsetY", 0);
+              onStyleChange("footerMediaScale", 1);
+            }}
+            onFitChange={(value) => onStyleChange("footerMediaFit", value)}
+            onOpacityChange={(value) => onStyleChange("footerMediaOpacity", value)}
+            onOffsetXChange={(value) => onStyleChange("footerMediaOffsetX", value)}
+            onOffsetYChange={(value) => onStyleChange("footerMediaOffsetY", value)}
+            onScaleChange={(value) => onStyleChange("footerMediaScale", value)}
+            showTitle={false}
+          />
+        </StyleSection>
 
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted">Color controls</p>
+        <StyleSection
+          title="Colors"
+          description="Theme the cards, price emphasis, and discount badge colors."
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             {COLOR_FIELDS.map((field) => (
               <label key={field.key} className="space-y-1 text-[11px] text-muted">
@@ -559,10 +624,13 @@ export function CatalogStyleControls({
               </label>
             ))}
           </div>
-        </div>
+        </StyleSection>
 
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted">Typography & layout</p>
+        <StyleSection
+          title="Typography & spacing"
+          description="Adjust font sizes and spacing while the A4 preview stays in view."
+          defaultOpen
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             {NUMBER_FIELDS.map((field) => (
               <label key={field.key} className="space-y-1 text-[11px] text-muted">
@@ -580,24 +648,30 @@ export function CatalogStyleControls({
               </label>
             ))}
           </div>
-        </div>
+        </StyleSection>
 
-        <div className="space-y-2">
-          {styleSaveError ? (
-            <p className="text-[11px] text-rose-600">{styleSaveError}</p>
-          ) : (
-            <p className="text-[11px] text-muted">{styleStatusLabel}</p>
-          )}
-          <Button
-            type="button"
-            className="w-full h-8 text-xs gap-1.5"
-            disabled={isUploadingMedia || exportPending}
-            onClick={onOpenExport}
-          >
-            {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
-            Open export
-          </Button>
-        </div>
+        <StyleSection
+          title="Export"
+          description="Check save status and open the export workspace once the design is ready."
+          defaultOpen
+        >
+          <div className="space-y-2">
+            {styleSaveError ? (
+              <p className="text-[11px] text-rose-600">{styleSaveError}</p>
+            ) : (
+              <p className="text-[11px] text-muted">{styleStatusLabel}</p>
+            )}
+            <Button
+              type="button"
+              className="w-full h-8 text-xs gap-1.5"
+              disabled={isUploadingMedia || exportPending}
+              onClick={onOpenExport}
+            >
+              {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
+              Open export
+            </Button>
+          </div>
+        </StyleSection>
       </form>
     </div>
   );

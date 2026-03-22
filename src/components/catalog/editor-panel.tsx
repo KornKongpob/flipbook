@@ -670,9 +670,9 @@ export function EditorPanel({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
+    <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
+      <div className="space-y-4 xl:min-w-0">
+        <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
           <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -703,7 +703,7 @@ export function EditorPanel({
           </div>
 
           {sidebarMode === "design" ? (
-            <div className="p-4">
+            <div className="min-h-0 overflow-y-auto p-4 thin-scrollbar">
               <CatalogStyleControls
                 jobId={jobId}
                 style={style}
@@ -749,7 +749,7 @@ export function EditorPanel({
                 </div>
               </div>
 
-              <div className="max-h-[740px] space-y-3 overflow-y-auto p-4 thin-scrollbar">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 thin-scrollbar">
                 {filteredItems.map((item) => (
                   <div key={item.id} className={`overflow-hidden rounded-2xl border bg-white/80 shadow-sm transition ${editingId === item.id ? "border-brand/30 ring-2 ring-brand/10" : "border-line hover:border-brand/20"} ${!item.isVisible ? "opacity-60" : ""}`}>
                     <div className="flex items-start gap-3 px-4 py-4">
@@ -854,7 +854,7 @@ export function EditorPanel({
         </div>
       </div>
 
-      <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden xl:sticky xl:top-24 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col">
         <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -914,27 +914,29 @@ export function EditorPanel({
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:thin-scrollbar">
           {currentPageItems.length > 0 ? (
-            <CatalogPageCanvas
-              items={currentPageItems.map((item) => ({
-                id: item.id,
-                title: item.displayName ?? item.productName,
-                sku: item.sku,
-                packSize: item.packSize,
-                unit: item.unit,
-                normalPrice: item.normalPrice,
-                promoPrice: item.promoPrice,
-                discountAmount: item.discountAmount,
-                discountPercent: item.discountPercent,
-                imageUrl: item.previewUrl,
-              }))}
-              options={style}
-              pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
-              headerMediaPreviewUrl={style.headerMediaPreviewUrl}
-              footerMediaPreviewUrl={style.footerMediaPreviewUrl}
-              showSafeAreaGuides
-            />
+            <div className="mx-auto w-full max-w-[620px]">
+              <CatalogPageCanvas
+                items={currentPageItems.map((item) => ({
+                  id: item.id,
+                  title: item.displayName ?? item.productName,
+                  sku: item.sku,
+                  packSize: item.packSize,
+                  unit: item.unit,
+                  normalPrice: item.normalPrice,
+                  promoPrice: item.promoPrice,
+                  discountAmount: item.discountAmount,
+                  discountPercent: item.discountPercent,
+                  imageUrl: item.previewUrl,
+                }))}
+                options={style}
+                pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
+                headerMediaPreviewUrl={style.headerMediaPreviewUrl}
+                footerMediaPreviewUrl={style.footerMediaPreviewUrl}
+                showSafeAreaGuides
+              />
+            </div>
           ) : (
             <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-line">
               <p className="text-sm text-muted">No visible items. Toggle items on to preview.</p>
