@@ -1,20 +1,42 @@
 import { randomUUID } from "crypto";
 import { FILE_BUCKETS } from "@/lib/catalog/constants";
-import { slugify } from "@/lib/utils";
 
 export type CatalogJobMediaSlot = "page-background" | "header-media" | "footer-media";
 
 function getExtension(fileName: string) {
   const parts = fileName.split(".");
-  return parts.length > 1 ? parts.at(-1) : "";
+  return parts.length > 1 ? (parts.at(-1) ?? "") : "";
+}
+
+function sanitizeStorageSegment(value: string, fallback: string, maxLength = 80) {
+  const slug = value
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7F]+/g, " ")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, maxLength);
+
+  return slug || fallback;
+}
+
+function sanitizeStorageExtension(extension: string) {
+  return extension
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7F]+/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 16);
 }
 
 export function sanitizeUploadName(fileName: string) {
   const extension = getExtension(fileName);
+  const sanitizedExtension = sanitizeStorageExtension(extension);
   const baseName = extension ? fileName.slice(0, -(extension.length + 1)) : fileName;
-  const slug = slugify(baseName).slice(0, 80) || "file";
+  const slug = sanitizeStorageSegment(baseName, "file");
 
-  return extension ? `${slug}.${extension.toLowerCase()}` : slug;
+  return sanitizedExtension ? `${slug}.${sanitizedExtension}` : slug;
 }
 
 export function buildRawUploadTarget(userId: string, jobId: string, fileName: string) {
@@ -62,6 +84,6 @@ export function buildCatalogJobMediaTarget(
 export function buildAssetCacheTarget(key: string, fileName = "asset.jpg") {
   return {
     bucket: FILE_BUCKETS.assetCache,
-    path: `makro/${slugify(key).slice(0, 96) || randomUUID()}/${sanitizeUploadName(fileName)}`,
+    path: `makro/${sanitizeStorageSegment(key, randomUUID(), 96)}/${sanitizeUploadName(fileName)}`,
   };
 }
