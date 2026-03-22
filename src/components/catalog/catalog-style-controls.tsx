@@ -9,6 +9,7 @@ import {
   type CatalogStyleOptions,
   type EditorCatalogStyleOptions,
 } from "@/lib/catalog/style-options";
+import { CATALOG_LAYOUT_PRESETS } from "@/lib/catalog/layout";
 
 interface CatalogStyleControlsProps {
   jobId: string;
@@ -56,6 +57,8 @@ const NUMBER_FIELDS: Array<{
   { key: "skuFontSize", label: "SKU size", min: 8, max: 18 },
   { key: "promoPriceFontSize", label: "Promo price size", min: 16, max: 40 },
   { key: "normalPriceFontSize", label: "Normal price size", min: 8, max: 22 },
+  { key: "headerSpace", label: "Header space", min: 0, max: 180 },
+  { key: "footerSpace", label: "Footer space", min: 0, max: 120 },
   { key: "pagePadding", label: "Page padding", min: 8, max: 40 },
   { key: "pageGap", label: "Grid gap", min: 4, max: 24 },
   { key: "cardPadding", label: "Card padding", min: 6, max: 28 },
@@ -82,6 +85,7 @@ export function CatalogStyleControls({
       </div>
       <form action={formAction} className="p-4 space-y-4">
         <input type="hidden" name="jobId" value={jobId} />
+        <input type="hidden" name="layoutPreset" value={style.layoutPreset} />
         <input type="hidden" name="pageBackgroundImageBucket" value={style.pageBackgroundImageBucket ?? ""} />
         <input type="hidden" name="pageBackgroundImagePath" value={style.pageBackgroundImagePath ?? ""} />
 
@@ -105,6 +109,33 @@ export function CatalogStyleControls({
                 className="rounded-lg border border-line bg-white px-2 py-2 text-[11px] font-medium text-foreground transition hover:border-brand/40 hover:bg-brand-soft/10"
               >
                 {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted">Layout preset</p>
+            <span className="text-[11px] text-muted">Applies to the whole catalog job</span>
+          </div>
+          <div className="grid gap-2">
+            {CATALOG_LAYOUT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onStyleChange("layoutPreset", preset.id)}
+                className={`rounded-xl border px-3 py-3 text-left transition ${style.layoutPreset === preset.id ? "border-brand/30 bg-brand-soft/15 shadow-sm" : "border-line bg-white hover:border-brand/20"}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{preset.label}</p>
+                    <p className="mt-1 text-[11px] text-muted-strong">{preset.description}</p>
+                  </div>
+                  <span className="rounded-full border border-line bg-white/80 px-2 py-1 text-[10px] font-semibold text-muted-strong">
+                    {preset.columns}×{preset.rows}
+                  </span>
+                </div>
               </button>
             ))}
           </div>

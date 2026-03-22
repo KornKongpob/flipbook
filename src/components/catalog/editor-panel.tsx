@@ -14,10 +14,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { moveItemAction, toggleItemVisibilityAction, saveStyleOptionsAction } from "@/app/(app)/actions";
+import { CatalogPageCanvas } from "@/components/catalog/catalog-page-canvas";
 import { CatalogStyleControls } from "@/components/catalog/catalog-style-controls";
 import { Input } from "@/components/ui/input";
-import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import {
+  getCatalogItemsPerPage,
+  getCatalogLayoutPresetDefinition,
+} from "@/lib/catalog/layout";
 import {
   CATALOG_STYLE_PRESETS,
   type EditorCatalogStyleOptions,
@@ -139,8 +143,6 @@ function ItemEditPanel({
   );
 }
 
-const ITEMS_PER_PAGE = 9;
-
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -170,7 +172,9 @@ export function EditorPanel({
 
   const visibleItems = items.filter((i) => i.isVisible);
   const hiddenCount = items.length - visibleItems.length;
-  const pages = chunk(visibleItems, ITEMS_PER_PAGE);
+  const layoutPreset = getCatalogLayoutPresetDefinition(style.layoutPreset);
+  const itemsPerPage = getCatalogItemsPerPage(style.layoutPreset);
+  const pages = chunk(visibleItems, itemsPerPage);
   const currentPageItems = pages[previewPage] ?? [];
   const editingItem = items.find((item) => item.id === editingId) ?? null;
   const filteredItems = items.filter((item) => {
@@ -532,6 +536,12 @@ export function EditorPanel({
               {hiddenCount} hidden items
             </span>
             <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {layoutPreset.label} · {itemsPerPage} per page
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              Header {style.headerSpace}px · Footer {style.footerSpace}px
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
               {style.pageBackgroundPreviewUrl ? "Image background active" : "Color background only"}
             </span>
           </div>
@@ -539,44 +549,23 @@ export function EditorPanel({
 
         <div className="p-4">
           {currentPageItems.length > 0 ? (
-            <div
-              className="catalog-page relative overflow-hidden"
-              style={{
-                backgroundColor: style.pageBackgroundColor,
-                padding: `${style.pagePadding}px`,
-              }}
-            >
-              {style.pageBackgroundPreviewUrl ? (
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    backgroundImage: `url(${style.pageBackgroundPreviewUrl})`,
-                    backgroundPosition: "center",
-                    backgroundRepeat: "no-repeat",
-                    backgroundSize: style.pageBackgroundFit,
-                    opacity: style.pageBackgroundOpacity,
-                  }}
-                />
-              ) : null}
-              <div className="relative grid h-full grid-cols-3 grid-rows-3" style={{ gap: `${style.pageGap}px` }}>
-                {currentPageItems.map((item) => (
-                  <div key={item.id} className="min-h-0 min-w-0 overflow-hidden">
-                    <CatalogCardPreview
-                      title={item.displayName ?? item.productName}
-                      sku={item.sku}
-                      packSize={item.packSize}
-                      unit={item.unit}
-                      normalPrice={item.normalPrice}
-                      promoPrice={item.promoPrice}
-                      discountAmount={item.discountAmount}
-                      discountPercent={item.discountPercent}
-                      imageUrl={item.previewUrl}
-                      options={style}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+            <CatalogPageCanvas
+              items={currentPageItems.map((item) => ({
+                id: item.id,
+                title: item.displayName ?? item.productName,
+                sku: item.sku,
+                packSize: item.packSize,
+                unit: item.unit,
+                normalPrice: item.normalPrice,
+                promoPrice: item.promoPrice,
+                discountAmount: item.discountAmount,
+                discountPercent: item.discountPercent,
+                imageUrl: item.previewUrl,
+              }))}
+              options={style}
+              pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
+              showSafeAreaGuides
+            />
           ) : (
             <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-line">
               <p className="text-sm text-muted">No visible items. Toggle items on to preview.</p>

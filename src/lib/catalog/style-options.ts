@@ -1,10 +1,15 @@
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import {
+  isCatalogLayoutPreset,
+  type CatalogLayoutPreset,
+} from "@/lib/catalog/layout";
 
 export type CatalogLayoutVariant = "promo" | "clean";
 export type CatalogBackgroundFit = "cover" | "contain";
 
 export interface CatalogStyleOptions {
   variant: CatalogLayoutVariant;
+  layoutPreset: CatalogLayoutPreset;
   showNormalPrice: boolean;
   showPromoPrice: boolean;
   showDiscountAmount: boolean;
@@ -18,6 +23,8 @@ export interface CatalogStyleOptions {
   pageBackgroundOpacity: number;
   pagePadding: number;
   pageGap: number;
+  headerSpace: number;
+  footerSpace: number;
   cardPadding: number;
   cardRadius: number;
   imageAreaHeight: number;
@@ -150,6 +157,9 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
   return {
     ...DEFAULT_STYLE_OPTIONS,
     variant: isVariant(source.variant) ? source.variant : DEFAULT_STYLE_OPTIONS.variant,
+    layoutPreset: isCatalogLayoutPreset(source.layoutPreset)
+      ? source.layoutPreset
+      : DEFAULT_STYLE_OPTIONS.layoutPreset,
     showNormalPrice: asBoolean(source.showNormalPrice, DEFAULT_STYLE_OPTIONS.showNormalPrice),
     showPromoPrice: asBoolean(source.showPromoPrice, DEFAULT_STYLE_OPTIONS.showPromoPrice),
     showDiscountAmount: asBoolean(source.showDiscountAmount, DEFAULT_STYLE_OPTIONS.showDiscountAmount),
@@ -170,6 +180,8 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
     ),
     pagePadding: asNumber(source.pagePadding, DEFAULT_STYLE_OPTIONS.pagePadding, 8, 40),
     pageGap: asNumber(source.pageGap, DEFAULT_STYLE_OPTIONS.pageGap, 4, 24),
+    headerSpace: asNumber(source.headerSpace, DEFAULT_STYLE_OPTIONS.headerSpace, 0, 180),
+    footerSpace: asNumber(source.footerSpace, DEFAULT_STYLE_OPTIONS.footerSpace, 0, 120),
     cardPadding: asNumber(source.cardPadding, DEFAULT_STYLE_OPTIONS.cardPadding, 6, 28),
     cardRadius: asNumber(source.cardRadius, DEFAULT_STYLE_OPTIONS.cardRadius, 8, 32),
     imageAreaHeight: asNumber(source.imageAreaHeight, DEFAULT_STYLE_OPTIONS.imageAreaHeight, 64, 180),

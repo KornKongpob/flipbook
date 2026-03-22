@@ -3,6 +3,7 @@ import type {
   CatalogJobStatus,
   FlipbookMode,
 } from "@/lib/database.types";
+import type { CatalogLayoutPreset } from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export const FILE_BUCKETS = {
@@ -23,8 +24,11 @@ export const MATCH_THRESHOLDS = {
   needsReview: 0.65,
 };
 
+export const DEFAULT_LAYOUT_PRESET: CatalogLayoutPreset = "3x3";
+
 export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   variant: "promo",
+  layoutPreset: DEFAULT_LAYOUT_PRESET,
   showNormalPrice: true,
   showPromoPrice: true,
   showDiscountAmount: true,
@@ -38,6 +42,8 @@ export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   pageBackgroundOpacity: 0.22,
   pagePadding: 18,
   pageGap: 12,
+  headerSpace: 120,
+  footerSpace: 44,
   cardPadding: 12,
   cardRadius: 18,
   imageAreaHeight: 88,

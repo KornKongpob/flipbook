@@ -80,6 +80,7 @@ export async function saveStyleOptionsAction(formData: FormData) {
     user.id,
     mergeCatalogStyleOptions({
       variant: String(formData.get("variant") ?? "promo"),
+      layoutPreset: formData.get("layoutPreset"),
       showNormalPrice: formData.get("showNormalPrice") === "on",
       showPromoPrice: formData.get("showPromoPrice") === "on",
       showDiscountAmount: formData.get("showDiscountAmount") === "on",
@@ -93,6 +94,8 @@ export async function saveStyleOptionsAction(formData: FormData) {
       pageBackgroundOpacity: formData.get("pageBackgroundOpacity"),
       pagePadding: formData.get("pagePadding"),
       pageGap: formData.get("pageGap"),
+      headerSpace: formData.get("headerSpace"),
+      footerSpace: formData.get("footerSpace"),
       cardPadding: formData.get("cardPadding"),
       cardRadius: formData.get("cardRadius"),
       imageAreaHeight: formData.get("imageAreaHeight"),

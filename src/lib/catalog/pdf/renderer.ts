@@ -1,7 +1,11 @@
 import PDFDocument from "pdfkit";
 import { chunk, formatCurrency } from "@/lib/utils";
 import { PDF_FONT_PATHS } from "@/lib/catalog/pdf/fonts";
-import { DEFAULT_STYLE_OPTIONS, PRODUCTS_PER_PAGE } from "@/lib/catalog/constants";
+import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import {
+  getCatalogItemsPerPage,
+  resolveCatalogPageLayout,
+} from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export interface RenderableCatalogItem {
@@ -250,19 +254,20 @@ export async function renderCatalogPdf({
   document.font("Sarabun-Regular");
 
   const bufferPromise = createDocumentBuffer(document);
-  const pages = chunk(items, PRODUCTS_PER_PAGE);
-  const margin = style.pagePadding;
-  const gap = style.pageGap;
-  const columns = 3;
-  const rows = 3;
+  const pages = chunk(items, getCatalogItemsPerPage(style.layoutPreset));
 
   pages.forEach((pageItems) => {
     document.addPage();
 
     const pageWidth = document.page.width;
     const pageHeight = document.page.height;
-    const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
-    const cardHeight = (pageHeight - margin * 2 - gap * (rows - 1)) / rows;
+    const pageLayout = resolveCatalogPageLayout(pageWidth, pageHeight, {
+      layoutPreset: style.layoutPreset,
+      pagePadding: style.pagePadding,
+      pageGap: style.pageGap,
+      headerSpace: style.headerSpace,
+      footerSpace: style.footerSpace,
+    });
 
     document.rect(0, 0, pageWidth, pageHeight).fill(style.pageBackgroundColor);
 
@@ -287,12 +292,22 @@ export async function renderCatalogPdf({
     }
 
     pageItems.forEach((item, itemIndex) => {
-      const column = itemIndex % columns;
-      const row = Math.floor(itemIndex / columns);
-      const x = margin + column * (cardWidth + gap);
-      const y = margin + row * (cardHeight + gap);
+      const column = itemIndex % pageLayout.columns;
+      const row = Math.floor(itemIndex / pageLayout.columns);
+      const x = pageLayout.frameX + column * (pageLayout.cardWidth + pageLayout.gap);
+      const y = pageLayout.frameY + row * (pageLayout.cardHeight + pageLayout.gap);
 
-      drawCard(document, item, x, y, cardWidth, cardHeight, variant, theme, style);
+      drawCard(
+        document,
+        item,
+        x,
+        y,
+        pageLayout.cardWidth,
+        pageLayout.cardHeight,
+        variant,
+        theme,
+        style,
+      );
     });
   });
 
