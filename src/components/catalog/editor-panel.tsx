@@ -153,8 +153,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-const AUTOSAVE_DELAY_MS = 450;
-
 const BOOLEAN_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "showNormalPrice",
   "showPromoPrice",
@@ -280,10 +278,23 @@ export function EditorPanel({
   });
   const [sidebarMode, setSidebarMode] = useState<"products" | "design">("products");
   const [productFilter, setProductFilter] = useState<"all" | "visible" | "hidden">("all");
-  const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const persistedStyleSignatureRef = useRef<string | null>(null);
+  const persistedStyleSignatureRef = useRef<string | null>(
+    serializeFormData(buildStyleFormData(jobId, initialStyle)),
+  );
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-  const nextAutosaveModeRef = useRef<"debounced" | "immediate">("debounced");
+
+  const setStyleStatus = useCallback((label: string) => {
+    setStyleStatusLabel((current) => (current === label ? current : label));
+  }, []);
+
+  const clearStyleSaveError = useCallback(() => {
+    setStyleSaveError((current) => (current === null ? current : null));
+  }, []);
+
+  const markStyleDirty = useCallback(() => {
+    clearStyleSaveError();
+    setStyleStatus("Unsaved style changes.");
+  }, [clearStyleSaveError, setStyleStatus]);
 
   const visibleItems = items.filter((i) => i.isVisible);
   const hiddenCount = items.length - visibleItems.length;
@@ -309,36 +320,36 @@ export function EditorPanel({
   }, [pages.length]);
 
   const captureStyleFormData = useCallback(() => buildStyleFormData(jobId, style), [jobId, style]);
+  const currentStyleSignature = serializeFormData(buildStyleFormData(jobId, style));
+  const hasUnsavedStyleChanges = currentStyleSignature !== persistedStyleSignatureRef.current;
 
   const persistStyle = useCallback(
-    async (options: { reason?: "autosave" | "export" } = {}) => {
+    async (options: { reason?: "manual" | "export" } = {}) => {
+      const reason = options.reason ?? "manual";
+
       const runPersist = async () => {
         const formData = captureStyleFormData();
-
-        if (!formData) {
-          return false;
-        }
 
         const signature = serializeFormData(formData);
 
         if (signature === persistedStyleSignatureRef.current) {
-          setStyleSaveError(null);
-          setStyleStatusLabel("All changes saved.");
+          clearStyleSaveError();
+          setStyleStatus("All changes saved.");
           return true;
         }
 
         setStyleSaving(true);
-        setStyleSaveError(null);
-        setStyleStatusLabel(options.reason === "export" ? "Saving latest changes…" : "Saving changes…");
+        clearStyleSaveError();
+        setStyleStatus(reason === "export" ? "Saving before export…" : "Saving style…");
 
         try {
           await saveStyleOptionsAction(formData);
           persistedStyleSignatureRef.current = signature;
-          setStyleStatusLabel("All changes saved.");
+          setStyleStatus("All changes saved.");
           return true;
         } catch (error) {
           setStyleSaveError(error instanceof Error ? error.message : "Could not save style changes.");
-          setStyleStatusLabel("Autosave failed.");
+          setStyleStatus(reason === "export" ? "Could not save before export." : "Could not save style.");
           return false;
         } finally {
           setStyleSaving(false);
@@ -349,58 +360,30 @@ export function EditorPanel({
       saveQueueRef.current = queuedSave.catch(() => false);
       return queuedSave;
     },
-    [captureStyleFormData],
+    [captureStyleFormData, clearStyleSaveError, setStyleStatus],
   );
 
   useEffect(() => {
-    const formData = captureStyleFormData();
-
-    if (!formData) {
+    if (styleSaving || exportPending) {
       return;
     }
 
-    const signature = serializeFormData(formData);
-
-    if (persistedStyleSignatureRef.current === null) {
-      persistedStyleSignatureRef.current = signature;
-      setStyleStatusLabel("All changes saved.");
+    if (!hasUnsavedStyleChanges) {
+      clearStyleSaveError();
+      setStyleStatus("All changes saved.");
       return;
     }
 
-    if (signature === persistedStyleSignatureRef.current) {
-      setStyleStatusLabel("All changes saved.");
-      return;
+    if (!styleSaveError) {
+      setStyleStatus("Unsaved style changes.");
     }
-
-    setStyleSaveError(null);
-    setStyleStatusLabel("Autosave pending…");
-
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current);
-    }
-
-    const delay = nextAutosaveModeRef.current === "immediate" ? 0 : AUTOSAVE_DELAY_MS;
-    nextAutosaveModeRef.current = "debounced";
-    autosaveTimeoutRef.current = setTimeout(() => {
-      autosaveTimeoutRef.current = null;
-      void persistStyle();
-    }, delay);
-
-    return () => {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
-    };
-  }, [captureStyleFormData, persistStyle, style]);
-
-  function markNextAutosaveImmediate() {
-    nextAutosaveModeRef.current = "immediate";
-  }
+  }, [clearStyleSaveError, exportPending, hasUnsavedStyleChanges, setStyleStatus, styleSaveError, styleSaving]);
 
   function updateStyle(
     key: keyof EditorCatalogStyleOptions,
     value: string | number | boolean | null,
   ) {
+    markStyleDirty();
     setStyle((previous) => ({
       ...previous,
       [key]: value,
@@ -414,7 +397,7 @@ export function EditorPanel({
       return;
     }
 
-    markNextAutosaveImmediate();
+    markStyleDirty();
     setStyle((previous) => ({
       ...previous,
       ...preset.options,
@@ -422,7 +405,7 @@ export function EditorPanel({
   }
 
   function resetStyle() {
-    markNextAutosaveImmediate();
+    markStyleDirty();
     setStyle({
       ...DEFAULT_STYLE_OPTIONS,
       pageBackgroundPreviewUrl: null,
@@ -437,7 +420,7 @@ export function EditorPanel({
   }
 
   function clearMedia(slot: MediaSlotKey) {
-    markNextAutosaveImmediate();
+    markStyleDirty();
     setStyle((previous) => {
       if (slot === "background") {
         return {
@@ -481,6 +464,8 @@ export function EditorPanel({
       ...previous,
       [slot]: true,
     }));
+    clearStyleSaveError();
+    setStyleStatus("Uploading media…");
     setMediaErrors((previous) => ({
       ...previous,
       [slot]: null,
@@ -534,12 +519,13 @@ export function EditorPanel({
                 footerMediaPreviewUrl: payload?.previewUrl ?? null,
               }),
       }));
-      markNextAutosaveImmediate();
+      markStyleDirty();
     } catch (error) {
       setMediaErrors((previous) => ({
         ...previous,
         [slot]: error instanceof Error ? error.message : `${slot} media upload failed.`,
       }));
+      setStyleStatus("Media upload failed.");
     } finally {
       event.target.value = "";
       setMediaUploading((previous) => ({
@@ -562,12 +548,11 @@ export function EditorPanel({
   }
 
   const isUploadingMedia = mediaUploading.background || mediaUploading.header || mediaUploading.footer;
-  const currentStyleSignature = serializeFormData(buildStyleFormData(jobId, style));
   const hasPendingEditorWork =
     isUploadingMedia ||
     styleSaving ||
     exportPending ||
-    currentStyleSignature !== persistedStyleSignatureRef.current;
+    hasUnsavedStyleChanges;
 
   useEffect(() => {
     if (!hasPendingEditorWork) {
@@ -585,22 +570,34 @@ export function EditorPanel({
     };
   }, [hasPendingEditorWork]);
 
+  const handleSaveStyle = useCallback(async () => {
+    if (isUploadingMedia) {
+      setStyleSaveError("Please wait for media uploads to finish before saving style.");
+      setStyleStatus("Upload still in progress.");
+      return false;
+    }
+
+    return persistStyle({ reason: "manual" });
+  }, [isUploadingMedia, persistStyle, setStyleStatus]);
+
   const handleOpenExport = useCallback(async () => {
     if (isUploadingMedia) {
       setStyleSaveError("Please wait for media uploads to finish before opening export.");
-      setStyleStatusLabel("Upload still in progress.");
+      setStyleStatus("Upload still in progress.");
       return;
     }
 
     setExportPending(true);
 
     try {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-        autosaveTimeoutRef.current = null;
+      if (!hasUnsavedStyleChanges) {
+        clearStyleSaveError();
+        setStyleStatus("All changes saved.");
       }
 
-      const didSaveSucceed = await persistStyle({ reason: "export" });
+      const didSaveSucceed = hasUnsavedStyleChanges
+        ? await persistStyle({ reason: "export" })
+        : true;
 
       if (didSaveSucceed) {
         router.push(`/catalogs/${jobId}/result`);
@@ -608,7 +605,7 @@ export function EditorPanel({
     } finally {
       setExportPending(false);
     }
-  }, [isUploadingMedia, jobId, persistStyle, router]);
+  }, [clearStyleSaveError, hasUnsavedStyleChanges, isUploadingMedia, jobId, persistStyle, router, setStyleStatus]);
 
   useEffect(() => {
     const listener = () => {
@@ -663,7 +660,6 @@ export function EditorPanel({
       );
 
       setEditingId(null);
-      router.refresh();
     } finally {
       setSaving(null);
     }
@@ -707,12 +703,16 @@ export function EditorPanel({
               <CatalogStyleControls
                 jobId={jobId}
                 style={style}
+                hasUnsavedStyleChanges={hasUnsavedStyleChanges}
                 styleSaving={styleSaving}
                 styleStatusLabel={styleStatusLabel}
                 styleSaveError={styleSaveError}
                 mediaUploading={mediaUploading}
                 mediaErrors={mediaErrors}
                 onStyleChange={updateStyle}
+                onSaveStyle={() => {
+                  void handleSaveStyle();
+                }}
                 onApplyPreset={applyPreset}
                 onReset={resetStyle}
                 onBackgroundUpload={handleBackgroundUpload}
@@ -862,13 +862,26 @@ export function EditorPanel({
               <p className="mt-1 text-sm font-semibold text-foreground">Page {previewPage + 1} of {Math.max(1, pages.length)}</p>
             </div>
             <div className="flex items-center gap-2">
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved changes" : "Saved"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSaveStyle();
+                }}
+                disabled={!hasUnsavedStyleChanges || styleSaving || exportPending || isUploadingMedia}
+                className="inline-flex h-8 items-center justify-center rounded-lg border border-line bg-white px-3 text-xs font-medium text-foreground hover:border-brand/30 hover:bg-brand-soft disabled:opacity-60 transition"
+              >
+                {styleSaving && !exportPending ? "Saving…" : hasUnsavedStyleChanges ? "Save style" : "Saved"}
+              </button>
               <button
                 type="button"
                 onClick={handleOpenExport}
-                disabled={exportPending || mediaUploading.background || mediaUploading.header || mediaUploading.footer}
+                disabled={exportPending || styleSaving || isUploadingMedia}
                 className="inline-flex h-8 items-center justify-center rounded-lg bg-brand px-3 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-60 transition"
               >
-                {exportPending ? "Opening…" : "Open export"}
+                {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + export" : "Open export"}
               </button>
               <button
                 type="button"

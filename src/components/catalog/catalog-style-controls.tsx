@@ -16,12 +16,14 @@ type MediaSlotKey = "background" | "header" | "footer";
 interface CatalogStyleControlsProps {
   jobId: string;
   style: EditorCatalogStyleOptions;
+  hasUnsavedStyleChanges: boolean;
   styleSaving: boolean;
   styleStatusLabel: string;
   styleSaveError: string | null;
   mediaUploading: Record<MediaSlotKey, boolean>;
   mediaErrors: Record<MediaSlotKey, string | null>;
   onStyleChange: (key: keyof EditorCatalogStyleOptions, value: string | number | boolean | null) => void;
+  onSaveStyle: () => void | Promise<void>;
   onApplyPreset: (presetId: string) => void;
   onReset: () => void;
   onBackgroundUpload: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
@@ -302,12 +304,14 @@ function StyleSection({
 export function CatalogStyleControls({
   jobId,
   style,
+  hasUnsavedStyleChanges,
   styleSaving,
   styleStatusLabel,
   styleSaveError,
   mediaUploading,
   mediaErrors,
   onStyleChange,
+  onSaveStyle,
   onApplyPreset,
   onReset,
   onBackgroundUpload,
@@ -323,8 +327,8 @@ export function CatalogStyleControls({
     <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
       <div className="border-b border-line bg-gray-50/50 px-4 py-2.5 flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Style Options</p>
-        <span className={`text-[11px] ${styleSaveError ? "text-rose-600" : "text-muted"}`}>
-          {styleSaveError ?? styleStatusLabel}
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+          {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved" : "Saved"}
         </span>
       </div>
       <form onSubmit={(event) => event.preventDefault()} className="p-4 space-y-4">
@@ -655,21 +659,33 @@ export function CatalogStyleControls({
           description="Check save status and open the export workspace once the design is ready."
           defaultOpen
         >
-          <div className="space-y-2">
+          <div className="space-y-3">
             {styleSaveError ? (
               <p className="text-[11px] text-rose-600">{styleSaveError}</p>
             ) : (
               <p className="text-[11px] text-muted">{styleStatusLabel}</p>
             )}
-            <Button
-              type="button"
-              className="w-full h-8 text-xs gap-1.5"
-              disabled={isUploadingMedia || exportPending}
-              onClick={onOpenExport}
-            >
-              {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
-              Open export
-            </Button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 text-xs gap-1.5"
+                disabled={!hasUnsavedStyleChanges || isUploadingMedia || styleSaving || exportPending}
+                onClick={onSaveStyle}
+              >
+                {styleSaving && !exportPending ? <Loader2 className="size-3 animate-spin" /> : null}
+                {hasUnsavedStyleChanges ? "Save style" : "Saved"}
+              </Button>
+              <Button
+                type="button"
+                className="h-8 text-xs gap-1.5"
+                disabled={isUploadingMedia || styleSaving || exportPending}
+                onClick={onOpenExport}
+              >
+                {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
+                {hasUnsavedStyleChanges ? "Save + export" : "Open export"}
+              </Button>
+            </div>
           </div>
         </StyleSection>
       </form>
