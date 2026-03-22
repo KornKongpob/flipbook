@@ -1,11 +1,15 @@
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import {
+  isCatalogBackgroundAnchor,
   isCatalogLayoutPreset,
+  isCatalogMediaFit,
+  type CatalogBackgroundAnchor,
   type CatalogLayoutPreset,
+  type CatalogMediaFit,
 } from "@/lib/catalog/layout";
 
 export type CatalogLayoutVariant = "promo" | "clean";
-export type CatalogBackgroundFit = "cover" | "contain";
+export type CatalogBackgroundFit = CatalogMediaFit;
 
 export interface CatalogStyleOptions {
   variant: CatalogLayoutVariant;
@@ -21,6 +25,24 @@ export interface CatalogStyleOptions {
   pageBackgroundImagePath: string | null;
   pageBackgroundFit: CatalogBackgroundFit;
   pageBackgroundOpacity: number;
+  pageBackgroundOffsetX: number;
+  pageBackgroundOffsetY: number;
+  pageBackgroundScale: number;
+  pageBackgroundAnchor: CatalogBackgroundAnchor;
+  headerMediaBucket: string | null;
+  headerMediaPath: string | null;
+  headerMediaFit: CatalogMediaFit;
+  headerMediaOpacity: number;
+  headerMediaOffsetX: number;
+  headerMediaOffsetY: number;
+  headerMediaScale: number;
+  footerMediaBucket: string | null;
+  footerMediaPath: string | null;
+  footerMediaFit: CatalogMediaFit;
+  footerMediaOpacity: number;
+  footerMediaOffsetX: number;
+  footerMediaOffsetY: number;
+  footerMediaScale: number;
   pagePadding: number;
   pageGap: number;
   headerSpace: number;
@@ -45,6 +67,8 @@ export interface CatalogStyleOptions {
 
 export interface EditorCatalogStyleOptions extends CatalogStyleOptions {
   pageBackgroundPreviewUrl: string | null;
+  headerMediaPreviewUrl: string | null;
+  footerMediaPreviewUrl: string | null;
 }
 
 export interface CatalogStylePreset {
@@ -112,7 +136,7 @@ function isVariant(value: unknown): value is CatalogLayoutVariant {
 }
 
 function isBackgroundFit(value: unknown): value is CatalogBackgroundFit {
-  return value === "cover" || value === "contain";
+  return isCatalogMediaFit(value);
 }
 
 function asBoolean(value: unknown, fallback: boolean) {
@@ -178,6 +202,85 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
       0,
       1,
     ),
+    pageBackgroundOffsetX: asNumber(
+      source.pageBackgroundOffsetX,
+      DEFAULT_STYLE_OPTIONS.pageBackgroundOffsetX,
+      -100,
+      100,
+    ),
+    pageBackgroundOffsetY: asNumber(
+      source.pageBackgroundOffsetY,
+      DEFAULT_STYLE_OPTIONS.pageBackgroundOffsetY,
+      -100,
+      100,
+    ),
+    pageBackgroundScale: asNumber(
+      source.pageBackgroundScale,
+      DEFAULT_STYLE_OPTIONS.pageBackgroundScale,
+      0.5,
+      2.5,
+    ),
+    pageBackgroundAnchor: isCatalogBackgroundAnchor(source.pageBackgroundAnchor)
+      ? source.pageBackgroundAnchor
+      : DEFAULT_STYLE_OPTIONS.pageBackgroundAnchor,
+    headerMediaBucket: asNullableString(source.headerMediaBucket),
+    headerMediaPath: asNullableString(source.headerMediaPath),
+    headerMediaFit: isCatalogMediaFit(source.headerMediaFit)
+      ? source.headerMediaFit
+      : DEFAULT_STYLE_OPTIONS.headerMediaFit,
+    headerMediaOpacity: asNumber(
+      source.headerMediaOpacity,
+      DEFAULT_STYLE_OPTIONS.headerMediaOpacity,
+      0,
+      1,
+    ),
+    headerMediaOffsetX: asNumber(
+      source.headerMediaOffsetX,
+      DEFAULT_STYLE_OPTIONS.headerMediaOffsetX,
+      -100,
+      100,
+    ),
+    headerMediaOffsetY: asNumber(
+      source.headerMediaOffsetY,
+      DEFAULT_STYLE_OPTIONS.headerMediaOffsetY,
+      -100,
+      100,
+    ),
+    headerMediaScale: asNumber(
+      source.headerMediaScale,
+      DEFAULT_STYLE_OPTIONS.headerMediaScale,
+      0.5,
+      2.5,
+    ),
+    footerMediaBucket: asNullableString(source.footerMediaBucket),
+    footerMediaPath: asNullableString(source.footerMediaPath),
+    footerMediaFit: isCatalogMediaFit(source.footerMediaFit)
+      ? source.footerMediaFit
+      : DEFAULT_STYLE_OPTIONS.footerMediaFit,
+    footerMediaOpacity: asNumber(
+      source.footerMediaOpacity,
+      DEFAULT_STYLE_OPTIONS.footerMediaOpacity,
+      0,
+      1,
+    ),
+    footerMediaOffsetX: asNumber(
+      source.footerMediaOffsetX,
+      DEFAULT_STYLE_OPTIONS.footerMediaOffsetX,
+      -100,
+      100,
+    ),
+    footerMediaOffsetY: asNumber(
+      source.footerMediaOffsetY,
+      DEFAULT_STYLE_OPTIONS.footerMediaOffsetY,
+      -100,
+      100,
+    ),
+    footerMediaScale: asNumber(
+      source.footerMediaScale,
+      DEFAULT_STYLE_OPTIONS.footerMediaScale,
+      0.5,
+      2.5,
+    ),
     pagePadding: asNumber(source.pagePadding, DEFAULT_STYLE_OPTIONS.pagePadding, 8, 40),
     pageGap: asNumber(source.pageGap, DEFAULT_STYLE_OPTIONS.pageGap, 4, 24),
     headerSpace: asNumber(source.headerSpace, DEFAULT_STYLE_OPTIONS.headerSpace, 0, 180),
@@ -224,5 +327,23 @@ export function withCatalogBackgroundPreview(
   return {
     ...mergeCatalogStyleOptions(raw),
     pageBackgroundPreviewUrl: previewUrl,
+    headerMediaPreviewUrl: null,
+    footerMediaPreviewUrl: null,
+  };
+}
+
+export function withCatalogMediaPreviews(
+  raw: Record<string, unknown> | null | undefined,
+  previews: {
+    pageBackgroundPreviewUrl?: string | null;
+    headerMediaPreviewUrl?: string | null;
+    footerMediaPreviewUrl?: string | null;
+  },
+): EditorCatalogStyleOptions {
+  return {
+    ...mergeCatalogStyleOptions(raw),
+    pageBackgroundPreviewUrl: previews.pageBackgroundPreviewUrl ?? null,
+    headerMediaPreviewUrl: previews.headerMediaPreviewUrl ?? null,
+    footerMediaPreviewUrl: previews.footerMediaPreviewUrl ?? null,
   };
 }

@@ -44,18 +44,16 @@ export default async function CatalogResultPage({
             <a href={`/catalogs/${jobId}/editor`} className={buttonClassName("secondary", "h-9 text-xs") }>
               ← Back to Editor
             </a>
-            {!isPdfReady && (
-              <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
-                <Button className="h-9 gap-1.5 text-xs" disabled={isGenerating}>
-                  {isGenerating ? (
-                    <RefreshCw className="size-3.5 animate-spin" />
-                  ) : (
-                    <Play className="size-3.5" />
-                  )}
-                  {isGenerating ? "Generating…" : "Generate PDF"}
-                </Button>
-              </form>
-            )}
+            <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
+              <Button className="h-9 gap-1.5 text-xs" disabled={isGenerating}>
+                {isGenerating ? (
+                  <RefreshCw className="size-3.5 animate-spin" />
+                ) : (
+                  <Play className="size-3.5" />
+                )}
+                {isGenerating ? "Generating…" : latestPdf ? "Regenerate PDF" : "Generate PDF"}
+              </Button>
+            </form>
           </div>
         }
         metrics={[

@@ -6,9 +6,11 @@ import { parseWorkbookBuffer } from "@/lib/catalog/excel";
 import { runMatchingForJob } from "@/lib/catalog/matching/service";
 import {
   buildCatalogBackgroundTarget,
+  buildCatalogJobMediaTarget,
   buildGeneratedPdfTarget,
   buildManualAssetTarget,
   buildRawUploadTarget,
+  type CatalogJobMediaSlot,
 } from "@/lib/catalog/storage";
 import { FILE_BUCKETS } from "@/lib/catalog/constants";
 import { mergeCatalogStyleOptions, type CatalogStyleOptions } from "@/lib/catalog/style-options";
@@ -825,11 +827,7 @@ export async function resolveCatalogBackgroundBuffer(
 ) {
   const style = mergeCatalogStyleOptions(styleOptions);
 
-  if (!style.pageBackgroundImageBucket || !style.pageBackgroundImagePath) {
-    return null;
-  }
-
-  return downloadStorageBuffer(style.pageBackgroundImageBucket, style.pageBackgroundImagePath);
+  return resolveCatalogMediaBuffer(style.pageBackgroundImageBucket, style.pageBackgroundImagePath);
 }
 
 export async function resolveCatalogBackgroundPreviewUrl(
@@ -837,11 +835,29 @@ export async function resolveCatalogBackgroundPreviewUrl(
 ) {
   const style = mergeCatalogStyleOptions(styleOptions);
 
-  if (!style.pageBackgroundImageBucket || !style.pageBackgroundImagePath) {
+  return resolveCatalogMediaPreviewUrl(style.pageBackgroundImageBucket, style.pageBackgroundImagePath);
+}
+
+export async function resolveCatalogMediaBuffer(
+  storageBucket: string | null | undefined,
+  storagePath: string | null | undefined,
+) {
+  if (!storageBucket || !storagePath) {
     return null;
   }
 
-  return createSignedStorageUrl(style.pageBackgroundImageBucket, style.pageBackgroundImagePath, 3600);
+  return downloadStorageBuffer(storageBucket, storagePath);
+}
+
+export async function resolveCatalogMediaPreviewUrl(
+  storageBucket: string | null | undefined,
+  storagePath: string | null | undefined,
+) {
+  if (!storageBucket || !storagePath) {
+    return null;
+  }
+
+  return createSignedStorageUrl(storageBucket, storagePath, 3600);
 }
 
 export async function uploadCatalogBackgroundAsset(args: {
@@ -851,9 +867,25 @@ export async function uploadCatalogBackgroundAsset(args: {
   fileBuffer: Buffer;
   contentType: string;
 }) {
+  return uploadCatalogJobMediaAsset({
+    ...args,
+    slot: "page-background",
+  });
+}
+
+export async function uploadCatalogJobMediaAsset(args: {
+  jobId: string;
+  userId: string;
+  fileName: string;
+  fileBuffer: Buffer;
+  contentType: string;
+  slot: CatalogJobMediaSlot;
+}) {
   const admin = getAdminClientOrThrow();
   const job = await ensureJobAccess(admin, args.jobId, args.userId);
-  const target = buildCatalogBackgroundTarget(args.userId, job.id, args.fileName);
+  const target = args.slot === "page-background"
+    ? buildCatalogBackgroundTarget(args.userId, job.id, args.fileName)
+    : buildCatalogJobMediaTarget(args.userId, job.id, args.slot, args.fileName);
   const uploadResponse = await admin.storage.from(target.bucket).upload(target.path, args.fileBuffer, {
     contentType: args.contentType,
     upsert: false,
@@ -955,6 +987,29 @@ export async function markJobStatus(
       started_at: status === "generating_pdf" ? new Date().toISOString() : undefined,
     })
     .eq("id", jobId);
+}
+
+export async function beginPdfGeneration(jobId: string, userId: string) {
+  const admin = getAdminClientOrThrow();
+  await ensureJobAccess(admin, jobId, userId);
+
+  const response = await admin
+    .from("catalog_jobs")
+    .update({
+      status: "generating_pdf",
+      error_message: null,
+      started_at: new Date().toISOString(),
+    })
+    .eq("id", jobId)
+    .neq("status", "generating_pdf")
+    .select("id")
+    .maybeSingle();
+
+  if (response.error) {
+    throw response.error;
+  }
+
+  return Boolean(response.data?.id);
 }
 
 export async function getJobStatus(jobId: string, userId: string) {

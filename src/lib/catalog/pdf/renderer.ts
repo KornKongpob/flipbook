@@ -3,8 +3,14 @@ import { chunk, formatCurrency } from "@/lib/utils";
 import { PDF_FONT_PATHS } from "@/lib/catalog/pdf/fonts";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import {
+  getCatalogBackgroundRect,
+  getCatalogFooterRect,
+  getCatalogHeaderRect,
   getCatalogItemsPerPage,
+  offsetRectByPercent,
   resolveCatalogPageLayout,
+  scaleRectFromCenter,
+  type CatalogRect,
 } from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
@@ -29,6 +35,8 @@ export interface RenderCatalogPdfInput {
   items: RenderableCatalogItem[];
   options?: CatalogStyleOptions;
   pageBackgroundBuffer?: Buffer | null;
+  headerMediaBuffer?: Buffer | null;
+  footerMediaBuffer?: Buffer | null;
 }
 
 function drawFallbackImage(
@@ -214,6 +222,41 @@ function drawCard(
   doc.restore();
 }
 
+function drawMediaLayer(
+  doc: PDFKit.PDFDocument,
+  buffer: Buffer | null,
+  rect: CatalogRect,
+  fit: "cover" | "contain",
+  opacity: number,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+) {
+  if (!buffer || rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+
+  const scaledRect = scaleRectFromCenter(rect, scale);
+  const renderRect = offsetRectByPercent(scaledRect, offsetX, offsetY);
+  const imageOptions = fit === "contain"
+    ? {
+        fit: [renderRect.width, renderRect.height] as [number, number],
+        align: "center" as const,
+        valign: "center" as const,
+      }
+    : {
+        cover: [renderRect.width, renderRect.height] as [number, number],
+        align: "center" as const,
+        valign: "center" as const,
+      };
+
+  doc.save();
+  doc.rect(rect.x, rect.y, rect.width, rect.height).clip();
+  doc.opacity(opacity);
+  doc.image(buffer, renderRect.x, renderRect.y, imageOptions as never);
+  doc.restore();
+}
+
 function createDocumentBuffer(doc: PDFKit.PDFDocument) {
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -231,6 +274,8 @@ export async function renderCatalogPdf({
   items,
   options,
   pageBackgroundBuffer = null,
+  headerMediaBuffer = null,
+  footerMediaBuffer = null,
 }: RenderCatalogPdfInput) {
   const style: CatalogStyleOptions = {
     ...DEFAULT_STYLE_OPTIONS,
@@ -268,28 +313,42 @@ export async function renderCatalogPdf({
       headerSpace: style.headerSpace,
       footerSpace: style.footerSpace,
     });
+    const backgroundRect = getCatalogBackgroundRect(pageLayout, style.pageBackgroundAnchor);
+    const headerRect = getCatalogHeaderRect(pageLayout);
+    const footerRect = getCatalogFooterRect(pageLayout);
 
     document.rect(0, 0, pageWidth, pageHeight).fill(style.pageBackgroundColor);
 
-    if (pageBackgroundBuffer) {
-      document.save();
-      document.opacity(style.pageBackgroundOpacity);
-
-      if (style.pageBackgroundFit === "contain") {
-        document.image(pageBackgroundBuffer, 0, 0, {
-          fit: [pageWidth, pageHeight],
-          align: "center",
-          valign: "center",
-        });
-      } else {
-        document.image(pageBackgroundBuffer, 0, 0, {
-          width: pageWidth,
-          height: pageHeight,
-        });
-      }
-
-      document.restore();
-    }
+    drawMediaLayer(
+      document,
+      pageBackgroundBuffer,
+      backgroundRect,
+      style.pageBackgroundFit,
+      style.pageBackgroundOpacity,
+      style.pageBackgroundScale,
+      style.pageBackgroundOffsetX,
+      style.pageBackgroundOffsetY,
+    );
+    drawMediaLayer(
+      document,
+      headerMediaBuffer,
+      headerRect,
+      style.headerMediaFit,
+      style.headerMediaOpacity,
+      style.headerMediaScale,
+      style.headerMediaOffsetX,
+      style.headerMediaOffsetY,
+    );
+    drawMediaLayer(
+      document,
+      footerMediaBuffer,
+      footerRect,
+      style.footerMediaFit,
+      style.footerMediaOpacity,
+      style.footerMediaScale,
+      style.footerMediaOffsetX,
+      style.footerMediaOffsetY,
+    );
 
     pageItems.forEach((item, itemIndex) => {
       const column = itemIndex % pageLayout.columns;

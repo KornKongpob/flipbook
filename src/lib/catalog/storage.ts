@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import { FILE_BUCKETS } from "@/lib/catalog/constants";
 import { slugify } from "@/lib/utils";
 
+export type CatalogJobMediaSlot = "page-background" | "header-media" | "footer-media";
+
 function getExtension(fileName: string) {
   const parts = fileName.split(".");
   return parts.length > 1 ? parts.at(-1) : "";
@@ -42,9 +44,18 @@ export function buildManualAssetTarget(
 }
 
 export function buildCatalogBackgroundTarget(userId: string, jobId: string, fileName: string) {
+  return buildCatalogJobMediaTarget(userId, jobId, "page-background", fileName);
+}
+
+export function buildCatalogJobMediaTarget(
+  userId: string,
+  jobId: string,
+  slot: CatalogJobMediaSlot,
+  fileName: string,
+) {
   return {
     bucket: FILE_BUCKETS.manualAssets,
-    path: `${userId}/${jobId}/page-background/${randomUUID()}-${sanitizeUploadName(fileName)}`,
+    path: `${userId}/${jobId}/${slot}/${randomUUID()}-${sanitizeUploadName(fileName)}`,
   };
 }
 

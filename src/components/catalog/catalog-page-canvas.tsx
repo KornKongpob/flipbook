@@ -2,7 +2,13 @@
 
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
-import { resolveCatalogPageLayout } from "@/lib/catalog/layout";
+import {
+  getCatalogBackgroundRect,
+  getCatalogFooterRect,
+  getCatalogHeaderRect,
+  resolveCatalogPageLayout,
+  type CatalogRect,
+} from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export interface CatalogPageCanvasItem {
@@ -22,7 +28,63 @@ interface CatalogPageCanvasProps {
   items: CatalogPageCanvasItem[];
   options?: Partial<CatalogStyleOptions>;
   pageBackgroundPreviewUrl?: string | null;
+  headerMediaPreviewUrl?: string | null;
+  footerMediaPreviewUrl?: string | null;
   showSafeAreaGuides?: boolean;
+}
+
+function rectStyle(rect: CatalogRect, pageWidth: number, pageHeight: number) {
+  return {
+    left: `${(rect.x / pageWidth) * 100}%`,
+    top: `${(rect.y / pageHeight) * 100}%`,
+    width: `${(rect.width / pageWidth) * 100}%`,
+    height: `${(rect.height / pageHeight) * 100}%`,
+  };
+}
+
+function MediaLayer({
+  rect,
+  pageWidth,
+  pageHeight,
+  previewUrl,
+  fit,
+  opacity,
+  offsetX,
+  offsetY,
+  scale,
+}: {
+  rect: CatalogRect;
+  pageWidth: number;
+  pageHeight: number;
+  previewUrl: string | null;
+  fit: "cover" | "contain";
+  opacity: number;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}) {
+  if (!previewUrl || rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className="pointer-events-none absolute overflow-hidden"
+      style={rectStyle(rect, pageWidth, pageHeight)}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={previewUrl}
+        alt=""
+        className={`h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"}`}
+        style={{
+          opacity,
+          transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})`,
+          transformOrigin: "center center",
+        }}
+      />
+    </div>
+  );
 }
 
 function SafeAreaGuide({
@@ -58,6 +120,8 @@ export function CatalogPageCanvas({
   items,
   options,
   pageBackgroundPreviewUrl = null,
+  headerMediaPreviewUrl = null,
+  footerMediaPreviewUrl = null,
   showSafeAreaGuides = false,
 }: CatalogPageCanvasProps) {
   const style = {
@@ -71,6 +135,9 @@ export function CatalogPageCanvas({
     headerSpace: style.headerSpace,
     footerSpace: style.footerSpace,
   });
+  const backgroundRect = getCatalogBackgroundRect(layout, style.pageBackgroundAnchor);
+  const headerRect = getCatalogHeaderRect(layout);
+  const footerRect = getCatalogFooterRect(layout);
 
   return (
     <div
@@ -79,20 +146,43 @@ export function CatalogPageCanvas({
         backgroundColor: style.pageBackgroundColor,
       }}
     >
-      {pageBackgroundPreviewUrl ? (
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `url(${pageBackgroundPreviewUrl})`,
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            backgroundSize: style.pageBackgroundFit,
-            opacity: style.pageBackgroundOpacity,
-          }}
-        />
-      ) : null}
+      <MediaLayer
+        rect={backgroundRect}
+        pageWidth={layout.pageWidth}
+        pageHeight={layout.pageHeight}
+        previewUrl={pageBackgroundPreviewUrl}
+        fit={style.pageBackgroundFit}
+        opacity={style.pageBackgroundOpacity}
+        offsetX={style.pageBackgroundOffsetX}
+        offsetY={style.pageBackgroundOffsetY}
+        scale={style.pageBackgroundScale}
+      />
 
-      <div className="relative flex h-full flex-col" style={{ padding: `${layout.padding}px` }}>
+      <MediaLayer
+        rect={headerRect}
+        pageWidth={layout.pageWidth}
+        pageHeight={layout.pageHeight}
+        previewUrl={headerMediaPreviewUrl}
+        fit={style.headerMediaFit}
+        opacity={style.headerMediaOpacity}
+        offsetX={style.headerMediaOffsetX}
+        offsetY={style.headerMediaOffsetY}
+        scale={style.headerMediaScale}
+      />
+
+      <MediaLayer
+        rect={footerRect}
+        pageWidth={layout.pageWidth}
+        pageHeight={layout.pageHeight}
+        previewUrl={footerMediaPreviewUrl}
+        fit={style.footerMediaFit}
+        opacity={style.footerMediaOpacity}
+        offsetX={style.footerMediaOffsetX}
+        offsetY={style.footerMediaOffsetY}
+        scale={style.footerMediaScale}
+      />
+
+      <div className="relative z-10 flex h-full flex-col" style={{ padding: `${layout.padding}px` }}>
         <SafeAreaGuide height={layout.headerSpace} label="Header media space" show={showSafeAreaGuides} />
 
         <div

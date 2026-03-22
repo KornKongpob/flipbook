@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Eye,
@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { moveItemAction, toggleItemVisibilityAction, saveStyleOptionsAction } from "@/app/(app)/actions";
+import { OPEN_CATALOG_EXPORT_EVENT } from "@/components/catalog/catalog-editor-export-button";
 import { CatalogPageCanvas } from "@/components/catalog/catalog-page-canvas";
 import { CatalogStyleControls } from "@/components/catalog/catalog-style-controls";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/catalog/layout";
 import {
   CATALOG_STYLE_PRESETS,
+  type CatalogStyleOptions,
   type EditorCatalogStyleOptions,
 } from "@/lib/catalog/style-options";
 
@@ -50,6 +52,8 @@ interface EditState {
   packSize: string;
   unit: string;
 }
+
+type MediaSlotKey = "background" | "header" | "footer";
 
 function ItemEditPanel({
   item,
@@ -149,6 +153,102 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+const AUTOSAVE_DELAY_MS = 450;
+
+const BOOLEAN_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
+  "showNormalPrice",
+  "showPromoPrice",
+  "showDiscountAmount",
+  "showDiscountPercent",
+  "showSku",
+  "showPackSize",
+];
+
+const NULLABLE_STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
+  "pageBackgroundImageBucket",
+  "pageBackgroundImagePath",
+  "headerMediaBucket",
+  "headerMediaPath",
+  "footerMediaBucket",
+  "footerMediaPath",
+];
+
+const STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
+  "variant",
+  "layoutPreset",
+  "pageBackgroundColor",
+  "pageBackgroundFit",
+  "pageBackgroundAnchor",
+  "headerMediaFit",
+  "footerMediaFit",
+  "cardBackgroundColor",
+  "cardBorderColor",
+  "imageBackgroundColor",
+  "titleColor",
+  "metaColor",
+  "promoPriceColor",
+  "normalPriceColor",
+  "discountBadgeBackgroundColor",
+  "discountBadgeTextColor",
+];
+
+const NUMBER_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
+  "pageBackgroundOpacity",
+  "pageBackgroundOffsetX",
+  "pageBackgroundOffsetY",
+  "pageBackgroundScale",
+  "headerMediaOpacity",
+  "headerMediaOffsetX",
+  "headerMediaOffsetY",
+  "headerMediaScale",
+  "footerMediaOpacity",
+  "footerMediaOffsetX",
+  "footerMediaOffsetY",
+  "footerMediaScale",
+  "pagePadding",
+  "pageGap",
+  "headerSpace",
+  "footerSpace",
+  "cardPadding",
+  "cardRadius",
+  "imageAreaHeight",
+  "titleFontSize",
+  "skuFontSize",
+  "promoPriceFontSize",
+  "normalPriceFontSize",
+];
+
+function serializeFormData(formData: FormData) {
+  return JSON.stringify(
+    Array.from(formData.entries()).map(([key, value]) => [key, typeof value === "string" ? value : value.name]),
+  );
+}
+
+function buildStyleFormData(jobId: string, style: EditorCatalogStyleOptions) {
+  const formData = new FormData();
+  formData.set("jobId", jobId);
+
+  BOOLEAN_STYLE_KEYS.forEach((key) => {
+    if (style[key]) {
+      formData.set(key, "on");
+    }
+  });
+
+  NULLABLE_STRING_STYLE_KEYS.forEach((key) => {
+    formData.set(key, String(style[key] ?? ""));
+  });
+
+  STRING_STYLE_KEYS.forEach((key) => {
+    formData.set(key, String(style[key]));
+  });
+
+  NUMBER_STYLE_KEYS.forEach((key) => {
+    formData.set(key, String(style[key]));
+  });
+
+  return formData;
+}
+
 export function EditorPanel({
   initialItems,
   jobId,
@@ -163,12 +263,27 @@ export function EditorPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [style, setStyle] = useState<EditorCatalogStyleOptions>(initialStyle);
-  const [styleTransition, startStyleTransition] = useTransition();
+  const [styleSaving, setStyleSaving] = useState(false);
+  const [styleSaveError, setStyleSaveError] = useState<string | null>(null);
+  const [styleStatusLabel, setStyleStatusLabel] = useState("All changes saved.");
+  const [exportPending, setExportPending] = useState(false);
   const [previewPage, setPreviewPage] = useState(0);
-  const [backgroundUploading, setBackgroundUploading] = useState(false);
-  const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const [mediaUploading, setMediaUploading] = useState<Record<MediaSlotKey, boolean>>({
+    background: false,
+    header: false,
+    footer: false,
+  });
+  const [mediaErrors, setMediaErrors] = useState<Record<MediaSlotKey, string | null>>({
+    background: null,
+    header: null,
+    footer: null,
+  });
   const [sidebarMode, setSidebarMode] = useState<"products" | "design">("products");
   const [productFilter, setProductFilter] = useState<"all" | "visible" | "hidden">("all");
+  const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistedStyleSignatureRef = useRef<string | null>(null);
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const nextAutosaveModeRef = useRef<"debounced" | "immediate">("debounced");
 
   const visibleItems = items.filter((i) => i.isVisible);
   const hiddenCount = items.length - visibleItems.length;
@@ -193,6 +308,95 @@ export function EditorPanel({
     setPreviewPage((current) => Math.min(current, Math.max(pages.length - 1, 0)));
   }, [pages.length]);
 
+  const captureStyleFormData = useCallback(() => buildStyleFormData(jobId, style), [jobId, style]);
+
+  const persistStyle = useCallback(
+    async (options: { reason?: "autosave" | "export" } = {}) => {
+      const runPersist = async () => {
+        const formData = captureStyleFormData();
+
+        if (!formData) {
+          return false;
+        }
+
+        const signature = serializeFormData(formData);
+
+        if (signature === persistedStyleSignatureRef.current) {
+          setStyleSaveError(null);
+          setStyleStatusLabel("All changes saved.");
+          return true;
+        }
+
+        setStyleSaving(true);
+        setStyleSaveError(null);
+        setStyleStatusLabel(options.reason === "export" ? "Saving latest changes…" : "Saving changes…");
+
+        try {
+          await saveStyleOptionsAction(formData);
+          persistedStyleSignatureRef.current = signature;
+          setStyleStatusLabel("All changes saved.");
+          return true;
+        } catch (error) {
+          setStyleSaveError(error instanceof Error ? error.message : "Could not save style changes.");
+          setStyleStatusLabel("Autosave failed.");
+          return false;
+        } finally {
+          setStyleSaving(false);
+        }
+      };
+
+      const queuedSave = saveQueueRef.current.then(runPersist, runPersist);
+      saveQueueRef.current = queuedSave.catch(() => false);
+      return queuedSave;
+    },
+    [captureStyleFormData],
+  );
+
+  useEffect(() => {
+    const formData = captureStyleFormData();
+
+    if (!formData) {
+      return;
+    }
+
+    const signature = serializeFormData(formData);
+
+    if (persistedStyleSignatureRef.current === null) {
+      persistedStyleSignatureRef.current = signature;
+      setStyleStatusLabel("All changes saved.");
+      return;
+    }
+
+    if (signature === persistedStyleSignatureRef.current) {
+      setStyleStatusLabel("All changes saved.");
+      return;
+    }
+
+    setStyleSaveError(null);
+    setStyleStatusLabel("Autosave pending…");
+
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    const delay = nextAutosaveModeRef.current === "immediate" ? 0 : AUTOSAVE_DELAY_MS;
+    nextAutosaveModeRef.current = "debounced";
+    autosaveTimeoutRef.current = setTimeout(() => {
+      autosaveTimeoutRef.current = null;
+      void persistStyle();
+    }, delay);
+
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [captureStyleFormData, persistStyle, style]);
+
+  function markNextAutosaveImmediate() {
+    nextAutosaveModeRef.current = "immediate";
+  }
+
   function updateStyle(
     key: keyof EditorCatalogStyleOptions,
     value: string | number | boolean | null,
@@ -210,6 +414,7 @@ export function EditorPanel({
       return;
     }
 
+    markNextAutosaveImmediate();
     setStyle((previous) => ({
       ...previous,
       ...preset.options,
@@ -217,31 +422,85 @@ export function EditorPanel({
   }
 
   function resetStyle() {
+    markNextAutosaveImmediate();
     setStyle({
       ...DEFAULT_STYLE_OPTIONS,
       pageBackgroundPreviewUrl: null,
+      headerMediaPreviewUrl: null,
+      footerMediaPreviewUrl: null,
     });
-    setBackgroundError(null);
+    setMediaErrors({
+      background: null,
+      header: null,
+      footer: null,
+    });
   }
 
-  async function handleBackgroundUpload(event: ChangeEvent<HTMLInputElement>) {
+  function clearMedia(slot: MediaSlotKey) {
+    markNextAutosaveImmediate();
+    setStyle((previous) => {
+      if (slot === "background") {
+        return {
+          ...previous,
+          pageBackgroundImageBucket: null,
+          pageBackgroundImagePath: null,
+          pageBackgroundPreviewUrl: null,
+        };
+      }
+
+      if (slot === "header") {
+        return {
+          ...previous,
+          headerMediaBucket: null,
+          headerMediaPath: null,
+          headerMediaPreviewUrl: null,
+        };
+      }
+
+      return {
+        ...previous,
+        footerMediaBucket: null,
+        footerMediaPath: null,
+        footerMediaPreviewUrl: null,
+      };
+    });
+    setMediaErrors((previous) => ({
+      ...previous,
+      [slot]: null,
+    }));
+  }
+
+  async function handleMediaUpload(slot: MediaSlotKey, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (!file) {
       return;
     }
 
-    setBackgroundUploading(true);
-    setBackgroundError(null);
+    setMediaUploading((previous) => ({
+      ...previous,
+      [slot]: true,
+    }));
+    setMediaErrors((previous) => ({
+      ...previous,
+      [slot]: null,
+    }));
 
     try {
       const formData = new FormData();
-      formData.append("background", file);
+      if (slot === "background") {
+        formData.append("background", file);
+      } else {
+        formData.append("media", file);
+      }
 
-      const response = await fetch(`/api/jobs/${jobId}/background`, {
+      const response = await fetch(
+        slot === "background" ? `/api/jobs/${jobId}/background` : `/api/jobs/${jobId}/media/${slot}`,
+        {
         method: "POST",
         body: formData,
-      });
+        },
+      );
       const payload = (await response.json().catch(() => null)) as
         | {
             error?: string;
@@ -252,22 +511,115 @@ export function EditorPanel({
         | null;
 
       if (!response.ok) {
-        throw new Error(payload?.error ?? "Background upload failed.");
+        throw new Error(payload?.error ?? `${slot} media upload failed.`);
       }
 
       setStyle((previous) => ({
         ...previous,
-        pageBackgroundImageBucket: payload?.storageBucket ?? null,
-        pageBackgroundImagePath: payload?.storagePath ?? null,
-        pageBackgroundPreviewUrl: payload?.previewUrl ?? null,
+        ...(slot === "background"
+          ? {
+              pageBackgroundImageBucket: payload?.storageBucket ?? null,
+              pageBackgroundImagePath: payload?.storagePath ?? null,
+              pageBackgroundPreviewUrl: payload?.previewUrl ?? null,
+            }
+          : slot === "header"
+            ? {
+                headerMediaBucket: payload?.storageBucket ?? null,
+                headerMediaPath: payload?.storagePath ?? null,
+                headerMediaPreviewUrl: payload?.previewUrl ?? null,
+              }
+            : {
+                footerMediaBucket: payload?.storageBucket ?? null,
+                footerMediaPath: payload?.storagePath ?? null,
+                footerMediaPreviewUrl: payload?.previewUrl ?? null,
+              }),
       }));
+      markNextAutosaveImmediate();
     } catch (error) {
-      setBackgroundError(error instanceof Error ? error.message : "Background upload failed.");
+      setMediaErrors((previous) => ({
+        ...previous,
+        [slot]: error instanceof Error ? error.message : `${slot} media upload failed.`,
+      }));
     } finally {
       event.target.value = "";
-      setBackgroundUploading(false);
+      setMediaUploading((previous) => ({
+        ...previous,
+        [slot]: false,
+      }));
     }
   }
+
+  async function handleBackgroundUpload(event: ChangeEvent<HTMLInputElement>) {
+    await handleMediaUpload("background", event);
+  }
+
+  async function handleHeaderMediaUpload(event: ChangeEvent<HTMLInputElement>) {
+    await handleMediaUpload("header", event);
+  }
+
+  async function handleFooterMediaUpload(event: ChangeEvent<HTMLInputElement>) {
+    await handleMediaUpload("footer", event);
+  }
+
+  const isUploadingMedia = mediaUploading.background || mediaUploading.header || mediaUploading.footer;
+  const currentStyleSignature = serializeFormData(buildStyleFormData(jobId, style));
+  const hasPendingEditorWork =
+    isUploadingMedia ||
+    styleSaving ||
+    exportPending ||
+    currentStyleSignature !== persistedStyleSignatureRef.current;
+
+  useEffect(() => {
+    if (!hasPendingEditorWork) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasPendingEditorWork]);
+
+  const handleOpenExport = useCallback(async () => {
+    if (isUploadingMedia) {
+      setStyleSaveError("Please wait for media uploads to finish before opening export.");
+      setStyleStatusLabel("Upload still in progress.");
+      return;
+    }
+
+    setExportPending(true);
+
+    try {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null;
+      }
+
+      const didSaveSucceed = await persistStyle({ reason: "export" });
+
+      if (didSaveSucceed) {
+        router.push(`/catalogs/${jobId}/result`);
+      }
+    } finally {
+      setExportPending(false);
+    }
+  }, [isUploadingMedia, jobId, persistStyle, router]);
+
+  useEffect(() => {
+    const listener = () => {
+      void handleOpenExport();
+    };
+
+    window.addEventListener(OPEN_CATALOG_EXPORT_EVENT, listener);
+    return () => {
+      window.removeEventListener(OPEN_CATALOG_EXPORT_EVENT, listener);
+    };
+  }, [handleOpenExport]);
 
   async function handleSaveItem(itemId: string, fields: Partial<EditState>) {
     setSaving(itemId);
@@ -355,19 +707,20 @@ export function EditorPanel({
               <CatalogStyleControls
                 jobId={jobId}
                 style={style}
-                styleTransition={styleTransition}
-                backgroundUploading={backgroundUploading}
-                backgroundError={backgroundError}
+                styleSaving={styleSaving}
+                styleStatusLabel={styleStatusLabel}
+                styleSaveError={styleSaveError}
+                mediaUploading={mediaUploading}
+                mediaErrors={mediaErrors}
                 onStyleChange={updateStyle}
                 onApplyPreset={applyPreset}
                 onReset={resetStyle}
                 onBackgroundUpload={handleBackgroundUpload}
-                formAction={(fd) => {
-                  startStyleTransition(async () => {
-                    await saveStyleOptionsAction(fd);
-                    router.refresh();
-                  });
-                }}
+                onHeaderMediaUpload={handleHeaderMediaUpload}
+                onFooterMediaUpload={handleFooterMediaUpload}
+                onClearMedia={clearMedia}
+                onOpenExport={handleOpenExport}
+                exportPending={exportPending}
               />
             </div>
           ) : (
@@ -508,7 +861,15 @@ export function EditorPanel({
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">A4 live preview</p>
               <p className="mt-1 text-sm font-semibold text-foreground">Page {previewPage + 1} of {Math.max(1, pages.length)}</p>
             </div>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenExport}
+                disabled={exportPending || mediaUploading.background || mediaUploading.header || mediaUploading.footer}
+                className="inline-flex h-8 items-center justify-center rounded-lg bg-brand px-3 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-60 transition"
+              >
+                {exportPending ? "Opening…" : "Open export"}
+              </button>
               <button
                 type="button"
                 disabled={previewPage === 0}
@@ -542,7 +903,13 @@ export function EditorPanel({
               Header {style.headerSpace}px · Footer {style.footerSpace}px
             </span>
             <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
-              {style.pageBackgroundPreviewUrl ? "Image background active" : "Color background only"}
+              {style.pageBackgroundPreviewUrl ? `Background ${style.pageBackgroundAnchor}` : "Color background only"}
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {style.headerMediaPreviewUrl ? "Header media active" : "Header media empty"}
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {style.footerMediaPreviewUrl ? "Footer media active" : "Footer media empty"}
             </span>
           </div>
         </div>
@@ -564,6 +931,8 @@ export function EditorPanel({
               }))}
               options={style}
               pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
+              headerMediaPreviewUrl={style.headerMediaPreviewUrl}
+              footerMediaPreviewUrl={style.footerMediaPreviewUrl}
               showSafeAreaGuides
             />
           ) : (

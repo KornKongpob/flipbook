@@ -1,14 +1,17 @@
 import Link from "next/link";
+import { CatalogEditorExportButton } from "@/components/catalog/catalog-editor-export-button";
 import { CatalogJobHeader } from "@/components/catalog/catalog-job-header";
 import { EditorPanel } from "@/components/catalog/editor-panel";
-import { buttonClassName } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import {
   getCatalogJobBundle,
-  resolveCatalogBackgroundPreviewUrl,
+  resolveCatalogMediaPreviewUrl,
   resolveProductAssetPreviewUrl,
 } from "@/lib/catalog/repository";
-import { withCatalogBackgroundPreview } from "@/lib/catalog/style-options";
+import {
+  mergeCatalogStyleOptions,
+  withCatalogMediaPreviews,
+} from "@/lib/catalog/style-options";
 
 export default async function CatalogEditorPage({
   params,
@@ -18,12 +21,29 @@ export default async function CatalogEditorPage({
   const { jobId } = await params;
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
-  const backgroundPreviewUrl = await resolveCatalogBackgroundPreviewUrl(
-    bundle.job.style_options_json as Record<string, unknown>,
-  );
-  const styleOptions = withCatalogBackgroundPreview(
-    bundle.job.style_options_json as Record<string, unknown>,
-    backgroundPreviewUrl,
+  const rawStyleOptions = bundle.job.style_options_json as Record<string, unknown>;
+  const mergedStyleOptions = mergeCatalogStyleOptions(rawStyleOptions);
+  const [pageBackgroundPreviewUrl, headerMediaPreviewUrl, footerMediaPreviewUrl] = await Promise.all([
+    resolveCatalogMediaPreviewUrl(
+      mergedStyleOptions.pageBackgroundImageBucket,
+      mergedStyleOptions.pageBackgroundImagePath,
+    ),
+    resolveCatalogMediaPreviewUrl(
+      mergedStyleOptions.headerMediaBucket,
+      mergedStyleOptions.headerMediaPath,
+    ),
+    resolveCatalogMediaPreviewUrl(
+      mergedStyleOptions.footerMediaBucket,
+      mergedStyleOptions.footerMediaPath,
+    ),
+  ]);
+  const styleOptions = withCatalogMediaPreviews(
+    rawStyleOptions,
+    {
+      pageBackgroundPreviewUrl,
+      headerMediaPreviewUrl,
+      footerMediaPreviewUrl,
+    },
   );
 
   const items = await Promise.all(
@@ -65,9 +85,7 @@ export default async function CatalogEditorPage({
                 {pendingReview} unreviewed
               </Link>
             )}
-            <Link href={`/catalogs/${jobId}/result`} className={buttonClassName("primary")}>
-              Generate PDF →
-            </Link>
+            <CatalogEditorExportButton />
           </div>
         }
         metrics={[

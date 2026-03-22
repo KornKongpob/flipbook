@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { Loader2, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,17 +11,25 @@ import {
 } from "@/lib/catalog/style-options";
 import { CATALOG_LAYOUT_PRESETS } from "@/lib/catalog/layout";
 
+type MediaSlotKey = "background" | "header" | "footer";
+
 interface CatalogStyleControlsProps {
   jobId: string;
   style: EditorCatalogStyleOptions;
-  styleTransition: boolean;
-  backgroundUploading: boolean;
-  backgroundError: string | null;
+  styleSaving: boolean;
+  styleStatusLabel: string;
+  styleSaveError: string | null;
+  mediaUploading: Record<MediaSlotKey, boolean>;
+  mediaErrors: Record<MediaSlotKey, string | null>;
   onStyleChange: (key: keyof EditorCatalogStyleOptions, value: string | number | boolean | null) => void;
   onApplyPreset: (presetId: string) => void;
   onReset: () => void;
   onBackgroundUpload: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
-  formAction: (formData: FormData) => void;
+  onHeaderMediaUpload: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onFooterMediaUpload: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onClearMedia: (slot: MediaSlotKey) => void;
+  onOpenExport: () => void | Promise<void>;
+  exportPending: boolean;
 }
 
 const DISPLAY_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> = [
@@ -34,7 +42,6 @@ const DISPLAY_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> =
 ];
 
 const COLOR_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> = [
-  { key: "pageBackgroundColor", label: "Page background" },
   { key: "cardBackgroundColor", label: "Card background" },
   { key: "cardBorderColor", label: "Card border" },
   { key: "imageBackgroundColor", label: "Image background" },
@@ -66,28 +73,234 @@ const NUMBER_FIELDS: Array<{
   { key: "imageAreaHeight", label: "Image height", min: 64, max: 180 },
 ];
 
+function MediaPreview({
+  previewUrl,
+  alt,
+  emptyLabel,
+}: {
+  previewUrl: string | null;
+  alt: string;
+  emptyLabel: string;
+}) {
+  return (
+    <div className="h-28 overflow-hidden rounded-lg border border-dashed border-line bg-gray-50">
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={previewUrl} alt={alt} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full items-center justify-center text-xs text-muted">{emptyLabel}</div>
+      )}
+    </div>
+  );
+}
+
+function MediaPanel({
+  title,
+  previewUrl,
+  alt,
+  emptyLabel,
+  uploadLabel,
+  fitName,
+  fitValue,
+  opacityName,
+  opacityValue,
+  offsetXName,
+  offsetXValue,
+  offsetYName,
+  offsetYValue,
+  scaleName,
+  scaleValue,
+  uploading,
+  error,
+  onUpload,
+  onClear,
+  onFitToZone,
+  onCenter,
+  onFitChange,
+  onOpacityChange,
+  onOffsetXChange,
+  onOffsetYChange,
+  onScaleChange,
+  extraControls,
+}: {
+  title: string;
+  previewUrl: string | null;
+  alt: string;
+  emptyLabel: string;
+  uploadLabel: string;
+  fitName: string;
+  fitValue: string;
+  opacityName: string;
+  opacityValue: number;
+  offsetXName: string;
+  offsetXValue: number;
+  offsetYName: string;
+  offsetYValue: number;
+  scaleName: string;
+  scaleValue: number;
+  uploading: boolean;
+  error: string | null;
+  onUpload: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onClear: () => void;
+  onFitToZone: () => void;
+  onCenter: () => void;
+  onFitChange: (value: string) => void;
+  onOpacityChange: (value: number) => void;
+  onOffsetXChange: (value: number) => void;
+  onOffsetYChange: (value: number) => void;
+  onScaleChange: (value: number) => void;
+  extraControls?: ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted">{title}</p>
+        {uploading ? <Loader2 className="size-3 animate-spin text-muted" /> : null}
+      </div>
+      <div className="rounded-xl border border-line bg-white p-3 space-y-3">
+        <MediaPreview previewUrl={previewUrl} alt={alt} emptyLabel={emptyLabel} />
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-foreground hover:border-brand/40">
+            <Upload className="size-3" />
+            {uploadLabel}
+            <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
+          </label>
+          {previewUrl ? (
+            <button
+              type="button"
+              onClick={onClear}
+              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-muted hover:text-foreground"
+            >
+              Remove image
+            </button>
+          ) : null}
+        </div>
+        {error ? <p className="text-[11px] text-rose-600">{error}</p> : null}
+        {extraControls}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1 text-[11px] text-muted">
+            <span>Fit mode</span>
+            <select
+              name={fitName}
+              value={fitValue}
+              onChange={(event) => onFitChange(event.target.value)}
+              className="h-10 w-full rounded-lg border border-line bg-white px-3 text-xs text-foreground"
+            >
+              <option value="cover">Cover</option>
+              <option value="contain">Contain</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-[11px] text-muted">
+            <span>Scale</span>
+            <Input
+              type="number"
+              name={scaleName}
+              min={0.5}
+              max={2.5}
+              step={0.1}
+              value={String(scaleValue)}
+              onChange={(event) => onScaleChange(Number(event.target.value))}
+              className="h-9 text-xs"
+            />
+          </label>
+          <label className="space-y-1 text-[11px] text-muted">
+            <span>X offset</span>
+            <Input
+              type="number"
+              name={offsetXName}
+              min={-100}
+              max={100}
+              step={1}
+              value={String(offsetXValue)}
+              onChange={(event) => onOffsetXChange(Number(event.target.value))}
+              className="h-9 text-xs"
+            />
+          </label>
+          <label className="space-y-1 text-[11px] text-muted">
+            <span>Y offset</span>
+            <Input
+              type="number"
+              name={offsetYName}
+              min={-100}
+              max={100}
+              step={1}
+              value={String(offsetYValue)}
+              onChange={(event) => onOffsetYChange(Number(event.target.value))}
+              className="h-9 text-xs"
+            />
+          </label>
+        </div>
+        <label className="space-y-1 text-[11px] text-muted">
+          <span>Opacity ({opacityValue.toFixed(2)})</span>
+          <input
+            type="range"
+            name={opacityName}
+            min="0"
+            max="1"
+            step="0.05"
+            value={opacityValue}
+            onChange={(event) => onOpacityChange(Number(event.target.value))}
+            className="w-full accent-brand"
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onCenter}
+            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-muted hover:text-foreground"
+          >
+            Center
+          </button>
+          <button
+            type="button"
+            onClick={onFitToZone}
+            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-muted hover:text-foreground"
+          >
+            Fit to zone
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CatalogStyleControls({
   jobId,
   style,
-  styleTransition,
-  backgroundUploading,
-  backgroundError,
+  styleSaving,
+  styleStatusLabel,
+  styleSaveError,
+  mediaUploading,
+  mediaErrors,
   onStyleChange,
   onApplyPreset,
   onReset,
   onBackgroundUpload,
-  formAction,
+  onHeaderMediaUpload,
+  onFooterMediaUpload,
+  onClearMedia,
+  onOpenExport,
+  exportPending,
 }: CatalogStyleControlsProps) {
+  const isUploadingMedia = mediaUploading.background || mediaUploading.header || mediaUploading.footer;
+
   return (
     <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden">
-      <div className="border-b border-line bg-gray-50/50 px-4 py-2.5">
+      <div className="border-b border-line bg-gray-50/50 px-4 py-2.5 flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Style Options</p>
+        <span className={`text-[11px] ${styleSaveError ? "text-rose-600" : "text-muted"}`}>
+          {styleSaveError ?? styleStatusLabel}
+        </span>
       </div>
-      <form action={formAction} className="p-4 space-y-4">
+      <form onSubmit={(event) => event.preventDefault()} className="p-4 space-y-4">
         <input type="hidden" name="jobId" value={jobId} />
         <input type="hidden" name="layoutPreset" value={style.layoutPreset} />
         <input type="hidden" name="pageBackgroundImageBucket" value={style.pageBackgroundImageBucket ?? ""} />
         <input type="hidden" name="pageBackgroundImagePath" value={style.pageBackgroundImagePath ?? ""} />
+        <input type="hidden" name="headerMediaBucket" value={style.headerMediaBucket ?? ""} />
+        <input type="hidden" name="headerMediaPath" value={style.headerMediaPath ?? ""} />
+        <input type="hidden" name="footerMediaBucket" value={style.footerMediaBucket ?? ""} />
+        <input type="hidden" name="footerMediaPath" value={style.footerMediaPath ?? ""} />
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -187,41 +400,42 @@ export function CatalogStyleControls({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted">A4 background</p>
-            {backgroundUploading ? <Loader2 className="size-3 animate-spin text-muted" /> : null}
-          </div>
-          <div className="rounded-xl border border-line bg-white p-3 space-y-3">
-            <div className="h-28 overflow-hidden rounded-lg border border-dashed border-line bg-gray-50">
-              {style.pageBackgroundPreviewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={style.pageBackgroundPreviewUrl} alt="Background preview" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-muted">No background image</div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-foreground hover:border-brand/40">
-                <Upload className="size-3" />
-                Upload background
-                <input type="file" accept="image/*" className="hidden" onChange={onBackgroundUpload} />
-              </label>
-              {style.pageBackgroundPreviewUrl ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onStyleChange("pageBackgroundImageBucket", null);
-                    onStyleChange("pageBackgroundImagePath", null);
-                    onStyleChange("pageBackgroundPreviewUrl", null);
-                  }}
-                  className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-muted hover:text-foreground"
-                >
-                  Remove image
-                </button>
-              ) : null}
-            </div>
-            {backgroundError ? <p className="text-[11px] text-rose-600">{backgroundError}</p> : null}
+        <MediaPanel
+          title="A4 background"
+          previewUrl={style.pageBackgroundPreviewUrl}
+          alt="Background preview"
+          emptyLabel="No background image"
+          uploadLabel="Upload background"
+          fitName="pageBackgroundFit"
+          fitValue={style.pageBackgroundFit}
+          opacityName="pageBackgroundOpacity"
+          opacityValue={style.pageBackgroundOpacity}
+          offsetXName="pageBackgroundOffsetX"
+          offsetXValue={style.pageBackgroundOffsetX}
+          offsetYName="pageBackgroundOffsetY"
+          offsetYValue={style.pageBackgroundOffsetY}
+          scaleName="pageBackgroundScale"
+          scaleValue={style.pageBackgroundScale}
+          uploading={mediaUploading.background}
+          error={mediaErrors.background}
+          onUpload={onBackgroundUpload}
+          onClear={() => onClearMedia("background")}
+          onCenter={() => {
+            onStyleChange("pageBackgroundOffsetX", 0);
+            onStyleChange("pageBackgroundOffsetY", 0);
+          }}
+          onFitToZone={() => {
+            onStyleChange("pageBackgroundAnchor", "safeArea");
+            onStyleChange("pageBackgroundOffsetX", 0);
+            onStyleChange("pageBackgroundOffsetY", 0);
+            onStyleChange("pageBackgroundScale", 1);
+          }}
+          onFitChange={(value) => onStyleChange("pageBackgroundFit", value)}
+          onOpacityChange={(value) => onStyleChange("pageBackgroundOpacity", value)}
+          onOffsetXChange={(value) => onStyleChange("pageBackgroundOffsetX", value)}
+          onOffsetYChange={(value) => onStyleChange("pageBackgroundOffsetY", value)}
+          onScaleChange={(value) => onStyleChange("pageBackgroundScale", value)}
+          extraControls={(
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="space-y-1 text-[11px] text-muted">
                 <span>Background color</span>
@@ -237,33 +451,94 @@ export function CatalogStyleControls({
                 </div>
               </label>
               <label className="space-y-1 text-[11px] text-muted">
-                <span>Background fit</span>
+                <span>Anchor</span>
                 <select
-                  name="pageBackgroundFit"
-                  value={style.pageBackgroundFit}
-                  onChange={(event) => onStyleChange("pageBackgroundFit", event.target.value)}
+                  name="pageBackgroundAnchor"
+                  value={style.pageBackgroundAnchor}
+                  onChange={(event) => onStyleChange("pageBackgroundAnchor", event.target.value)}
                   className="h-10 w-full rounded-lg border border-line bg-white px-3 text-xs text-foreground"
                 >
-                  <option value="cover">Cover</option>
-                  <option value="contain">Contain</option>
+                  <option value="page">Full page</option>
+                  <option value="safeArea">Safe area</option>
                 </select>
               </label>
             </div>
-            <label className="space-y-1 text-[11px] text-muted">
-              <span>Background opacity ({style.pageBackgroundOpacity.toFixed(2)})</span>
-              <input
-                type="range"
-                name="pageBackgroundOpacity"
-                min="0"
-                max="1"
-                step="0.05"
-                value={style.pageBackgroundOpacity}
-                onChange={(event) => onStyleChange("pageBackgroundOpacity", Number(event.target.value))}
-                className="w-full accent-brand"
-              />
-            </label>
-          </div>
-        </div>
+          )}
+        />
+
+        <MediaPanel
+          title="Header media"
+          previewUrl={style.headerMediaPreviewUrl}
+          alt="Header media preview"
+          emptyLabel="No header media"
+          uploadLabel="Upload header media"
+          fitName="headerMediaFit"
+          fitValue={style.headerMediaFit}
+          opacityName="headerMediaOpacity"
+          opacityValue={style.headerMediaOpacity}
+          offsetXName="headerMediaOffsetX"
+          offsetXValue={style.headerMediaOffsetX}
+          offsetYName="headerMediaOffsetY"
+          offsetYValue={style.headerMediaOffsetY}
+          scaleName="headerMediaScale"
+          scaleValue={style.headerMediaScale}
+          uploading={mediaUploading.header}
+          error={mediaErrors.header}
+          onUpload={onHeaderMediaUpload}
+          onClear={() => onClearMedia("header")}
+          onCenter={() => {
+            onStyleChange("headerMediaOffsetX", 0);
+            onStyleChange("headerMediaOffsetY", 0);
+          }}
+          onFitToZone={() => {
+            onStyleChange("headerMediaFit", "cover");
+            onStyleChange("headerMediaOffsetX", 0);
+            onStyleChange("headerMediaOffsetY", 0);
+            onStyleChange("headerMediaScale", 1);
+          }}
+          onFitChange={(value) => onStyleChange("headerMediaFit", value)}
+          onOpacityChange={(value) => onStyleChange("headerMediaOpacity", value)}
+          onOffsetXChange={(value) => onStyleChange("headerMediaOffsetX", value)}
+          onOffsetYChange={(value) => onStyleChange("headerMediaOffsetY", value)}
+          onScaleChange={(value) => onStyleChange("headerMediaScale", value)}
+        />
+
+        <MediaPanel
+          title="Footer media"
+          previewUrl={style.footerMediaPreviewUrl}
+          alt="Footer media preview"
+          emptyLabel="No footer media"
+          uploadLabel="Upload footer media"
+          fitName="footerMediaFit"
+          fitValue={style.footerMediaFit}
+          opacityName="footerMediaOpacity"
+          opacityValue={style.footerMediaOpacity}
+          offsetXName="footerMediaOffsetX"
+          offsetXValue={style.footerMediaOffsetX}
+          offsetYName="footerMediaOffsetY"
+          offsetYValue={style.footerMediaOffsetY}
+          scaleName="footerMediaScale"
+          scaleValue={style.footerMediaScale}
+          uploading={mediaUploading.footer}
+          error={mediaErrors.footer}
+          onUpload={onFooterMediaUpload}
+          onClear={() => onClearMedia("footer")}
+          onCenter={() => {
+            onStyleChange("footerMediaOffsetX", 0);
+            onStyleChange("footerMediaOffsetY", 0);
+          }}
+          onFitToZone={() => {
+            onStyleChange("footerMediaFit", "cover");
+            onStyleChange("footerMediaOffsetX", 0);
+            onStyleChange("footerMediaOffsetY", 0);
+            onStyleChange("footerMediaScale", 1);
+          }}
+          onFitChange={(value) => onStyleChange("footerMediaFit", value)}
+          onOpacityChange={(value) => onStyleChange("footerMediaOpacity", value)}
+          onOffsetXChange={(value) => onStyleChange("footerMediaOffsetX", value)}
+          onOffsetYChange={(value) => onStyleChange("footerMediaOffsetY", value)}
+          onScaleChange={(value) => onStyleChange("footerMediaScale", value)}
+        />
 
         <div>
           <p className="mb-2 text-xs font-medium text-muted">Color controls</p>
@@ -307,10 +582,22 @@ export function CatalogStyleControls({
           </div>
         </div>
 
-        <Button type="submit" className="w-full h-8 text-xs gap-1.5" disabled={styleTransition || backgroundUploading}>
-          {styleTransition && <Loader2 className="size-3 animate-spin" />}
-          Save style
-        </Button>
+        <div className="space-y-2">
+          {styleSaveError ? (
+            <p className="text-[11px] text-rose-600">{styleSaveError}</p>
+          ) : (
+            <p className="text-[11px] text-muted">{styleStatusLabel}</p>
+          )}
+          <Button
+            type="button"
+            className="w-full h-8 text-xs gap-1.5"
+            disabled={isUploadingMedia || exportPending}
+            onClick={onOpenExport}
+          >
+            {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
+            Open export
+          </Button>
+        </div>
       </form>
     </div>
   );

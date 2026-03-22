@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { renderCatalogPdf } from "@/lib/catalog/pdf/renderer";
 import { createHeyzineFlipbook } from "@/lib/catalog/flipbooks/heyzine";
 import {
+  beginPdfGeneration,
   createGeneratedFileRecord,
   getCatalogJobBundle,
   getSignedFileUrl,
   markJobStatus,
   resolveCatalogBackgroundBuffer,
+  resolveCatalogMediaBuffer,
   resolveProductAssetBuffer,
   updateCatalogJobAfterPdf,
   upsertFlipbookRecord,
@@ -32,7 +34,15 @@ export async function POST(
   }
 
   try {
-    await markJobStatus(jobId, user.id, "generating_pdf");
+    const didStartGeneration = await beginPdfGeneration(jobId, user.id);
+
+    if (!didStartGeneration) {
+      return NextResponse.redirect(
+        new URL(`/catalogs/${jobId}/result?error=${encodeURIComponent("PDF generation is already in progress.")}`, request.url),
+        SEE_OTHER,
+      );
+    }
+
     const bundle = await getCatalogJobBundle(jobId, user.id);
 
     if (bundle.job.review_required_count > 0) {
@@ -65,9 +75,13 @@ export async function POST(
     const styleOptions = mergeCatalogStyleOptions(
       bundle.job.style_options_json as Record<string, unknown>,
     );
-    const pageBackgroundBuffer = await resolveCatalogBackgroundBuffer(
-      bundle.job.style_options_json as Record<string, unknown>,
-    );
+    const [pageBackgroundBuffer, headerMediaBuffer, footerMediaBuffer] = await Promise.all([
+      resolveCatalogBackgroundBuffer(
+        bundle.job.style_options_json as Record<string, unknown>,
+      ),
+      resolveCatalogMediaBuffer(styleOptions.headerMediaBucket, styleOptions.headerMediaPath),
+      resolveCatalogMediaBuffer(styleOptions.footerMediaBucket, styleOptions.footerMediaPath),
+    ]);
     const { buffer, pageCount } = await renderCatalogPdf({
       jobName: bundle.job.job_name,
       variant: String(styleOptions.variant ?? bundle.template?.variant ?? "promo"),
@@ -75,6 +89,8 @@ export async function POST(
       items: renderItems,
       options: styleOptions,
       pageBackgroundBuffer,
+      headerMediaBuffer,
+      footerMediaBuffer,
     });
 
     const pdfFile = await createGeneratedFileRecord({
