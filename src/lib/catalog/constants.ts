@@ -65,6 +65,8 @@ export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   cardPadding: 12,
   cardRadius: 18,
   imageAreaHeight: 88,
+  cardImageFit: "contain",
+  cardImageScale: 1.12,
   titleFontSize: 13,
   skuFontSize: 11,
   promoPriceFontSize: 28,

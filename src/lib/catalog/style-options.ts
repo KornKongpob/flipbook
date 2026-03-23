@@ -50,6 +50,8 @@ export interface CatalogStyleOptions {
   cardPadding: number;
   cardRadius: number;
   imageAreaHeight: number;
+  cardImageFit: CatalogMediaFit;
+  cardImageScale: number;
   titleFontSize: number;
   skuFontSize: number;
   promoPriceFontSize: number;
@@ -288,6 +290,10 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
     cardPadding: asNumber(source.cardPadding, DEFAULT_STYLE_OPTIONS.cardPadding, 6, 28),
     cardRadius: asNumber(source.cardRadius, DEFAULT_STYLE_OPTIONS.cardRadius, 8, 32),
     imageAreaHeight: asNumber(source.imageAreaHeight, DEFAULT_STYLE_OPTIONS.imageAreaHeight, 64, 180),
+    cardImageFit: isCatalogMediaFit(source.cardImageFit)
+      ? source.cardImageFit
+      : DEFAULT_STYLE_OPTIONS.cardImageFit,
+    cardImageScale: asNumber(source.cardImageScale, DEFAULT_STYLE_OPTIONS.cardImageScale, 1, 1.35),
     titleFontSize: asNumber(source.titleFontSize, DEFAULT_STYLE_OPTIONS.titleFontSize, 10, 24),
     skuFontSize: asNumber(source.skuFontSize, DEFAULT_STYLE_OPTIONS.skuFontSize, 8, 18),
     promoPriceFontSize: asNumber(

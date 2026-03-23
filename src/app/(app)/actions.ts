@@ -117,6 +117,8 @@ export async function saveStyleOptionsAction(formData: FormData) {
       cardPadding: formData.get("cardPadding"),
       cardRadius: formData.get("cardRadius"),
       imageAreaHeight: formData.get("imageAreaHeight"),
+      cardImageFit: formData.get("cardImageFit"),
+      cardImageScale: formData.get("cardImageScale"),
       titleFontSize: formData.get("titleFontSize"),
       skuFontSize: formData.get("skuFontSize"),
       promoPriceFontSize: formData.get("promoPriceFontSize"),

@@ -75,6 +75,23 @@ const NUMBER_FIELDS: Array<{
   { key: "imageAreaHeight", label: "Image height", min: 64, max: 180 },
 ];
 
+const CARD_IMAGE_FIT_OPTIONS: Array<{
+  value: CatalogStyleOptions["cardImageFit"];
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "contain",
+    label: "Show full product",
+    description: "Keeps the full pack visible while reducing empty space with zoom.",
+  },
+  {
+    value: "cover",
+    label: "Fill frame more",
+    description: "Uses more of the frame and may crop image edges slightly.",
+  },
+];
+
 function MediaPreview({
   previewUrl,
   alt,
@@ -635,22 +652,70 @@ export function CatalogStyleControls({
           description="Adjust font sizes and spacing while the A4 preview stays in view."
           defaultOpen
         >
-          <div className="grid gap-2 sm:grid-cols-2">
-            {NUMBER_FIELDS.map((field) => (
-              <label key={field.key} className="space-y-1 text-[11px] text-muted">
-                <span>{field.label}</span>
-                <Input
-                  type="number"
-                  name={field.key}
-                  min={field.min}
-                  max={field.max}
-                  step={field.step ?? 1}
-                  value={String(style[field.key])}
-                  onChange={(event) => onStyleChange(field.key, Number(event.target.value))}
-                  className="h-9 text-xs"
-                />
-              </label>
-            ))}
+          <div className="space-y-4">
+            <div className="rounded-xl border border-line bg-white p-3 space-y-3">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted">Product image framing</p>
+                <p className="text-[11px] text-muted">
+                  Reduce empty space inside the image box without changing the rest of the card layout.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <span className="text-[11px] text-muted">Image fit</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CARD_IMAGE_FIT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => onStyleChange("cardImageFit", option.value)}
+                        className={`rounded-xl border px-3 py-2 text-left transition ${style.cardImageFit === option.value ? "border-brand/30 bg-brand-soft/15 shadow-sm" : "border-line bg-white hover:border-brand/20"}`}
+                      >
+                        <span className="block text-xs font-semibold text-foreground">{option.label}</span>
+                        <span className="mt-1 block text-[10px] text-muted">{option.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <label className="space-y-1.5 text-[11px] text-muted">
+                  <span>Image zoom</span>
+                  <div className="rounded-xl border border-line bg-white px-3 py-2.5">
+                    <input
+                      type="range"
+                      name="cardImageScale"
+                      min={1}
+                      max={1.35}
+                      step={0.01}
+                      value={style.cardImageScale}
+                      onChange={(event) => onStyleChange("cardImageScale", Number(event.target.value))}
+                      className="w-full accent-brand"
+                    />
+                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                      <span className="text-muted-strong">Current framing</span>
+                      <span className="font-semibold text-foreground">{style.cardImageScale.toFixed(2)}×</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {NUMBER_FIELDS.map((field) => (
+                <label key={field.key} className="space-y-1 text-[11px] text-muted">
+                  <span>{field.label}</span>
+                  <Input
+                    type="number"
+                    name={field.key}
+                    min={field.min}
+                    max={field.max}
+                    step={field.step ?? 1}
+                    value={String(style[field.key])}
+                    onChange={(event) => onStyleChange(field.key, Number(event.target.value))}
+                    className="h-9 text-xs"
+                  />
+                </label>
+              ))}
+            </div>
           </div>
         </StyleSection>
 

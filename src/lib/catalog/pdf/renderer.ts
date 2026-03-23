@@ -184,6 +184,19 @@ function drawCard(
     showNormalPrice,
   });
   const imageRect = cardLayout.imageRect;
+  const imageRenderRect = getCatalogMediaRenderRect(imageRect, options.cardImageScale, 0, 0);
+  const imageRadius = Math.max(options.cardRadius - 6, 8);
+  const imageOptions = options.cardImageFit === "contain"
+    ? {
+        fit: [imageRenderRect.width, imageRenderRect.height] as [number, number],
+        align: "center" as const,
+        valign: "center" as const,
+      }
+    : {
+        cover: [imageRenderRect.width, imageRenderRect.height] as [number, number],
+        align: "center" as const,
+        valign: "center" as const,
+      };
 
   doc.save();
   doc
@@ -196,16 +209,23 @@ function drawCard(
       originY + imageRect.y,
       imageRect.width,
       imageRect.height,
-      Math.max(options.cardRadius - 6, 8),
+      imageRadius,
     )
     .fill(options.imageBackgroundColor);
 
   if (item.imageBuffer) {
-    doc.image(item.imageBuffer, originX + imageRect.x, originY + imageRect.y, {
-      fit: [imageRect.width, imageRect.height],
-      align: "center",
-      valign: "center",
-    });
+    doc.save();
+    doc
+      .roundedRect(
+        originX + imageRect.x,
+        originY + imageRect.y,
+        imageRect.width,
+        imageRect.height,
+        imageRadius,
+      )
+      .clip();
+    doc.image(item.imageBuffer, originX + imageRenderRect.x, originY + imageRenderRect.y, imageOptions as never);
+    doc.restore();
   } else {
     drawFallbackImage(
       doc,
@@ -215,7 +235,7 @@ function drawCard(
       imageRect.height,
       options.imageBackgroundColor,
       options.metaColor,
-      Math.max(options.cardRadius - 6, 8),
+      imageRadius,
     );
   }
 

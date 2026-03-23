@@ -10,6 +10,7 @@ import {
   resolveCatalogCardLayout,
 } from "@/lib/catalog/card-layout";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
+import { getCatalogMediaRenderRect } from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
 
@@ -132,6 +133,13 @@ export function CatalogCardPreview({
       showNormalPrice,
     });
   }, [cardSize.height, cardSize.width, showDiscountBadge, showNormalPrice, showPromoLine, style]);
+  const imageRenderRect = useMemo(() => {
+    if (!cardLayout) {
+      return null;
+    }
+
+    return getCatalogMediaRenderRect(cardLayout.imageRect, style.cardImageScale, 0, 0);
+  }, [cardLayout, style.cardImageScale]);
 
   return (
     <div
@@ -154,16 +162,28 @@ export function CatalogCardPreview({
               backgroundColor: style.imageBackgroundColor,
             }}
           >
-            {imageUrl && !imgFailed ? (
-              <Image
-                src={imageUrl}
-                alt={title}
-                fill
-                className="object-contain"
-                sizes="200px"
-                unoptimized
-                onError={() => setImgFailed(true)}
-              />
+            {imageUrl && !imgFailed && imageRenderRect ? (
+              <div
+                className="absolute"
+                style={{
+                  left: `${imageRenderRect.x - cardLayout.imageRect.x}px`,
+                  top: `${imageRenderRect.y - cardLayout.imageRect.y}px`,
+                  width: `${imageRenderRect.width}px`,
+                  height: `${imageRenderRect.height}px`,
+                }}
+              >
+                <div className="relative h-full w-full">
+                  <Image
+                    src={imageUrl}
+                    alt={title}
+                    fill
+                    className={style.cardImageFit === "cover" ? "object-cover" : "object-contain"}
+                    sizes="200px"
+                    unoptimized
+                    onError={() => setImgFailed(true)}
+                  />
+                </div>
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center">
                 <span className="text-[10px] font-medium" style={{ color: style.metaColor }}>No image</span>
