@@ -33,6 +33,7 @@ export const CATALOG_CARD_BADGE_HEIGHT = 22;
 export const CATALOG_CARD_IMAGE_GAP = 8;
 export const CATALOG_CARD_BADGE_GAP = 8;
 export const CATALOG_CARD_TITLE_META_GAP = 4;
+export const CATALOG_CARD_IMAGE_TOP_INSET_FACTOR = 0.42;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -88,8 +89,16 @@ export function resolveCatalogCardLayout(args: {
   const padding = Math.max(scaledCardPadding, 0);
   const innerRect = rect(padding, padding, cardWidth - padding * 2, cardHeight - padding * 2);
   const innerBottom = innerRect.y + innerRect.height;
-  const imageHeight = clamp(scaledImageAreaHeight, 0, innerRect.height);
-  const imageRect = rect(innerRect.x, innerRect.y, innerRect.width, imageHeight);
+  const imageTopInset = Math.min(
+    Math.max(padding * CATALOG_CARD_IMAGE_TOP_INSET_FACTOR, 4 * scale),
+    padding,
+  );
+  const imageHeight = clamp(
+    scaledImageAreaHeight + Math.max(padding - imageTopInset, 0),
+    0,
+    innerBottom - imageTopInset,
+  );
+  const imageRect = rect(innerRect.x, imageTopInset, innerRect.width, imageHeight);
   const badgeRect = showDiscountBadge
     ? optionalRect(
         innerRect.x,

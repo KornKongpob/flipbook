@@ -670,19 +670,22 @@ export function EditorPanel({
   return (
     <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
       <div className="space-y-4 xl:min-w-0">
-        <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
-          <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
+        <div className="overflow-hidden rounded-2xl border border-line/80 bg-white/80 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.35)] backdrop-blur-sm xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
+          <div className="space-y-3 border-b border-line/70 bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 px-4 py-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Editor workspace</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Editor workspace</p>
                 <p className="mt-1 text-sm font-semibold text-foreground">Manage products and visual design</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">
+                  Switch between product visibility and the design system without losing the live A4 preview.
+                </p>
               </div>
-              <span className="rounded-full border border-line bg-white/80 px-2.5 py-1 text-[11px] text-muted-strong">
+              <span className="rounded-full border border-line/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-muted-strong shadow-sm">
                 {visibleItems.length} visible
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line/80 bg-white/80 p-1 shadow-sm">
               {[
                 { key: "products", label: "Products", description: `${items.length} items` },
                 { key: "design", label: "Design", description: "Theme + layout" },
@@ -691,7 +694,7 @@ export function EditorPanel({
                   key={tab.key}
                   type="button"
                   onClick={() => setSidebarMode(tab.key as "products" | "design")}
-                  className={`rounded-xl border px-3 py-2 text-left transition ${sidebarMode === tab.key ? "border-brand/30 bg-brand-soft/15 text-brand shadow-sm" : "border-line bg-white text-muted-strong hover:border-brand/20 hover:text-foreground"}`}
+                  className={`rounded-xl px-3 py-2.5 text-left transition ${sidebarMode === tab.key ? "bg-brand text-white shadow-sm" : "text-muted-strong hover:bg-slate-50 hover:text-foreground"}`}
                 >
                   <p className="text-sm font-semibold">{tab.label}</p>
                   <p className="mt-0.5 text-[11px] opacity-80">{tab.description}</p>
@@ -701,7 +704,7 @@ export function EditorPanel({
           </div>
 
           {sidebarMode === "design" ? (
-            <div className="min-h-0 overflow-y-auto p-4 thin-scrollbar">
+            <div className="min-h-0 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.55)_0%,rgba(255,255,255,0.9)_100%)] p-4 thin-scrollbar">
               <CatalogStyleControls
                 jobId={jobId}
                 style={style}
@@ -727,7 +730,7 @@ export function EditorPanel({
             </div>
           ) : (
             <>
-              <div className="border-b border-line bg-white/60 px-4 py-3">
+              <div className="border-b border-line/70 bg-white/70 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   {[
                     { key: "all", label: `All (${items.length})` },
