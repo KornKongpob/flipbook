@@ -23,7 +23,21 @@ import type { FlyerType } from "@/lib/database.types";
 import { buildCatalogStyleFormData, serializeStyleFormData } from "@/lib/catalog/style-form-data";
 import type { CatalogLayoutVariant, EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Grip, Loader2, RefreshCw, Save, Sparkles } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  Grip,
+  Loader2,
+  Minus,
+  Plus,
+  RefreshCw,
+  Save,
+  Sparkles,
+} from "lucide-react";
 
 interface MasterCardItem {
   id: string;
@@ -60,9 +74,115 @@ const MASTER_CARD_MAX_PREVIEW_WIDTH = 420;
 
 type GridSizeOption = (typeof GRID_SIZE_OPTIONS)[number];
 type NudgeStepOption = (typeof NUDGE_STEP_OPTIONS)[number];
+type MasterCardDisplayFieldKey =
+  | "showPromoPrice"
+  | "showNormalPrice"
+  | "showDiscountAmount"
+  | "showDiscountPercent"
+  | "showSku"
+  | "showPackSize"
+  | "showPriceDecimals";
+type MasterCardFontSizeFieldKey = "titleFontSize" | "skuFontSize" | "promoPriceFontSize" | "normalPriceFontSize";
+
+const MASTER_CARD_DISPLAY_FIELDS: Array<{
+  key: MasterCardDisplayFieldKey;
+  label: string;
+  description: string;
+  previewLabel: string;
+}> = [
+  {
+    key: "showPromoPrice",
+    label: "Promo price",
+    description: "Controls the promo-price line and reveals the promo price box for editing.",
+    previewLabel: "Promo",
+  },
+  {
+    key: "showNormalPrice",
+    label: "Regular price",
+    description: "Shows the crossed regular price in promo cards and the single-price line in normal cards.",
+    previewLabel: "Both",
+  },
+  {
+    key: "showDiscountAmount",
+    label: "Discount badge",
+    description: "Turns the shared savings badge on or off when the selected product has a discount amount.",
+    previewLabel: "Promo",
+  },
+  {
+    key: "showDiscountPercent",
+    label: "Percent off",
+    description: "Shows the percent-off text when promo and regular price data are both active.",
+    previewLabel: "Promo",
+  },
+  {
+    key: "showSku",
+    label: "SKU",
+    description: "Adds the SKU into the shared meta line for every product card in this job.",
+    previewLabel: "Both",
+  },
+  {
+    key: "showPackSize",
+    label: "Pack size",
+    description: "Shows pack size in the meta line when the selected product has that value.",
+    previewLabel: "Both",
+  },
+  {
+    key: "showPriceDecimals",
+    label: "Price decimals",
+    description: "Keeps decimals visible in promo, normal, and single-price labels.",
+    previewLabel: "Both",
+  },
+];
+
+const MASTER_CARD_FONT_SIZE_FIELDS: Array<{
+  key: MasterCardFontSizeFieldKey;
+  label: string;
+  description: string;
+  min: number;
+  max: number;
+  step: number;
+}> = [
+  {
+    key: "titleFontSize",
+    label: "Title",
+    description: "Main product name text.",
+    min: 10,
+    max: 24,
+    step: 1,
+  },
+  {
+    key: "skuFontSize",
+    label: "Meta / SKU",
+    description: "SKU, pack size, and unit line.",
+    min: 8,
+    max: 18,
+    step: 1,
+  },
+  {
+    key: "promoPriceFontSize",
+    label: "Promo price",
+    description: "Large promo price in promo cards.",
+    min: 16,
+    max: 40,
+    step: 1,
+  },
+  {
+    key: "normalPriceFontSize",
+    label: "Regular price",
+    description: "Crossed or supporting regular price text.",
+    min: 8,
+    max: 22,
+    step: 1,
+  },
+];
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function asFiniteNumber(value: string, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function clampAdjustment(value: number) {
@@ -298,6 +418,45 @@ export function MasterCardWorkspace({
     }
   }, [draftLayout, hasUnappliedChanges, jobId, persistStyle, router, style]);
 
+  const updateStyleBooleanField = useCallback((key: MasterCardDisplayFieldKey, nextValue: boolean) => {
+    setStyle((previous) => {
+      if (previous[key] === nextValue) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [key]: nextValue,
+      };
+    });
+    setStyleSaveError(null);
+    setStyleStatusLabel("Master card settings updated. Save to keep changes.");
+  }, []);
+
+  const updateStyleNumberField = useCallback((key: MasterCardFontSizeFieldKey, nextValue: number) => {
+    const field = MASTER_CARD_FONT_SIZE_FIELDS.find((entry) => entry.key === key);
+
+    if (!field || !Number.isFinite(nextValue)) {
+      return;
+    }
+
+    const snappedValue = Math.round(nextValue / field.step) * field.step;
+    const clampedValue = clampNumber(snappedValue, field.min, field.max);
+
+    setStyle((previous) => {
+      if (previous[key] === clampedValue) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [key]: clampedValue,
+      };
+    });
+    setStyleSaveError(null);
+    setStyleStatusLabel("Master card settings updated. Save to keep changes.");
+  }, []);
+
   const updateDraftLayoutEntry = useCallback(
     (
       key: CatalogCardElementKey,
@@ -459,6 +618,97 @@ export function MasterCardWorkspace({
     () => CATALOG_CARD_ELEMENT_KEYS.filter((key) => Boolean(resolvedRects?.[ELEMENT_LABELS[key].rectKey])).length,
     [resolvedRects],
   );
+  const enabledDisplayFieldCount = useMemo(
+    () => MASTER_CARD_DISPLAY_FIELDS.filter((field) => Boolean(style[field.key])).length,
+    [style],
+  );
+  const selectedElementRenderHint = useMemo(() => {
+    if (selectedRect) {
+      return null;
+    }
+
+    if (!selectedLayout.visible) {
+      return "This element is hidden in the shared layout. Turn it back on to render it on the sample card.";
+    }
+
+    switch (selectedElement) {
+      case "promoPrice":
+        if (previewFlyerType === "normal") {
+          return "Promo price only renders in Promo preview.";
+        }
+
+        if (!style.showPromoPrice) {
+          return "Turn on Promo price in Card display settings to edit this element.";
+        }
+
+        return "This sample product does not currently qualify for a promo price line.";
+      case "discountBadge":
+        if (previewFlyerType === "normal") {
+          return "Discount badge only renders in Promo preview.";
+        }
+
+        if (!style.showDiscountAmount) {
+          return "Turn on Discount badge in Card display settings to edit this element.";
+        }
+
+        return "This sample product does not currently have a discount amount to show.";
+      case "normalPrice":
+      case "strikeLine":
+        if (previewFlyerType === "normal") {
+          return "This row only renders in Promo preview when both Promo price and Regular price are enabled.";
+        }
+
+        if (!style.showPromoPrice || !style.showNormalPrice) {
+          return "Enable both Promo price and Regular price in Card display settings to edit this row.";
+        }
+
+        return "This sample product does not currently qualify for the crossed regular price row.";
+      case "discountPercent":
+        if (previewFlyerType === "normal") {
+          return "Percent off only renders in Promo preview.";
+        }
+
+        if (!style.showDiscountPercent) {
+          return "Turn on Percent off in Card display settings to edit this element.";
+        }
+
+        if (!style.showPromoPrice || !style.showNormalPrice) {
+          return "Enable both Promo price and Regular price to render percent off.";
+        }
+
+        return "This sample product does not currently have a percent-off value to show.";
+      case "singlePrice":
+        if (!style.showNormalPrice) {
+          return "Enable Regular price in Card display settings to render the single-price box.";
+        }
+
+        if (previewFlyerType === "promo" && style.showPromoPrice) {
+          return "Single price appears when Promo price is off or when previewing the normal card.";
+        }
+
+        return `This element is not rendered in the current ${previewFlyerType} preview.`;
+      case "meta":
+        if (!style.showSku && !style.showPackSize && !selectedItem?.unit) {
+          return "Turn on SKU or Pack size, or use a sample with a unit, to render the meta line.";
+        }
+
+        return `This element is not rendered in the current ${previewFlyerType} preview.`;
+      default:
+        return `This element is not rendered in the current ${previewFlyerType} preview.`;
+    }
+  }, [
+    previewFlyerType,
+    selectedElement,
+    selectedItem?.unit,
+    selectedLayout.visible,
+    selectedRect,
+    style.showDiscountAmount,
+    style.showDiscountPercent,
+    style.showNormalPrice,
+    style.showPackSize,
+    style.showPromoPrice,
+    style.showSku,
+  ]);
 
   if (!selectedItem) {
     return (
@@ -471,7 +721,7 @@ export function MasterCardWorkspace({
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
+    <div className="grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)] xl:items-start">
       <SurfaceCard className="xl:sticky xl:top-24">
         <SurfaceCardHeader>
           <div className="space-y-2">
@@ -485,7 +735,7 @@ export function MasterCardWorkspace({
               </span>
             </div>
             <p className="text-xs leading-5 text-muted-strong">
-              Define the shared product-card structure once: move, resize, and show or hide reusable elements before applying the layout to every card.
+              Define the shared product-card structure once: move layout boxes, toggle shared elements, and manage card display plus text sizing before saving the job.
             </p>
           </div>
         </SurfaceCardHeader>
@@ -493,10 +743,15 @@ export function MasterCardWorkspace({
           {styleSaveError ? (
             <StatusBanner tone="danger" title="Could not save master card" description={styleSaveError} />
           ) : hasUnappliedChanges ? (
-            <StatusBanner tone="warning" title="Draft changes not applied" description="Apply the current draft layout before saving or moving to page design." />
+            <StatusBanner tone="warning" title="Draft changes not applied" description="Apply the current draft layout before saving or moving to page design. Display toggles and text sizing update live, but shared layout box changes still need Apply." />
           ) : (
             <StatusBanner tone="success" title="Master card is applied" description={styleStatusLabel} />
           )}
+
+          <div className="rounded-2xl border border-brand/20 bg-brand-soft/10 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+            <p className="font-semibold text-foreground">Display settings and text size update the preview immediately.</p>
+            <p className="mt-1">Position, size, and shared element visibility still belong to the layout draft, so they need Apply before Save.</p>
+          </div>
 
           <div className="rounded-2xl border border-line bg-slate-50/70 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -533,13 +788,102 @@ export function MasterCardWorkspace({
           </div>
 
           <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Editable elements</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">Select any shared card element, then move it, resize its box, or hide it from the reusable layout.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Card display settings</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These are job-level content toggles. They reuse the existing style settings and only need Save, not Apply.</p>
               </div>
               <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                {renderedElementCount}/{CATALOG_CARD_ELEMENT_KEYS.length} rendered
+                {enabledDisplayFieldCount}/{MASTER_CARD_DISPLAY_FIELDS.length} enabled
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {MASTER_CARD_DISPLAY_FIELDS.map((field) => (
+                <label
+                  key={field.key}
+                  className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line/80 bg-white px-3 py-3 text-xs text-muted-strong shadow-sm transition hover:border-brand/20 has-[:checked]:border-brand/30 has-[:checked]:bg-brand-soft/10 has-[:checked]:text-foreground"
+                >
+                  <input
+                    type="checkbox"
+                    checked={style[field.key]}
+                    onChange={(event) => updateStyleBooleanField(field.key, event.target.checked)}
+                    className="mt-0.5 accent-brand"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{field.label}</p>
+                      <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[10px] font-medium text-muted-strong">{field.previewLabel}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-5">{field.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Text sizing</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These values reuse the shared card typography settings, so the live preview and PDF stay aligned.</p>
+              </div>
+              <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                Live preview
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {MASTER_CARD_FONT_SIZE_FIELDS.map((field) => (
+                <div key={field.key} className="rounded-2xl border border-line/80 bg-slate-50/70 p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{field.label}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-muted-strong">{field.description}</p>
+                    </div>
+                    <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[10px] font-medium text-muted-strong">
+                      {style[field.key]}px
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="size-9 shrink-0 px-0"
+                      onClick={() => updateStyleNumberField(field.key, style[field.key] - field.step)}
+                    >
+                      <Minus className="size-4" />
+                    </Button>
+                    <Input
+                      type="number"
+                      min={field.min}
+                      max={field.max}
+                      step={field.step}
+                      value={String(style[field.key])}
+                      onChange={(event) => updateStyleNumberField(field.key, asFiniteNumber(event.target.value, style[field.key]))}
+                      className="h-9 text-center text-sm"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="size-9 shrink-0 px-0"
+                      onClick={() => updateStyleNumberField(field.key, style[field.key] + field.step)}
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-muted">Range {field.min}-{field.max}px</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Shared layout elements</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These controls belong to the shared layout draft. Select any element to move its box, resize it, or hide it from the reusable layout.</p>
+              </div>
+              <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                Apply required
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -553,20 +897,25 @@ export function MasterCardWorkspace({
                     key={key}
                     type="button"
                     onClick={() => setSelectedElement(key)}
-                    className={`rounded-2xl border px-3 py-3 text-left transition ${isSelected ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                    className={`rounded-2xl border px-3 py-3 text-left shadow-sm transition ${isSelected ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold">{ELEMENT_LABELS[key].label}</p>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${isVisible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
-                        {isVisible ? "Visible" : "Hidden"}
-                      </span>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${isVisible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                          {isVisible ? "Layout on" : "Layout off"}
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${rect ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                          {rect ? "On canvas" : "Off canvas"}
+                        </span>
+                      </div>
                     </div>
                     <p className="mt-1 text-[11px] leading-5">
                       {!isVisible
-                        ? "Hidden from the shared layout"
+                        ? "Hidden from the shared layout until you turn it back on."
                         : rect
                           ? `X ${draftLayout[key].x}px · Y ${draftLayout[key].y}px · W ${draftLayout[key].width}px · H ${draftLayout[key].height}px`
-                          : `Not rendered in ${previewFlyerType} preview`}
+                          : `Not active on the current ${previewFlyerType} canvas`}
                     </p>
                   </button>
                 );
@@ -606,11 +955,11 @@ export function MasterCardWorkspace({
           <div className="grid gap-2 sm:grid-cols-2">
             <Button type="button" variant="secondary" className="h-10 gap-2" onClick={applyDraftLayout} disabled={!hasUnappliedChanges}>
               <Sparkles className="size-4" />
-              Apply master card
+              Apply layout draft
             </Button>
             <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => updateDraftLayoutEntry(selectedElement, createDefaultCatalogMasterCardElementLayout())}>
               <RefreshCw className="size-4" />
-              Reset selected
+              Reset selected box
             </Button>
             <Button
               type="button"
@@ -629,14 +978,14 @@ export function MasterCardWorkspace({
               onClick={() => setDraftLayout(createDefaultCatalogMasterCardLayout())}
             >
               <RefreshCw className="size-4" />
-              Reset all layout
+              Reset shared layout
             </Button>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
             <Button type="button" className="h-10 gap-2" onClick={() => { void handleSave(); }} disabled={styleSaving || pageDesignPending}>
               {styleSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save layout
+              Save master card
             </Button>
             <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => { void handleOpenPageDesign(); }} disabled={styleSaving || pageDesignPending}>
               {pageDesignPending ? <Loader2 className="size-4 animate-spin" /> : <Grip className="size-4" />}
@@ -670,7 +1019,7 @@ export function MasterCardWorkspace({
               </div>
             </div>
           </SurfaceCardHeader>
-          <SurfaceCardBody className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
+          <SurfaceCardBody className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="rounded-[28px] border border-line bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 p-5">
               <div className="mx-auto flex max-w-[430px] justify-center">
                 <div
@@ -727,12 +1076,13 @@ export function MasterCardWorkspace({
                       return (
                         <div
                           key={key}
-                          className="absolute"
+                          className="group absolute"
                           style={{
                             left: `${rect.x}px`,
                             top: `${rect.y}px`,
                             width: `${rect.width}px`,
                             height: `${Math.max(rect.height, 12)}px`,
+                            zIndex: isSelected ? 20 : 10,
                           }}
                         >
                           <button
@@ -740,9 +1090,9 @@ export function MasterCardWorkspace({
                             aria-label={`Move ${ELEMENT_LABELS[key].label}`}
                             onClick={() => setSelectedElement(key)}
                             onPointerDown={(event) => handlePointerDown(event, key)}
-                            className={`absolute inset-0 cursor-grab rounded-xl border-2 border-dashed text-left transition active:cursor-grabbing ${isSelected ? "border-brand bg-brand/10 shadow-sm" : "border-sky-300/90 bg-sky-100/35 hover:border-brand/40 hover:bg-brand-soft/10"}`}
+                            className={`absolute inset-0 cursor-grab rounded-[18px] border-2 border-dashed text-left transition active:cursor-grabbing ${isSelected ? "border-brand bg-brand/12 shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" : "border-sky-300/80 bg-sky-100/20 hover:border-brand/40 hover:bg-brand-soft/10"}`}
                           >
-                            <span className={`absolute -top-6 left-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm ${isSelected ? "bg-brand text-white" : "bg-white text-foreground border border-line"}`}>
+                            <span className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[9px] font-semibold tracking-[0.08em] shadow-sm transition ${isSelected ? "bg-brand text-white opacity-100" : "border border-line bg-white/95 text-foreground opacity-0 group-hover:opacity-100"}`}>
                               {ELEMENT_LABELS[key].label}
                             </span>
                           </button>
@@ -751,9 +1101,9 @@ export function MasterCardWorkspace({
                             aria-label={`Resize ${ELEMENT_LABELS[key].label}`}
                             onClick={() => setSelectedElement(key)}
                             onPointerDown={(event) => handleResizePointerDown(event, key)}
-                            className={`absolute -bottom-3 -right-3 flex size-6 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm ${isSelected ? "border-brand bg-brand text-white" : "border-line bg-white text-foreground hover:border-brand/30 hover:bg-brand-soft/10"}`}
+                            className={`absolute bottom-2 right-2 flex size-5 items-center justify-center rounded-full border shadow-sm transition ${isSelected ? "border-brand bg-brand text-white opacity-100" : "border-line bg-white text-foreground opacity-0 group-hover:opacity-100 hover:border-brand/30 hover:bg-brand-soft/10"}`}
                           >
-                            ↘
+                            <ArrowDownRight className="size-3.5" />
                           </button>
                         </div>
                       );
@@ -770,12 +1120,17 @@ export function MasterCardWorkspace({
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Selected element</p>
                     <p className="mt-2 text-sm font-semibold text-foreground">{ELEMENT_LABELS[selectedElement].label}</p>
                     <p className="mt-1 text-[11px] leading-5 text-muted-strong">
-                      Move the element on the canvas, drag the corner handle to resize its box, or fine-tune the shared layout adjustments below.
+                      Move the element on the canvas, drag the corner handle to resize its box, or use the controls below for precise shared-layout edits.
                     </p>
                   </div>
-                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${selectedLayout.visible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
-                    {selectedLayout.visible ? "Visible" : "Hidden"}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${selectedLayout.visible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                      {selectedLayout.visible ? "Layout on" : "Layout off"}
+                    </span>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${selectedRect ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                      {selectedRect ? "On canvas" : "Preview hidden"}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-4 space-y-3">
                   <label className="flex items-center gap-3 rounded-2xl border border-line bg-slate-50 px-3 py-3 text-sm text-foreground">
@@ -790,40 +1145,61 @@ export function MasterCardWorkspace({
                       <p className="mt-0.5 text-[11px] text-muted-strong">Turn this off when every product card should hide this element by default.</p>
                     </div>
                   </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex items-center gap-2 rounded-full border border-line bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={showGrid}
-                        onChange={(event) => setShowGrid(event.target.checked)}
-                        className="accent-brand"
-                      />
-                      Show grid
-                    </label>
-                    <label className="inline-flex items-center gap-2 rounded-full border border-line bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={snapToGrid}
-                        onChange={(event) => setSnapToGrid(event.target.checked)}
-                        className="accent-brand"
-                      />
-                      Snap drag
-                    </label>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-medium text-muted">Grid size</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {GRID_SIZE_OPTIONS.map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => setGridSize(option)}
-                          className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${gridSize === option ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
-                        >
-                          {option}px
-                        </button>
-                      ))}
+                  {selectedRect ? (
+                    <div className="rounded-2xl border border-line bg-slate-50 px-3 py-3 text-[11px] text-muted-strong">
+                      Resolved box: {Math.round(selectedRect.width)} × {Math.round(selectedRect.height)} px at {Math.round(selectedRect.x)}, {Math.round(selectedRect.y)} · Adjustments {selectedLayout.x}, {selectedLayout.y}, {selectedLayout.width}, {selectedLayout.height}
                     </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-line px-3 py-3 text-[11px] leading-5 text-muted">
+                      {selectedElementRenderHint}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-line bg-white p-4 shadow-sm space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Canvas tools</p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted-strong">Keep the grid visible while editing and decide whether drag actions should snap to that spacing.</p>
+                  </div>
+                  <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                    Zoom {editorCanvasZoom.toFixed(2)}×
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-2 rounded-full border border-line bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={showGrid}
+                      onChange={(event) => setShowGrid(event.target.checked)}
+                      className="accent-brand"
+                    />
+                    Show grid
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-full border border-line bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={snapToGrid}
+                      onChange={(event) => setSnapToGrid(event.target.checked)}
+                      className="accent-brand"
+                    />
+                    Snap drag
+                  </label>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium text-muted">Grid size</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {GRID_SIZE_OPTIONS.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setGridSize(option)}
+                        className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${gridSize === option ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                      >
+                        {option}px
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -883,17 +1259,17 @@ export function MasterCardWorkspace({
                   <div className="space-y-3">
                     <p className="text-[11px] font-medium text-muted">Resize element box</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(-1, 0)}>
-                        Narrower
+                      <Button type="button" variant="secondary" className="h-10 text-[11px] font-medium" onClick={() => resizeSelectedElement(-1, 0)}>
+                        Width -
                       </Button>
-                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(1, 0)}>
-                        Wider
+                      <Button type="button" variant="secondary" className="h-10 text-[11px] font-medium" onClick={() => resizeSelectedElement(1, 0)}>
+                        Width +
                       </Button>
-                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(0, -1)}>
-                        Shorter
+                      <Button type="button" variant="secondary" className="h-10 text-[11px] font-medium" onClick={() => resizeSelectedElement(0, -1)}>
+                        Height -
                       </Button>
-                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(0, 1)}>
-                        Taller
+                      <Button type="button" variant="secondary" className="h-10 text-[11px] font-medium" onClick={() => resizeSelectedElement(0, 1)}>
+                        Height +
                       </Button>
                     </div>
                   </div>
@@ -948,19 +1324,6 @@ export function MasterCardWorkspace({
                     />
                   </label>
                 </div>
-                {selectedRect ? (
-                  <div className="rounded-2xl border border-line bg-slate-50 px-3 py-3 text-[11px] text-muted-strong">
-                    Resolved box: {Math.round(selectedRect.width)} × {Math.round(selectedRect.height)} px at {Math.round(selectedRect.x)}, {Math.round(selectedRect.y)} · Adjustments {selectedLayout.x}, {selectedLayout.y}, {selectedLayout.width}, {selectedLayout.height}
-                  </div>
-                ) : !selectedLayout.visible ? (
-                  <div className="rounded-2xl border border-dashed border-line px-3 py-3 text-[11px] text-muted">
-                    This element is hidden in the shared layout. Turn it back on to render it on the sample card.
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-line px-3 py-3 text-[11px] text-muted">
-                    This element is not rendered in the current {previewFlyerType} preview. Switch preview mode to position it on canvas.
-                  </div>
-                )}
               </div>
             </div>
           </SurfaceCardBody>
