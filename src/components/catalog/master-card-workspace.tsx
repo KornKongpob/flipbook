@@ -69,8 +69,9 @@ const ELEMENT_LABELS: Record<CatalogCardElementKey, { label: string; rectKey: ke
 
 const GRID_SIZE_OPTIONS = [4, 8, 16] as const;
 const NUDGE_STEP_OPTIONS = [1, 4, 8] as const;
-const MASTER_CARD_TARGET_PREVIEW_WIDTH = 340;
-const MASTER_CARD_MAX_PREVIEW_WIDTH = 420;
+const MASTER_CARD_TARGET_PREVIEW_WIDTH = 300;
+const MASTER_CARD_MAX_PREVIEW_WIDTH = 360;
+const MASTER_CARD_MAX_EDITOR_CANVAS_ZOOM = 4;
 
 type GridSizeOption = (typeof GRID_SIZE_OPTIONS)[number];
 type NudgeStepOption = (typeof NUDGE_STEP_OPTIONS)[number];
@@ -318,7 +319,9 @@ export function MasterCardWorkspace({
       MASTER_CARD_MAX_PREVIEW_WIDTH,
     );
 
-    return targetWidth / editorCardBaseSize.width;
+    const nextZoom = targetWidth / editorCardBaseSize.width;
+
+    return clampNumber(nextZoom, 1, MASTER_CARD_MAX_EDITOR_CANVAS_ZOOM);
   }, [editorCardBaseSize.width]);
   const editorCardViewportSize = useMemo(
     () => ({
@@ -728,7 +731,7 @@ export function MasterCardWorkspace({
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)] xl:items-start">
+    <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[390px_minmax(0,1fr)]">
       <SurfaceCard className="overflow-hidden xl:sticky xl:top-24 xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
         <SurfaceCardHeader>
           <div className="space-y-2">
@@ -804,7 +807,7 @@ export function MasterCardWorkspace({
                 {enabledDisplayFieldCount}/{MASTER_CARD_DISPLAY_FIELDS.length} enabled
               </span>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2">
               {MASTER_CARD_DISPLAY_FIELDS.map((field) => (
                 <label
                   key={field.key}
@@ -838,7 +841,7 @@ export function MasterCardWorkspace({
                 Live preview
               </span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               {MASTER_CARD_FONT_SIZE_FIELDS.map((field) => (
                 <div key={field.key} className="rounded-2xl border border-line/80 bg-slate-50/70 p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -893,7 +896,7 @@ export function MasterCardWorkspace({
                 Apply required
               </span>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2">
               {CATALOG_CARD_ELEMENT_KEYS.map((key) => {
                 const isSelected = selectedElement === key;
                 const isVisible = draftLayout[key].visible;
@@ -1002,7 +1005,7 @@ export function MasterCardWorkspace({
         </SurfaceCardBody>
       </SurfaceCard>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <SurfaceCard>
           <SurfaceCardHeader>
             <div className="flex items-center justify-between gap-3">
