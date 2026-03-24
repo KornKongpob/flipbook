@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { useRouter } from "next/navigation";
 import { saveStyleOptionsAction } from "@/app/(app)/actions";
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
-import { CatalogPageCanvas } from "@/components/catalog/catalog-page-canvas";
+import { CatalogPageCanvas, type CatalogPageCanvasResolvedCardPreviewSize } from "@/components/catalog/catalog-page-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -18,6 +18,7 @@ import {
   type CatalogMasterCardLayout,
   type CatalogResolvedCardElementRects,
 } from "@/lib/catalog/master-card-layout";
+import { CATALOG_A4_PAGE_HEIGHT, CATALOG_A4_PAGE_WIDTH, resolveCatalogPageLayout } from "@/lib/catalog/layout";
 import type { FlyerType } from "@/lib/database.types";
 import { buildCatalogStyleFormData, serializeStyleFormData } from "@/lib/catalog/style-form-data";
 import type { CatalogLayoutVariant, EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
@@ -54,9 +55,15 @@ const ELEMENT_LABELS: Record<CatalogCardElementKey, { label: string; rectKey: ke
 
 const GRID_SIZE_OPTIONS = [4, 8, 16] as const;
 const NUDGE_STEP_OPTIONS = [1, 4, 8] as const;
+const MASTER_CARD_TARGET_PREVIEW_WIDTH = 340;
+const MASTER_CARD_MAX_PREVIEW_WIDTH = 420;
 
 type GridSizeOption = (typeof GRID_SIZE_OPTIONS)[number];
 type NudgeStepOption = (typeof NUDGE_STEP_OPTIONS)[number];
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function clampAdjustment(value: number) {
   return Math.min(160, Math.max(-160, value));
@@ -102,6 +109,7 @@ export function MasterCardWorkspace({
   const [gridSize, setGridSize] = useState<GridSizeOption>(8);
   const [nudgeStep, setNudgeStep] = useState<NudgeStepOption>(1);
   const [previewFlyerType, setPreviewFlyerType] = useState<FlyerType>(initialStyle.flyerType);
+  const [resolvedPagePreviewCardSize, setResolvedPagePreviewCardSize] = useState<CatalogPageCanvasResolvedCardPreviewSize | null>(null);
 
   const visibleItems = useMemo(
     () => [...initialItems].sort((left, right) => left.displayOrder - right.displayOrder).filter((item) => item.isVisible),
@@ -144,6 +152,53 @@ export function MasterCardWorkspace({
       imageUrl: item.previewUrl,
     })),
     [previewItems],
+  );
+  const fallbackPageLayout = useMemo(
+    () => resolveCatalogPageLayout(CATALOG_A4_PAGE_WIDTH, CATALOG_A4_PAGE_HEIGHT, {
+      layoutPreset: style.layoutPreset,
+      pagePadding: style.pagePadding,
+      pageGap: style.pageGap,
+      headerSpace: style.headerSpace,
+      footerSpace: style.footerSpace,
+    }),
+    [style.footerSpace, style.headerSpace, style.layoutPreset, style.pageGap, style.pagePadding],
+  );
+  const editorCardBaseSize = useMemo(() => {
+    if (
+      resolvedPagePreviewCardSize &&
+      resolvedPagePreviewCardSize.renderedCardWidth > 0 &&
+      resolvedPagePreviewCardSize.renderedCardHeight > 0
+    ) {
+      return {
+        width: resolvedPagePreviewCardSize.renderedCardWidth,
+        height: resolvedPagePreviewCardSize.renderedCardHeight,
+      };
+    }
+
+    return {
+      width: fallbackPageLayout.cardWidth,
+      height: fallbackPageLayout.cardHeight,
+    };
+  }, [fallbackPageLayout.cardHeight, fallbackPageLayout.cardWidth, resolvedPagePreviewCardSize]);
+  const editorCanvasZoom = useMemo(() => {
+    if (editorCardBaseSize.width <= 0) {
+      return 1;
+    }
+
+    const targetWidth = clampNumber(
+      editorCardBaseSize.width,
+      MASTER_CARD_TARGET_PREVIEW_WIDTH,
+      MASTER_CARD_MAX_PREVIEW_WIDTH,
+    );
+
+    return targetWidth / editorCardBaseSize.width;
+  }, [editorCardBaseSize.width]);
+  const editorCardViewportSize = useMemo(
+    () => ({
+      width: editorCardBaseSize.width * editorCanvasZoom,
+      height: editorCardBaseSize.height * editorCanvasZoom,
+    }),
+    [editorCanvasZoom, editorCardBaseSize.height, editorCardBaseSize.width],
   );
 
   useEffect(() => {
@@ -340,8 +395,8 @@ export function MasterCardWorkspace({
     const startLayout = draftLayout[key];
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
+      const deltaX = (moveEvent.clientX - startX) / editorCanvasZoom;
+      const deltaY = (moveEvent.clientY - startY) / editorCanvasZoom;
       updateDraftPosition(key, startLayout.x + deltaX, startLayout.y + deltaY, { snap: snapToGrid });
     };
 
@@ -359,7 +414,7 @@ export function MasterCardWorkspace({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-  }, [draftLayout, snapToGrid, updateDraftPosition]);
+  }, [draftLayout, editorCanvasZoom, snapToGrid, updateDraftPosition]);
 
   const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, key: CatalogCardElementKey) => {
     event.preventDefault();
@@ -373,8 +428,8 @@ export function MasterCardWorkspace({
     const startLayout = draftLayout[key];
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
+      const deltaX = (moveEvent.clientX - startX) / editorCanvasZoom;
+      const deltaY = (moveEvent.clientY - startY) / editorCanvasZoom;
       updateDraftSize(key, startLayout.width + deltaX, startLayout.height + deltaY, { snap: snapToGrid });
     };
 
@@ -392,7 +447,7 @@ export function MasterCardWorkspace({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-  }, [draftLayout, snapToGrid, updateDraftSize]);
+  }, [draftLayout, editorCanvasZoom, snapToGrid, updateDraftSize]);
 
   const selectedLayout = draftLayout[selectedElement];
   const selectedRect = selectedElement ? resolvedRects?.[ELEMENT_LABELS[selectedElement].rectKey] ?? null : null;
@@ -607,6 +662,9 @@ export function MasterCardWorkspace({
                   {previewFlyerType === "promo" ? "Promo preview" : "Normal preview"}
                 </span>
                 <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                  Zoom {editorCanvasZoom.toFixed(2)}×
+                </span>
+                <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
                   {snapToGrid ? `Snap ${gridSize}px` : "Free drag"}
                 </span>
               </div>
@@ -615,76 +673,92 @@ export function MasterCardWorkspace({
           <SurfaceCardBody className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
             <div className="rounded-[28px] border border-line bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 p-5">
               <div className="mx-auto flex max-w-[430px] justify-center">
-                <div className="relative aspect-[0.72] w-full max-w-[420px]">
-                  <CatalogCardPreview
-                    title={selectedItem.displayName ?? selectedItem.productName}
-                    sku={selectedItem.sku}
-                    packSize={selectedItem.packSize}
-                    unit={selectedItem.unit}
-                    normalPrice={selectedItem.normalPrice}
-                    promoPrice={selectedItem.promoPrice}
-                    discountAmount={selectedItem.discountAmount}
-                    discountPercent={selectedItem.discountPercent}
-                    imageUrl={selectedItem.previewUrl}
-                    options={previewStyle}
-                    onResolvedElementRects={setResolvedRects}
-                  />
-
-                  {showGrid ? (
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 rounded-[26px]"
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(to right, rgba(37, 99, 235, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(37, 99, 235, 0.12) 1px, transparent 1px)",
-                        backgroundSize: `${gridSize}px ${gridSize}px`,
-                      }}
+                <div
+                  className="relative shrink-0"
+                  style={{
+                    width: `${editorCardViewportSize.width}px`,
+                    height: `${editorCardViewportSize.height}px`,
+                  }}
+                >
+                  <div
+                    className="absolute left-0 top-0"
+                    style={{
+                      width: `${editorCardBaseSize.width}px`,
+                      height: `${editorCardBaseSize.height}px`,
+                      transform: `scale(${editorCanvasZoom})`,
+                      transformOrigin: "top left",
+                    }}
+                  >
+                    <CatalogCardPreview
+                      title={selectedItem.displayName ?? selectedItem.productName}
+                      sku={selectedItem.sku}
+                      packSize={selectedItem.packSize}
+                      unit={selectedItem.unit}
+                      normalPrice={selectedItem.normalPrice}
+                      promoPrice={selectedItem.promoPrice}
+                      discountAmount={selectedItem.discountAmount}
+                      discountPercent={selectedItem.discountPercent}
+                      imageUrl={selectedItem.previewUrl}
+                      options={previewStyle}
+                      onResolvedElementRects={setResolvedRects}
                     />
-                  ) : null}
 
-                  {resolvedRects ? CATALOG_CARD_ELEMENT_KEYS.map((key) => {
-                    const rect = resolvedRects[ELEMENT_LABELS[key].rectKey];
-
-                    if (!rect) {
-                      return null;
-                    }
-
-                    const isSelected = selectedElement === key;
-
-                    return (
+                    {showGrid ? (
                       <div
-                        key={key}
-                        className="absolute"
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-[26px]"
                         style={{
-                          left: `${rect.x}px`,
-                          top: `${rect.y}px`,
-                          width: `${rect.width}px`,
-                          height: `${Math.max(rect.height, 12)}px`,
+                          backgroundImage:
+                            "linear-gradient(to right, rgba(37, 99, 235, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(37, 99, 235, 0.12) 1px, transparent 1px)",
+                          backgroundSize: `${gridSize}px ${gridSize}px`,
                         }}
-                      >
-                        <button
-                          type="button"
-                          aria-label={`Move ${ELEMENT_LABELS[key].label}`}
-                          onClick={() => setSelectedElement(key)}
-                          onPointerDown={(event) => handlePointerDown(event, key)}
-                          className={`absolute inset-0 cursor-grab rounded-xl border-2 border-dashed text-left transition active:cursor-grabbing ${isSelected ? "border-brand bg-brand/10 shadow-sm" : "border-sky-300/90 bg-sky-100/35 hover:border-brand/40 hover:bg-brand-soft/10"}`}
+                      />
+                    ) : null}
+
+                    {resolvedRects ? CATALOG_CARD_ELEMENT_KEYS.map((key) => {
+                      const rect = resolvedRects[ELEMENT_LABELS[key].rectKey];
+
+                      if (!rect) {
+                        return null;
+                      }
+
+                      const isSelected = selectedElement === key;
+
+                      return (
+                        <div
+                          key={key}
+                          className="absolute"
+                          style={{
+                            left: `${rect.x}px`,
+                            top: `${rect.y}px`,
+                            width: `${rect.width}px`,
+                            height: `${Math.max(rect.height, 12)}px`,
+                          }}
                         >
-                          <span className={`absolute -top-6 left-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm ${isSelected ? "bg-brand text-white" : "bg-white text-foreground border border-line"}`}>
-                            {ELEMENT_LABELS[key].label}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Resize ${ELEMENT_LABELS[key].label}`}
-                          onClick={() => setSelectedElement(key)}
-                          onPointerDown={(event) => handleResizePointerDown(event, key)}
-                          className={`absolute -bottom-3 -right-3 flex size-6 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm ${isSelected ? "border-brand bg-brand text-white" : "border-line bg-white text-foreground hover:border-brand/30 hover:bg-brand-soft/10"}`}
-                        >
-                          ↘
-                        </button>
-                      </div>
-                    );
-                  }) : null}
+                          <button
+                            type="button"
+                            aria-label={`Move ${ELEMENT_LABELS[key].label}`}
+                            onClick={() => setSelectedElement(key)}
+                            onPointerDown={(event) => handlePointerDown(event, key)}
+                            className={`absolute inset-0 cursor-grab rounded-xl border-2 border-dashed text-left transition active:cursor-grabbing ${isSelected ? "border-brand bg-brand/10 shadow-sm" : "border-sky-300/90 bg-sky-100/35 hover:border-brand/40 hover:bg-brand-soft/10"}`}
+                          >
+                            <span className={`absolute -top-6 left-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm ${isSelected ? "bg-brand text-white" : "bg-white text-foreground border border-line"}`}>
+                              {ELEMENT_LABELS[key].label}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Resize ${ELEMENT_LABELS[key].label}`}
+                            onClick={() => setSelectedElement(key)}
+                            onPointerDown={(event) => handleResizePointerDown(event, key)}
+                            className={`absolute -bottom-3 -right-3 flex size-6 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm ${isSelected ? "border-brand bg-brand text-white" : "border-line bg-white text-foreground hover:border-brand/30 hover:bg-brand-soft/10"}`}
+                          >
+                            ↘
+                          </button>
+                        </div>
+                      );
+                    }) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -912,6 +986,7 @@ export function MasterCardWorkspace({
                 pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
                 headerMediaPreviewUrl={style.headerMediaPreviewUrl}
                 footerMediaPreviewUrl={style.footerMediaPreviewUrl}
+                onResolvedCardPreviewSize={setResolvedPagePreviewCardSize}
               />
             </div>
           </SurfaceCardBody>

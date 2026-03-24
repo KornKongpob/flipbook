@@ -29,6 +29,14 @@ export interface CatalogPageCanvasItem {
   imageUrl?: string | null;
 }
 
+export interface CatalogPageCanvasResolvedCardPreviewSize {
+  cardWidth: number;
+  cardHeight: number;
+  previewScale: number;
+  renderedCardWidth: number;
+  renderedCardHeight: number;
+}
+
 interface CatalogPageCanvasProps {
   items: CatalogPageCanvasItem[];
   options?: Partial<CatalogStyleOptions>;
@@ -36,6 +44,7 @@ interface CatalogPageCanvasProps {
   headerMediaPreviewUrl?: string | null;
   footerMediaPreviewUrl?: string | null;
   onItemsReorder?: (orderedItemIds: string[]) => void | Promise<void>;
+  onResolvedCardPreviewSize?: (size: CatalogPageCanvasResolvedCardPreviewSize | null) => void;
   reorderDisabled?: boolean;
   showSafeAreaGuides?: boolean;
 }
@@ -148,6 +157,7 @@ export function CatalogPageCanvas({
   headerMediaPreviewUrl = null,
   footerMediaPreviewUrl = null,
   onItemsReorder,
+  onResolvedCardPreviewSize,
   reorderDisabled = false,
   showSafeAreaGuides = false,
 }: CatalogPageCanvasProps) {
@@ -178,6 +188,19 @@ export function CatalogPageCanvas({
   const previewScale = previewSize.width > 0 && previewSize.height > 0
     ? Math.min(previewSize.width / layout.pageWidth, previewSize.height / layout.pageHeight)
     : 1;
+  const resolvedCardPreviewSize = useMemo(() => {
+    if (layout.cardWidth <= 0 || layout.cardHeight <= 0 || previewScale <= 0) {
+      return null;
+    }
+
+    return {
+      cardWidth: layout.cardWidth,
+      cardHeight: layout.cardHeight,
+      previewScale,
+      renderedCardWidth: layout.cardWidth * previewScale,
+      renderedCardHeight: layout.cardHeight * previewScale,
+    } satisfies CatalogPageCanvasResolvedCardPreviewSize;
+  }, [layout.cardHeight, layout.cardWidth, previewScale]);
   const promoDateLabel = useMemo(
     () => (style.showDates ? formatThaiFlyerDateRange(style.promoStartDate, style.promoEndDate) : null),
     [style.promoEndDate, style.promoStartDate, style.showDates],
@@ -231,6 +254,10 @@ export function CatalogPageCanvas({
       observer.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    onResolvedCardPreviewSize?.(resolvedCardPreviewSize);
+  }, [onResolvedCardPreviewSize, resolvedCardPreviewSize]);
 
   return (
     <div
