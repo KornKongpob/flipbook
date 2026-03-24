@@ -11,7 +11,7 @@ export function CatalogEditorExportButton() {
   }, []);
 
   return (
-    <Button type="button" className="h-9 text-xs" onClick={handleClick}>
+    <Button type="button" className="h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4" onClick={handleClick}>
       Generate PDF step →
     </Button>
   );

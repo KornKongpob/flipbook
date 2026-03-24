@@ -37,17 +37,17 @@ export default async function CatalogGeneratePage({
         title="Generate PDF"
         description="Review the final catalog summary, then generate or regenerate the PDF before opening the result and publishing hub."
         actions={
-          <div className="flex shrink-0 items-center gap-2">
-            <Link href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-9 text-xs")}>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:justify-end">
+            <Link href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}>
               ← Back to Page Design
             </Link>
             {isPdfReady ? (
-              <Link href={`/catalogs/${jobId}/result`} className={buttonClassName("secondary", "h-9 text-xs")}>
+              <Link href={`/catalogs/${jobId}/result`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}>
                 Open Result
               </Link>
             ) : null}
             <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
-              <Button className="h-9 gap-1.5 text-xs" disabled={isGenerating}>
+              <Button className="h-auto min-h-9 max-w-full gap-1.5 px-3 py-2 text-center text-xs leading-4" disabled={isGenerating}>
                 {isGenerating ? <Loader2 className="size-3.5 animate-spin" /> : latestPdf ? <RefreshCw className="size-3.5" /> : <Play className="size-3.5" />}
                 {isGenerating ? "Generating…" : latestPdf ? "Regenerate PDF" : "Generate PDF"}
               </Button>

@@ -865,12 +865,12 @@ export function EditorPanel({
 
       <div className="rounded-xl border border-line bg-card shadow-sm overflow-hidden xl:sticky xl:top-24 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col">
         <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">A4 live preview</p>
               <p className="mt-1 text-sm font-semibold text-foreground">Page {previewPage + 1} of {Math.max(1, pages.length)}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
                 {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved changes" : "Saved"}
               </span>
@@ -883,7 +883,7 @@ export function EditorPanel({
                   void handleSaveStyle();
                 }}
                 disabled={!hasUnsavedStyleChanges || styleSaving || exportPending || isUploadingMedia || orderSaving}
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-line bg-white px-3 text-xs font-medium text-foreground hover:border-brand/30 hover:bg-brand-soft disabled:opacity-60 transition"
+                className="inline-flex min-h-8 min-w-0 max-w-full items-center justify-center rounded-lg border border-line bg-white px-3 py-1.5 text-center text-xs font-medium leading-4 text-foreground transition hover:border-brand/30 hover:bg-brand-soft disabled:opacity-60"
               >
                 {styleSaving && !exportPending ? "Saving…" : hasUnsavedStyleChanges ? "Save style" : "Saved"}
               </button>
@@ -891,26 +891,28 @@ export function EditorPanel({
                 type="button"
                 onClick={handleOpenExport}
                 disabled={exportPending || styleSaving || isUploadingMedia || orderSaving}
-                className="inline-flex h-8 items-center justify-center rounded-lg bg-brand px-3 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-60 transition"
+                className="inline-flex min-h-8 min-w-0 max-w-full items-center justify-center rounded-lg bg-brand px-3 py-1.5 text-center text-xs font-medium leading-4 text-white transition hover:bg-brand/90 disabled:opacity-60"
               >
                 {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + generate" : "Generate PDF step"}
               </button>
-              <button
-                type="button"
-                disabled={previewPage === 0}
-                onClick={() => setPreviewPage((p) => p - 1)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted hover:text-foreground disabled:opacity-30 transition"
-              >
-                <ChevronUp className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                disabled={previewPage >= pages.length - 1}
-                onClick={() => setPreviewPage((p) => p + 1)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted hover:text-foreground disabled:opacity-30 transition"
-              >
-                <ChevronDown className="size-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={previewPage === 0}
+                  onClick={() => setPreviewPage((p) => p - 1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted transition hover:text-foreground disabled:opacity-30"
+                >
+                  <ChevronUp className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  disabled={previewPage >= pages.length - 1}
+                  onClick={() => setPreviewPage((p) => p + 1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted transition hover:text-foreground disabled:opacity-30"
+                >
+                  <ChevronDown className="size-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 

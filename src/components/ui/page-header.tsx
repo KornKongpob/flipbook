@@ -40,7 +40,11 @@ export function PageHeader({
           ) : null}
         </div>
 
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? (
+          <div className="flex w-full min-w-0 flex-wrap items-start gap-2 lg:w-auto lg:max-w-[52%] lg:shrink-0 lg:justify-end">
+            {actions}
+          </div>
+        ) : null}
       </div>
 
       {children ? <div className="relative z-10 mt-5">{children}</div> : null}

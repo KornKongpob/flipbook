@@ -40,15 +40,15 @@ export default async function CatalogResultPage({
             : "Generate the final PDF, then continue to download or publish the catalog."
         }
         actions={
-          <div className="flex shrink-0 items-center gap-2">
-            <a href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-9 text-xs") }>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:justify-end">
+            <a href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4") }>
               ← Back to Page Design
             </a>
-            <a href={`/catalogs/${jobId}/generate`} className={buttonClassName("secondary", "h-9 text-xs") }>
+            <a href={`/catalogs/${jobId}/generate`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4") }>
               Generate step
             </a>
             <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
-              <Button className="h-9 gap-1.5 text-xs" disabled={isGenerating}>
+              <Button className="h-auto min-h-9 max-w-full gap-1.5 px-3 py-2 text-center text-xs leading-4" disabled={isGenerating}>
                 {isGenerating ? (
                   <RefreshCw className="size-3.5 animate-spin" />
                 ) : (
@@ -95,7 +95,7 @@ export default async function CatalogResultPage({
                     </div>
                     <a
                       href={`/api/files/${latestPdf.id}/download`}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-strong transition-colors whitespace-nowrap"
+                      className="inline-flex min-h-10 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-center text-sm font-medium leading-5 text-white transition-colors hover:bg-brand-strong"
                     >
                       <Download className="size-4" />
                       Download PDF
@@ -123,7 +123,7 @@ export default async function CatalogResultPage({
                           href={bundle.flipbook.flipbook_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-white border border-brand/20 text-brand px-4 text-sm font-medium hover:bg-brand-soft/20 transition-colors whitespace-nowrap"
+                          className="inline-flex min-h-10 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg border border-brand/20 bg-white px-4 py-2 text-center text-sm font-medium leading-5 text-brand transition-colors hover:bg-brand-soft/20"
                         >
                           <ExternalLink className="size-4" />
                           Open Flipbook
@@ -145,7 +145,7 @@ export default async function CatalogResultPage({
                         </div>
                         {bundle.job.flipbook_mode === "client_id" && (
                           <form action={`/api/jobs/${jobId}/flipbook`} method="post">
-                            <Button className="h-10 gap-2 whitespace-nowrap">
+                            <Button className="h-auto min-h-10 max-w-full gap-2 px-4 py-2 text-center leading-5">
                               <RefreshCw className="size-4" />
                               Generate Flipbook
                             </Button>

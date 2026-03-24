@@ -19,7 +19,7 @@ export function buttonClassName(
   className?: string,
 ) {
   return cn(
-    "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-all duration-150 outline-none disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex min-h-9 min-w-0 max-w-full items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-center text-sm font-medium leading-[1.15] transition-all duration-150 outline-none disabled:cursor-not-allowed disabled:opacity-50",
     variantClasses[variant],
     className,
   );

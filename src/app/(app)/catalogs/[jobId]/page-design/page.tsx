@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CatalogEditorExportButton } from "@/components/catalog/catalog-editor-export-button";
 import { CatalogJobHeader } from "@/components/catalog/catalog-job-header";
 import { EditorPanel } from "@/components/catalog/editor-panel";
+import { buttonClassName } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import {
   getCatalogJobBundle,
@@ -76,18 +77,18 @@ export default async function CatalogPageDesignPage({
         title="Page design workspace"
         description="Refine the page background, header, footer, product visibility, and A4 layout with a cleaner live design workspace before moving to PDF generation."
         actions={
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:justify-end">
             {pendingReview > 0 && (
               <Link
                 href={`/catalogs/${jobId}/review`}
-                className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-100 transition"
+                className="inline-flex min-h-9 min-w-0 max-w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium leading-4 text-amber-700 transition hover:bg-amber-100"
               >
                 {pendingReview} unreviewed
               </Link>
             )}
             <Link
               href={`/catalogs/${jobId}/master-card`}
-              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-foreground hover:border-brand/25 hover:bg-brand-soft/10 transition"
+              className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}
             >
               ← Master Card
             </Link>

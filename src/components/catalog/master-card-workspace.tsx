@@ -252,6 +252,13 @@ export function MasterCardWorkspace({
     }),
     [draftLayout, previewFlyerType, style],
   );
+  const liveCurrentJobPreviewStyle = useMemo(
+    () => ({
+      ...style,
+      masterCardLayout: draftLayout,
+    }),
+    [draftLayout, style],
+  );
   const hasUnappliedChanges = useMemo(
     () => !layoutsEqual(draftLayout, style.masterCardLayout),
     [draftLayout, style.masterCardLayout],
@@ -722,7 +729,7 @@ export function MasterCardWorkspace({
 
   return (
     <div className="grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)] xl:items-start">
-      <SurfaceCard className="xl:sticky xl:top-24">
+      <SurfaceCard className="overflow-hidden xl:sticky xl:top-24 xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
         <SurfaceCardHeader>
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
@@ -739,7 +746,7 @@ export function MasterCardWorkspace({
             </p>
           </div>
         </SurfaceCardHeader>
-        <SurfaceCardBody className="space-y-4">
+        <SurfaceCardBody className="space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:thin-scrollbar">
           {styleSaveError ? (
             <StatusBanner tone="danger" title="Could not save master card" description={styleSaveError} />
           ) : hasUnappliedChanges ? (
@@ -995,7 +1002,7 @@ export function MasterCardWorkspace({
         </SurfaceCardBody>
       </SurfaceCard>
 
-      <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
         <SurfaceCard>
           <SurfaceCardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -1019,7 +1026,7 @@ export function MasterCardWorkspace({
               </div>
             </div>
           </SurfaceCardHeader>
-          <SurfaceCardBody className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <SurfaceCardBody className="space-y-5">
             <div className="rounded-[28px] border border-line bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 p-5">
               <div className="mx-auto flex max-w-[430px] justify-center">
                 <div
@@ -1113,7 +1120,7 @@ export function MasterCardWorkspace({
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid gap-4 2xl:grid-cols-2">
               <div className="rounded-2xl border border-line bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1329,23 +1336,32 @@ export function MasterCardWorkspace({
           </SurfaceCardBody>
         </SurfaceCard>
 
-        <SurfaceCard>
+        <SurfaceCard className="overflow-hidden xl:sticky xl:top-24 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col">
           <SurfaceCardHeader>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Applied to current job</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Live current job preview</p>
                 <h2 className="mt-1 text-sm font-semibold text-foreground">Current job preview</h2>
               </div>
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${hasUnappliedChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-                {hasUnappliedChanges ? "Waiting for Apply" : "Applied"}
-              </span>
+              <div className="flex flex-col items-end gap-2">
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${hasUnappliedChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                  {hasUnappliedChanges ? "Live draft" : "Applied"}
+                </span>
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-line bg-white text-muted-strong"}`}>
+                  {styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Save pending" : "Saved"}
+                </span>
+              </div>
             </div>
           </SurfaceCardHeader>
-          <SurfaceCardBody>
+          <SurfaceCardBody className="space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:thin-scrollbar">
+            <div className="rounded-2xl border border-brand/20 bg-brand-soft/10 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+              <p className="font-semibold text-foreground">Canvas edits update this preview immediately.</p>
+              <p className="mt-1">This rail shows the current job with your live draft layout so you do not have to scroll below the canvas to validate changes.</p>
+            </div>
             <div className="mx-auto max-w-[620px]">
               <CatalogPageCanvas
                 items={pagePreviewItems}
-                options={style}
+                options={liveCurrentJobPreviewStyle}
                 pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
                 headerMediaPreviewUrl={style.headerMediaPreviewUrl}
                 footerMediaPreviewUrl={style.footerMediaPreviewUrl}

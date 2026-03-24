@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { wrapThaiTextWithAutoScaling } from "@/lib/catalog/pdf/text-layout";
 import {
   CATALOG_CARD_META_LINE_HEIGHT,
   CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
@@ -43,6 +44,14 @@ function rectStyle(rect: { x: number; y: number; width: number; height: number }
 
 let browserTextMeasureCanvas: HTMLCanvasElement | null = null;
 
+function getBrowserFontFamily() {
+  if (typeof window === "undefined") {
+    return "Sarabun, sans-serif";
+  }
+
+  return window.getComputedStyle(document.body).fontFamily || "Sarabun, sans-serif";
+}
+
 function measureBrowserTextWidth(text: string, fontSize: number, fontWeight = 400) {
   if (typeof document === "undefined" || !text) {
     return 0;
@@ -55,7 +64,7 @@ function measureBrowserTextWidth(text: string, fontSize: number, fontWeight = 40
     return 0;
   }
 
-  context.font = `${fontWeight} ${fontSize}px Sarabun, sans-serif`;
+  context.font = `${fontWeight} ${fontSize}px ${getBrowserFontFamily()}`;
   return context.measureText(text).width;
 }
 
@@ -191,6 +200,23 @@ export function CatalogCardPreview({
   }, [cardLayout, discountPercent, normalPriceTextWidth, style.masterCardLayout, style.showDiscountPercent]);
   const imageRect = elementRects?.imageRect ?? null;
   const badgeRect = elementRects?.badgeRect ?? null;
+  const titleRectWidth = elementRects?.titleRect?.width ?? 0;
+  const titleRectHeight = elementRects?.titleRect?.height ?? 0;
+  const titleFontSize = cardLayout?.titleFontSize ?? 0;
+  const titleTextLayout = useMemo(() => {
+    if (titleRectWidth <= 0 || titleRectHeight <= 0 || titleFontSize <= 0) {
+      return null;
+    }
+
+    return wrapThaiTextWithAutoScaling({
+      text: title,
+      initialFontSize: titleFontSize,
+      maxWidth: titleRectWidth,
+      maxHeight: titleRectHeight,
+      lineHeight: CATALOG_CARD_TITLE_LINE_HEIGHT,
+      measureText: (textValue, fontSize) => measureBrowserTextWidth(textValue, fontSize, 600),
+    });
+  }, [title, titleFontSize, titleRectHeight, titleRectWidth]);
   const imageRenderRect = useMemo(() => {
     if (!cardLayout || !imageRect) {
       return null;
@@ -276,15 +302,13 @@ export function CatalogCardPreview({
               style={{
                 ...rectStyle(elementRects.titleRect),
                 color: style.titleColor,
-                fontSize: `${cardLayout.titleFontSize}px`,
-                lineHeight: CATALOG_CARD_TITLE_LINE_HEIGHT,
-                display: "-webkit-box",
+                fontSize: `${titleTextLayout?.fontSize ?? cardLayout.titleFontSize}px`,
+                lineHeight: titleTextLayout ? `${titleTextLayout.lineHeightPx}px` : CATALOG_CARD_TITLE_LINE_HEIGHT,
+                whiteSpace: "pre-line",
                 overflowWrap: "anywhere",
-                WebkitBoxOrient: "vertical",
-                WebkitLineClamp: 2,
               }}
             >
-              {title}
+              {titleTextLayout ? titleTextLayout.lines.join("\n") : title}
             </h3>
           ) : null}
 
