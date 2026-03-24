@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Eye,
@@ -13,7 +13,7 @@ import {
   ImageOff,
   Loader2,
 } from "lucide-react";
-import { moveItemAction, toggleItemVisibilityAction, saveStyleOptionsAction } from "@/app/(app)/actions";
+import { moveItemAction, reorderItemsAction, toggleItemVisibilityAction, saveStyleOptionsAction } from "@/app/(app)/actions";
 import { OPEN_CATALOG_EXPORT_EVENT } from "@/components/catalog/catalog-editor-export-button";
 import { CatalogPageCanvas } from "@/components/catalog/catalog-page-canvas";
 import { CatalogStyleControls } from "@/components/catalog/catalog-style-controls";
@@ -28,6 +28,7 @@ import {
   type CatalogStyleOptions,
   type EditorCatalogStyleOptions,
 } from "@/lib/catalog/style-options";
+import { formatThaiFlyerDateRange } from "@/lib/utils";
 
 interface EditorItem {
   id: string;
@@ -158,11 +159,15 @@ const BOOLEAN_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "showPromoPrice",
   "showDiscountAmount",
   "showDiscountPercent",
+  "showBarcode",
+  "showDates",
   "showSku",
   "showPackSize",
 ];
 
 const NULLABLE_STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
+  "promoStartDate",
+  "promoEndDate",
   "pageBackgroundImageBucket",
   "pageBackgroundImagePath",
   "headerMediaBucket",
@@ -173,6 +178,7 @@ const NULLABLE_STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
 
 const STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "variant",
+  "flyerType",
   "layoutPreset",
   "pageBackgroundColor",
   "pageBackgroundFit",
@@ -192,6 +198,7 @@ const STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
 ];
 
 const NUMBER_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
+  "baseFontSize",
   "pageBackgroundOpacity",
   "pageBackgroundOffsetX",
   "pageBackgroundOffsetY",
@@ -217,6 +224,14 @@ const NUMBER_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "promoPriceFontSize",
   "normalPriceFontSize",
 ];
+
+function getVariantFromFlyerType(flyerType: EditorCatalogStyleOptions["flyerType"]) {
+  return flyerType === "normal" ? "clean" : "promo";
+}
+
+function getFlyerTypeFromVariant(variant: EditorCatalogStyleOptions["variant"]) {
+  return variant === "clean" ? "normal" : "promo";
+}
 
 function serializeFormData(formData: FormData) {
   return JSON.stringify(
@@ -267,6 +282,8 @@ export function EditorPanel({
   const [styleSaveError, setStyleSaveError] = useState<string | null>(null);
   const [styleStatusLabel, setStyleStatusLabel] = useState("All changes saved.");
   const [exportPending, setExportPending] = useState(false);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
   const [mediaUploading, setMediaUploading] = useState<Record<MediaSlotKey, boolean>>({
     background: false,
@@ -298,14 +315,27 @@ export function EditorPanel({
     setStyleStatus("Unsaved style changes.");
   }, [clearStyleSaveError, setStyleStatus]);
 
-  const visibleItems = items.filter((i) => i.isVisible);
-  const hiddenCount = items.length - visibleItems.length;
+  const orderedItems = useMemo(
+    () => [...items].sort((left, right) => left.displayOrder - right.displayOrder),
+    [items],
+  );
+  const visibleItems = useMemo(
+    () => orderedItems.filter((item) => item.isVisible),
+    [orderedItems],
+  );
+  const hiddenCount = orderedItems.length - visibleItems.length;
   const layoutPreset = getCatalogLayoutPresetDefinition(style.layoutPreset);
   const itemsPerPage = getCatalogItemsPerPage(style.layoutPreset);
-  const pages = chunk(visibleItems, itemsPerPage);
-  const currentPageItems = pages[previewPage] ?? [];
-  const editingItem = items.find((item) => item.id === editingId) ?? null;
-  const filteredItems = items.filter((item) => {
+  const pages = useMemo(
+    () => chunk(visibleItems, itemsPerPage),
+    [itemsPerPage, visibleItems],
+  );
+  const currentPageItems = useMemo(
+    () => pages[previewPage] ?? [],
+    [pages, previewPage],
+  );
+  const editingItem = orderedItems.find((item) => item.id === editingId) ?? null;
+  const filteredItems = orderedItems.filter((item) => {
     if (productFilter === "visible") {
       return item.isVisible;
     }
@@ -316,6 +346,10 @@ export function EditorPanel({
 
     return true;
   });
+  const promoDateLabel = useMemo(
+    () => formatThaiFlyerDateRange(style.promoStartDate, style.promoEndDate),
+    [style.promoEndDate, style.promoStartDate],
+  );
 
   useEffect(() => {
     setPreviewPage((current) => Math.min(current, Math.max(pages.length - 1, 0)));
@@ -388,6 +422,11 @@ export function EditorPanel({
     markStyleDirty();
     setStyle((previous) => ({
       ...previous,
+      ...(key === "flyerType"
+        ? { variant: getVariantFromFlyerType(value as EditorCatalogStyleOptions["flyerType"]) }
+        : key === "variant"
+          ? { flyerType: getFlyerTypeFromVariant(value as EditorCatalogStyleOptions["variant"]) }
+          : {}),
       [key]: value,
     }));
   }
@@ -552,6 +591,7 @@ export function EditorPanel({
   const isUploadingMedia = mediaUploading.background || mediaUploading.header || mediaUploading.footer;
   const hasPendingEditorWork =
     isUploadingMedia ||
+    orderSaving ||
     styleSaving ||
     exportPending ||
     hasUnsavedStyleChanges;
@@ -583,6 +623,11 @@ export function EditorPanel({
   }, [isUploadingMedia, persistStyle, setStyleStatus]);
 
   const handleOpenExport = useCallback(async () => {
+    if (orderSaving) {
+      setOrderError("Please wait for the latest item reorder to finish syncing before export.");
+      return;
+    }
+
     if (isUploadingMedia) {
       setStyleSaveError("Please wait for media uploads to finish before opening export.");
       setStyleStatus("Upload still in progress.");
@@ -607,7 +652,7 @@ export function EditorPanel({
     } finally {
       setExportPending(false);
     }
-  }, [clearStyleSaveError, hasUnsavedStyleChanges, isUploadingMedia, jobId, persistStyle, router, setStyleStatus]);
+  }, [clearStyleSaveError, hasUnsavedStyleChanges, isUploadingMedia, jobId, orderSaving, persistStyle, router, setStyleStatus]);
 
   useEffect(() => {
     const listener = () => {
@@ -666,6 +711,64 @@ export function EditorPanel({
       setSaving(null);
     }
   }
+
+  const handlePageItemsReorder = useCallback(
+    async (orderedPageItemIds: string[]) => {
+      if (orderSaving || orderedPageItemIds.length <= 1) {
+        return;
+      }
+
+      const currentPageItemIds = currentPageItems.map((item) => item.id);
+
+      if (
+        orderedPageItemIds.length !== currentPageItemIds.length ||
+        currentPageItemIds.every((itemId, index) => orderedPageItemIds[index] === itemId)
+      ) {
+        return;
+      }
+
+      const pageItemsById = new Map(currentPageItems.map((item) => [item.id, item]));
+      const nextPageItems = orderedPageItemIds
+        .map((itemId) => pageItemsById.get(itemId) ?? null)
+        .filter((item): item is EditorItem => item !== null);
+
+      if (nextPageItems.length !== currentPageItems.length) {
+        return;
+      }
+
+      const pageStart = previewPage * itemsPerPage;
+      const nextVisibleItems = [...visibleItems];
+      nextVisibleItems.splice(pageStart, currentPageItems.length, ...nextPageItems);
+
+      const visibleQueue = [...nextVisibleItems];
+      const previousOrderedItems = orderedItems.map((item) => ({ ...item }));
+      const nextOrderedItems = orderedItems.map((item) => {
+        if (!item.isVisible) {
+          return item;
+        }
+
+        return visibleQueue.shift() ?? item;
+      });
+      const nextItems = nextOrderedItems.map((item, index) => ({
+        ...item,
+        displayOrder: index,
+      }));
+
+      setOrderSaving(true);
+      setOrderError(null);
+      setItems(nextItems);
+
+      try {
+        await reorderItemsAction(jobId, nextItems.map((item) => item.id));
+      } catch (error) {
+        setItems(previousOrderedItems);
+        setOrderError(error instanceof Error ? error.message : "Could not save the new item order.");
+      } finally {
+        setOrderSaving(false);
+      }
+    },
+    [currentPageItems, itemsPerPage, jobId, orderSaving, orderedItems, previewPage, visibleItems],
+  );
 
   return (
     <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
@@ -870,12 +973,15 @@ export function EditorPanel({
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
                 {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved changes" : "Saved"}
               </span>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${orderError ? "border-rose-200 bg-rose-50 text-rose-700" : orderSaving ? "border-sky-200 bg-sky-50 text-sky-700" : "border-line bg-white text-muted-strong"}`}>
+                {orderError ? "Order sync failed" : orderSaving ? "Saving order…" : "Drag to reorder"}
+              </span>
               <button
                 type="button"
                 onClick={() => {
                   void handleSaveStyle();
                 }}
-                disabled={!hasUnsavedStyleChanges || styleSaving || exportPending || isUploadingMedia}
+                disabled={!hasUnsavedStyleChanges || styleSaving || exportPending || isUploadingMedia || orderSaving}
                 className="inline-flex h-8 items-center justify-center rounded-lg border border-line bg-white px-3 text-xs font-medium text-foreground hover:border-brand/30 hover:bg-brand-soft disabled:opacity-60 transition"
               >
                 {styleSaving && !exportPending ? "Saving…" : hasUnsavedStyleChanges ? "Save style" : "Saved"}
@@ -883,7 +989,7 @@ export function EditorPanel({
               <button
                 type="button"
                 onClick={handleOpenExport}
-                disabled={exportPending || styleSaving || isUploadingMedia}
+                disabled={exportPending || styleSaving || isUploadingMedia || orderSaving}
                 className="inline-flex h-8 items-center justify-center rounded-lg bg-brand px-3 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-60 transition"
               >
                 {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + export" : "Open export"}
@@ -918,7 +1024,13 @@ export function EditorPanel({
               {layoutPreset.label} · {itemsPerPage} per page
             </span>
             <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              Flyer {style.flyerType === "normal" ? "Normal" : "Promo"} · Base {style.baseFontSize}px
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
               Header {style.headerSpace}px · Footer {style.footerSpace}px
+            </span>
+            <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
+              {style.showDates ? promoDateLabel ?? "Dates on · not set" : "Dates hidden"}
             </span>
             <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-[11px] text-muted-strong">
               {style.pageBackgroundPreviewUrl ? `Background ${style.pageBackgroundAnchor}` : "Color background only"}
@@ -952,6 +1064,10 @@ export function EditorPanel({
                 pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
                 headerMediaPreviewUrl={style.headerMediaPreviewUrl}
                 footerMediaPreviewUrl={style.footerMediaPreviewUrl}
+                onItemsReorder={(orderedPageItemIds: string[]) => {
+                  void handlePageItemsReorder(orderedPageItemIds);
+                }}
+                reorderDisabled={orderSaving}
                 showSafeAreaGuides
               />
             </div>

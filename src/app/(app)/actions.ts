@@ -9,6 +9,7 @@ import {
   approveCatalogItem,
   duplicateCatalogJob,
   moveCatalogItem,
+  reorderCatalogItems,
   toggleCatalogItemVisibility,
   updateCatalogItemDisplayName,
   updateJobStyleOptions,
@@ -60,6 +61,14 @@ export async function moveItemAction(formData: FormData) {
   revalidatePath(`/catalogs/${jobId}/editor`);
 }
 
+export async function reorderItemsAction(jobId: string, orderedItemIds: string[]) {
+  const user = await requireUser();
+
+  await reorderCatalogItems(user.id, jobId, orderedItemIds);
+
+  revalidatePath(`/catalogs/${jobId}/editor`);
+}
+
 export async function toggleItemVisibilityAction(formData: FormData) {
   const user = await requireUser();
   const itemId = String(formData.get("itemId"));
@@ -80,13 +89,19 @@ export async function saveStyleOptionsAction(formData: FormData) {
     user.id,
     mergeCatalogStyleOptions({
       variant: String(formData.get("variant") ?? "promo"),
+      flyerType: formData.get("flyerType"),
       layoutPreset: formData.get("layoutPreset"),
+      baseFontSize: formData.get("baseFontSize"),
       showNormalPrice: formData.get("showNormalPrice") === "on",
       showPromoPrice: formData.get("showPromoPrice") === "on",
       showDiscountAmount: formData.get("showDiscountAmount") === "on",
       showDiscountPercent: formData.get("showDiscountPercent") === "on",
+      showBarcode: formData.get("showBarcode") === "on",
+      showDates: formData.get("showDates") === "on",
       showSku: formData.get("showSku") === "on",
       showPackSize: formData.get("showPackSize") === "on",
+      promoStartDate: formData.get("promoStartDate"),
+      promoEndDate: formData.get("promoEndDate"),
       pageBackgroundColor: formData.get("pageBackgroundColor"),
       pageBackgroundImageBucket: formData.get("pageBackgroundImageBucket"),
       pageBackgroundImagePath: formData.get("pageBackgroundImagePath"),

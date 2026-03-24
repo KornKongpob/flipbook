@@ -25,6 +25,65 @@ export function formatCompactNumber(value?: number | null) {
   }).format(value ?? 0);
 }
 
+const THAI_SHORT_MONTHS = [
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
+];
+
+export function parseDateInputValue(value?: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [yearValue, monthValue, dayValue] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(yearValue, monthValue - 1, dayValue));
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== yearValue ||
+    parsed.getUTCMonth() !== monthValue - 1 ||
+    parsed.getUTCDate() !== dayValue
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+export function formatThaiFlyerDate(value?: string | null) {
+  const parsed = parseDateInputValue(value);
+
+  if (!parsed) {
+    return null;
+  }
+
+  const day = parsed.getUTCDate();
+  const month = THAI_SHORT_MONTHS[parsed.getUTCMonth()] ?? "";
+  const year = parsed.getUTCFullYear() + 543;
+  return `${day} ${month} ${year}`;
+}
+
+export function formatThaiFlyerDateRange(startDate?: string | null, endDate?: string | null) {
+  const startLabel = formatThaiFlyerDate(startDate);
+  const endLabel = formatThaiFlyerDate(endDate);
+
+  if (startLabel && endLabel) {
+    return `${startLabel} - ${endLabel}`;
+  }
+
+  return startLabel ?? endLabel ?? null;
+}
+
 export function slugify(value: string) {
   return value
     .toLowerCase()

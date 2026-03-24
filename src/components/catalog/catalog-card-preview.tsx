@@ -59,6 +59,7 @@ export function CatalogCardPreview({
     [options],
   );
   const promoActive =
+    style.flyerType === "promo" &&
     promoPrice !== null &&
     promoPrice !== undefined &&
     normalPrice !== null &&
@@ -72,6 +73,7 @@ export function CatalogCardPreview({
     .join(" • ");
   const normalPriceLabel = formatCurrency(normalPrice);
   const promoPriceLabel = formatCurrency(promoPrice);
+  const showSinglePrice = !showPromoLine && style.showNormalPrice;
   const singlePriceLabel = formatCurrency(normalPrice ?? promoPrice);
 
   useEffect(() => {
@@ -129,10 +131,12 @@ export function CatalogCardPreview({
       cardHeight: cardSize.height,
       options: style,
       showDiscountBadge,
+      showMeta: Boolean(meta),
       showPromoLine,
       showNormalPrice,
+      showSinglePrice,
     });
-  }, [cardSize.height, cardSize.width, showDiscountBadge, showNormalPrice, showPromoLine, style]);
+  }, [cardSize.height, cardSize.width, meta, showDiscountBadge, showNormalPrice, showPromoLine, showSinglePrice, style]);
   const imageRenderRect = useMemo(() => {
     if (!cardLayout) {
       return null;
@@ -212,9 +216,10 @@ export function CatalogCardPreview({
               style={{
                 ...rectStyle(cardLayout.titleRect),
                 color: style.titleColor,
-                fontSize: `${style.titleFontSize}px`,
+                fontSize: `${cardLayout.titleFontSize}px`,
                 lineHeight: CATALOG_CARD_TITLE_LINE_HEIGHT,
                 display: "-webkit-box",
+                overflowWrap: "anywhere",
                 WebkitBoxOrient: "vertical",
                 WebkitLineClamp: 2,
               }}
@@ -229,7 +234,7 @@ export function CatalogCardPreview({
               style={{
                 ...rectStyle(cardLayout.metaRect),
                 color: style.metaColor,
-                fontSize: `${style.skuFontSize}px`,
+                fontSize: `${cardLayout.metaFontSize}px`,
                 lineHeight: CATALOG_CARD_META_LINE_HEIGHT,
               }}
             >
@@ -243,7 +248,7 @@ export function CatalogCardPreview({
               style={{
                 ...rectStyle(cardLayout.promoPriceRect),
                 color: style.promoPriceColor,
-                fontSize: `${style.promoPriceFontSize}px`,
+                fontSize: `${cardLayout.promoPriceFontSize}px`,
                 lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
               }}
             >
@@ -257,7 +262,7 @@ export function CatalogCardPreview({
               style={{
                 ...rectStyle(cardLayout.normalPriceRowRect),
                 color: style.normalPriceColor,
-                fontSize: `${style.normalPriceFontSize}px`,
+                fontSize: `${cardLayout.normalPriceFontSize}px`,
                 lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
               }}
             >
@@ -282,14 +287,15 @@ export function CatalogCardPreview({
             </div>
           ) : null}
 
-          {!showPromoLine && cardLayout.singlePriceRect ? (
+          {showSinglePrice && !showPromoLine && cardLayout.singlePriceRect ? (
             <div
               className="absolute overflow-hidden font-bold"
               style={{
                 ...rectStyle(cardLayout.singlePriceRect),
-                color: style.variant === "clean" ? style.titleColor : style.promoPriceColor,
+                color: style.flyerType === "normal" ? style.normalPriceColor : style.promoPriceColor,
                 fontSize: `${cardLayout.singlePriceFontSize}px`,
                 lineHeight: 1,
+                textAlign: style.flyerType === "normal" ? "center" : "left",
               }}
             >
               {singlePriceLabel}

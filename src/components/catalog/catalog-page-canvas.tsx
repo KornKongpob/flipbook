@@ -14,6 +14,7 @@ import {
   type CatalogRect,
 } from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
+import { formatThaiFlyerDateRange } from "@/lib/utils";
 
 export interface CatalogPageCanvasItem {
   id: string;
@@ -34,7 +35,23 @@ interface CatalogPageCanvasProps {
   pageBackgroundPreviewUrl?: string | null;
   headerMediaPreviewUrl?: string | null;
   footerMediaPreviewUrl?: string | null;
+  onItemsReorder?: (orderedItemIds: string[]) => void | Promise<void>;
+  reorderDisabled?: boolean;
   showSafeAreaGuides?: boolean;
+}
+
+function reorderIds(itemIds: string[], activeId: string, targetId: string) {
+  const activeIndex = itemIds.indexOf(activeId);
+  const targetIndex = itemIds.indexOf(targetId);
+
+  if (activeIndex < 0 || targetIndex < 0 || activeIndex === targetIndex) {
+    return itemIds;
+  }
+
+  const nextItemIds = [...itemIds];
+  const [movedItemId] = nextItemIds.splice(activeIndex, 1);
+  nextItemIds.splice(targetIndex, 0, movedItemId);
+  return nextItemIds;
 }
 
 function rectStyle(rect: CatalogRect) {
@@ -130,10 +147,14 @@ export function CatalogPageCanvas({
   pageBackgroundPreviewUrl = null,
   headerMediaPreviewUrl = null,
   footerMediaPreviewUrl = null,
+  onItemsReorder,
+  reorderDisabled = false,
   showSafeAreaGuides = false,
 }: CatalogPageCanvasProps) {
   const pageRef = useRef<HTMLDivElement | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
   const style = useMemo(
     () => ({
       ...DEFAULT_STYLE_OPTIONS,
@@ -157,6 +178,10 @@ export function CatalogPageCanvas({
   const previewScale = previewSize.width > 0 && previewSize.height > 0
     ? Math.min(previewSize.width / layout.pageWidth, previewSize.height / layout.pageHeight)
     : 1;
+  const promoDateLabel = useMemo(
+    () => (style.showDates ? formatThaiFlyerDateRange(style.promoStartDate, style.promoEndDate) : null),
+    [style.promoEndDate, style.promoStartDate, style.showDates],
+  );
 
   useEffect(() => {
     const element = pageRef.current;
@@ -262,6 +287,19 @@ export function CatalogPageCanvas({
               scale={style.footerMediaScale}
             />
 
+            {promoDateLabel ? (
+              <div
+                className="absolute z-20 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-right text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur"
+                style={{
+                  top: `${Math.max(layout.padding * 0.55, 10)}px`,
+                  right: `${layout.padding}px`,
+                  maxWidth: `${Math.min(layout.pageWidth * 0.42, 250)}px`,
+                }}
+              >
+                {promoDateLabel}
+              </div>
+            ) : null}
+
             <div className="relative z-10 flex h-full flex-col" style={{ padding: `${layout.padding}px` }}>
               <SafeAreaGuide height={layout.headerSpace} label="Header media space" show={showSafeAreaGuides} />
 
@@ -276,7 +314,53 @@ export function CatalogPageCanvas({
                 }}
               >
                 {items.map((item) => (
-                  <div key={item.id} className="min-h-0 min-w-0 overflow-hidden">
+                  <div
+                    key={item.id}
+                    draggable={!reorderDisabled && items.length > 1}
+                    onDragStart={(event) => {
+                      if (reorderDisabled) {
+                        return;
+                      }
+
+                      setDraggedItemId(item.id);
+                      setDragOverItemId(item.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", item.id);
+                    }}
+                    onDragOver={(event) => {
+                      if (reorderDisabled || !draggedItemId || draggedItemId === item.id) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setDragOverItemId(item.id);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+
+                      if (reorderDisabled || !draggedItemId || draggedItemId === item.id) {
+                        setDraggedItemId(null);
+                        setDragOverItemId(null);
+                        return;
+                      }
+
+                      const orderedItemIds = reorderIds(
+                        items.map((entry) => entry.id),
+                        draggedItemId,
+                        item.id,
+                      );
+
+                      setDraggedItemId(null);
+                      setDragOverItemId(null);
+                      void onItemsReorder?.(orderedItemIds);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedItemId(null);
+                      setDragOverItemId(null);
+                    }}
+                    className={`min-h-0 min-w-0 overflow-hidden rounded-[22px] transition ${draggedItemId === item.id ? "opacity-75 ring-2 ring-brand/30" : ""} ${dragOverItemId === item.id && draggedItemId !== item.id ? "ring-2 ring-sky-300 ring-offset-2 ring-offset-white/40" : ""} ${!reorderDisabled && items.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+                  >
                     <CatalogCardPreview
                       title={item.title}
                       sku={item.sku}

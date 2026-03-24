@@ -39,8 +39,26 @@ const DISPLAY_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> =
   { key: "showPromoPrice", label: "Promo price" },
   { key: "showDiscountAmount", label: "Discount amount" },
   { key: "showDiscountPercent", label: "Percent off" },
+  { key: "showBarcode", label: "Barcode (phase 2)" },
   { key: "showSku", label: "SKU" },
   { key: "showPackSize", label: "Pack size" },
+];
+
+const FLYER_TYPE_OPTIONS: Array<{
+  value: CatalogStyleOptions["flyerType"];
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "promo",
+    label: "Promo campaign",
+    description: "Show promo price, crossed normal price, and savings emphasis.",
+  },
+  {
+    value: "normal",
+    label: "Normal catalog",
+    description: "Hide promo extras and let image + regular price fill the card cleanly.",
+  },
 ];
 
 const COLOR_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> = [
@@ -375,7 +393,10 @@ export function CatalogStyleControls({
       </div>
       <form onSubmit={(event) => event.preventDefault()} className="space-y-3 bg-[linear-gradient(180deg,rgba(248,250,252,0.68)_0%,rgba(255,255,255,0.96)_100%)] p-4">
         <input type="hidden" name="jobId" value={jobId} />
+        <input type="hidden" name="flyerType" value={style.flyerType} />
         <input type="hidden" name="layoutPreset" value={style.layoutPreset} />
+        <input type="hidden" name="promoStartDate" value={style.promoStartDate ?? ""} />
+        <input type="hidden" name="promoEndDate" value={style.promoEndDate ?? ""} />
         <input type="hidden" name="pageBackgroundImageBucket" value={style.pageBackgroundImageBucket ?? ""} />
         <input type="hidden" name="pageBackgroundImagePath" value={style.pageBackgroundImagePath ?? ""} />
         <input type="hidden" name="headerMediaBucket" value={style.headerMediaBucket ?? ""} />
@@ -441,28 +462,66 @@ export function CatalogStyleControls({
               </div>
             </div>
 
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted">Layout variant</p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { value: "promo", label: "Promo flyer" },
-                  { value: "clean", label: "Clean grid" },
-                ].map((variant) => (
-                  <label
-                    key={variant.value}
-                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-line/80 bg-white p-3 text-xs shadow-sm transition has-[:checked]:border-brand has-[:checked]:bg-brand-soft/10"
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted">Flyer type</p>
+                <span className="text-[11px] text-muted">Switches card layout instantly</span>
+              </div>
+              <div className="grid gap-2">
+                {FLYER_TYPE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onStyleChange("flyerType", option.value)}
+                    className={`rounded-2xl border px-3 py-3 text-left shadow-sm transition ${style.flyerType === option.value ? "border-brand/30 bg-brand-soft/15 shadow-[0_14px_28px_-22px_rgba(37,99,235,0.8)]" : "border-line/80 bg-white hover:border-brand/20"}`}
                   >
-                    <input
-                      type="radio"
-                      name="variant"
-                      value={variant.value}
-                      checked={style.variant === variant.value}
-                      onChange={() => onStyleChange("variant", variant.value)}
-                      className="accent-brand"
-                    />
-                    {variant.label}
-                  </label>
+                    <p className="text-sm font-semibold text-foreground">{option.label}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted-strong">{option.description}</p>
+                  </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line/80 bg-gradient-to-br from-white via-white to-violet-50/55 p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Promotion range</p>
+                  <p className="mt-1 text-[11px] leading-5 text-muted-strong">
+                    These dates are stored at the job level and appear at the top-right of every flyer page.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-3 py-1.5 text-[11px] font-medium text-foreground shadow-sm">
+                  <input
+                    type="checkbox"
+                    name="showDates"
+                    checked={style.showDates}
+                    onChange={(event) => onStyleChange("showDates", event.target.checked)}
+                    className="accent-brand"
+                  />
+                  Show dates
+                </label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1 text-[11px] text-muted">
+                  <span>Start date</span>
+                  <Input
+                    type="date"
+                    name="promoStartDate"
+                    value={style.promoStartDate ?? ""}
+                    onChange={(event) => onStyleChange("promoStartDate", event.target.value || null)}
+                    className="h-9 text-xs"
+                  />
+                </label>
+                <label className="space-y-1 text-[11px] text-muted">
+                  <span>End date</span>
+                  <Input
+                    type="date"
+                    name="promoEndDate"
+                    value={style.promoEndDate ?? ""}
+                    onChange={(event) => onStyleChange("promoEndDate", event.target.value || null)}
+                    className="h-9 text-xs"
+                  />
+                </label>
               </div>
             </div>
           </div>
@@ -478,7 +537,7 @@ export function CatalogStyleControls({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Visible on card</p>
                   <p className="mt-1 text-[11px] leading-5 text-muted-strong">
-                    Quickly control which product details appear across the whole catalog layout.
+                    Quickly control which product details appear across the whole catalog layout. Barcode is prepared as a phase-2 hook for now.
                   </p>
                 </div>
                 <span className="rounded-full border border-line/80 bg-white px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm">
@@ -715,6 +774,34 @@ export function CatalogStyleControls({
         >
           <div className="space-y-4">
             <div className="rounded-2xl border border-line/80 bg-gradient-to-br from-white via-white to-amber-50/50 p-4 shadow-sm space-y-4">
+              <div className="space-y-2 rounded-2xl border border-line/70 bg-white/90 p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Global font scale</p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted-strong">
+                      Scales the shared title, meta, and price typography before the card layout is resolved.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-foreground">
+                    {style.baseFontSize.toFixed(1)}px
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  name="baseFontSize"
+                  min={10}
+                  max={24}
+                  step={0.5}
+                  value={style.baseFontSize}
+                  onChange={(event) => onStyleChange("baseFontSize", Number(event.target.value))}
+                  className={RANGE_INPUT_CLASSNAME}
+                />
+                <div className="flex items-center justify-between text-[10px] text-muted-strong">
+                  <span>Compact</span>
+                  <span>Comfortable</span>
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Product image framing</p>
                 <p className="text-[11px] leading-5 text-muted-strong">

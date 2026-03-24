@@ -537,6 +537,50 @@ export async function moveCatalogItem(
     .eq("id", target.id);
 }
 
+export async function reorderCatalogItems(
+  userId: string,
+  jobId: string,
+  orderedItemIds: string[],
+) {
+  const admin = getAdminClientOrThrow();
+
+  if (!orderedItemIds.length) {
+    return;
+  }
+
+  await ensureJobAccess(admin, jobId, userId);
+
+  const itemsResponse = await admin
+    .from("catalog_items")
+    .select("id")
+    .eq("job_id", jobId)
+    .order("display_order", { ascending: true });
+  const items = asRows<Pick<CatalogItemRow, "id">>(itemsResponse.data);
+  const existingIds = new Set(items.map((item) => item.id));
+  const submittedIds = new Set(orderedItemIds);
+
+  if (
+    items.length !== orderedItemIds.length ||
+    submittedIds.size !== orderedItemIds.length ||
+    orderedItemIds.some((itemId) => !existingIds.has(itemId))
+  ) {
+    throw new Error("Invalid item order payload.");
+  }
+
+  await Promise.all(
+    orderedItemIds.map((itemId, index) =>
+      admin
+        .from("catalog_items")
+        .update({ display_order: index })
+        .eq("id", itemId),
+    ),
+  );
+
+  await appendJobEvent(jobId, "editor", "Reordered catalog items from the interactive editor.", {
+    itemCount: orderedItemIds.length,
+  });
+}
+
 export async function duplicateCatalogJob(jobId: string, userId: string) {
   const admin = getAdminClientOrThrow();
   const bundle = await getCatalogJobBundle(jobId, userId);

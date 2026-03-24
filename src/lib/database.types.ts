@@ -29,6 +29,17 @@ export type CatalogItemStatus =
   | "rejected"
   | "rendered";
 export type FlipbookMode = "manual" | "client_id" | "disabled";
+export type FlyerType = "promo" | "normal";
+
+export interface JobSettings {
+  flyerType?: FlyerType;
+  baseFontSize?: number | null;
+  showBarcode?: boolean;
+  showDates?: boolean;
+  promoStartDate?: string | null;
+  promoEndDate?: string | null;
+}
+
 export type GeneratedFileType =
   | "raw_upload"
   | "generated_pdf"

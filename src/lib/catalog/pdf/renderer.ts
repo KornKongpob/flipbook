@@ -6,8 +6,9 @@ import {
   CATALOG_CARD_TITLE_LINE_HEIGHT,
   resolveCatalogCardLayout,
 } from "@/lib/catalog/card-layout";
-import { chunk, formatCurrency } from "@/lib/utils";
+import { chunk, formatCurrency, formatThaiFlyerDateRange } from "@/lib/utils";
 import { PDF_FONT_PATHS } from "@/lib/catalog/pdf/fonts";
+import { wrapThaiTextWithAutoScaling } from "@/lib/catalog/pdf/text-layout";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import {
   CATALOG_A4_PAGE_SIZE,
@@ -152,6 +153,97 @@ function measurePdfTextWidth(
   return width;
 }
 
+function drawPdfThaiTitleBlock(
+  doc: PDFKit.PDFDocument,
+  originX: number,
+  originY: number,
+  args: PdfTextBlockArgs,
+) {
+  if (args.rect.width <= 0 || args.rect.height <= 0) {
+    return;
+  }
+
+  const layout = wrapThaiTextWithAutoScaling({
+    text: args.text,
+    initialFontSize: args.fontSize,
+    maxWidth: args.rect.width,
+    maxHeight: args.rect.height,
+    lineHeight: args.lineHeight,
+    measureText: (textValue, fontSize) => measurePdfTextWidth(doc, args.fontName, fontSize, textValue),
+  });
+
+  doc.save();
+  doc.fillColor(args.color).font(args.fontName).fontSize(layout.fontSize);
+
+  // แบบนี้ใช้ width ของฟอนต์จริงใน PDFKit เพื่อ wrap ภาษาไทยก่อน แล้วค่อยชดเชย lineGap ให้ตำแหน่งตรงกับ preview มากที่สุด
+  const pdfLineBoxHeight = doc.currentLineHeight(true);
+  const lineGap = layout.lineHeightPx - pdfLineBoxHeight;
+  const textHeight = layout.totalHeight;
+  const yOffset = getPdfVerticalOffset(args.rect.height, textHeight, args.verticalAlign ?? "top");
+
+  doc.text(
+    layout.lines.join("\n"),
+    originX + args.rect.x,
+    originY + args.rect.y + yOffset,
+    {
+      width: args.rect.width,
+      lineGap,
+      align: args.align,
+      ellipsis: false,
+    },
+  );
+  doc.restore();
+}
+
+function drawPromoDateLabel(
+  doc: PDFKit.PDFDocument,
+  pageWidth: number,
+  pagePadding: number,
+  style: CatalogStyleOptions,
+) {
+  if (!style.showDates) {
+    return;
+  }
+
+  const dateLabel = formatThaiFlyerDateRange(style.promoStartDate, style.promoEndDate);
+
+  if (!dateLabel) {
+    return;
+  }
+
+  const fontName = "Sarabun-SemiBold";
+  const fontSize = Math.max(style.baseFontSize - 2, 10);
+  const textWidth = measurePdfTextWidth(doc, fontName, fontSize, dateLabel);
+  const horizontalPadding = 12;
+  const verticalPadding = 7;
+  const pillWidth = Math.min(textWidth + horizontalPadding * 2, pageWidth * 0.42);
+  const pillHeight = fontSize * 1.35 + verticalPadding * 2;
+  const x = pageWidth - pagePadding - pillWidth;
+  const y = Math.max(pagePadding * 0.55, 10);
+
+  doc.save();
+  doc.fillOpacity(0.88);
+  doc.roundedRect(x, y, pillWidth, pillHeight, pillHeight / 2).fillAndStroke("#ffffff", "#dbe4f0");
+  doc.restore();
+
+  drawPdfTextBlock(doc, 0, 0, {
+    rect: {
+      x,
+      y,
+      width: pillWidth - horizontalPadding * 2,
+      height: pillHeight,
+    },
+    text: dateLabel,
+    fontName,
+    fontSize,
+    color: "#334155",
+    lineHeight: 1.05,
+    align: "right",
+    verticalAlign: "middle",
+    ellipsis: false,
+  });
+}
+
 function drawCard(
   doc: PDFKit.PDFDocument,
   item: RenderableCatalogItem,
@@ -163,6 +255,7 @@ function drawCard(
   options: CatalogStyleOptions,
 ) {
   const promoActive =
+    options.flyerType === "promo" &&
     item.promoPrice !== null &&
     item.normalPrice !== null &&
     item.promoPrice > 0 &&
@@ -175,13 +268,19 @@ function drawCard(
   const showPackSize = options.showPackSize;
   const showDiscountBadge = promoActive && showDiscountAmount && item.discountAmount != null;
   const showPromoLine = promoActive && showPromoPrice;
+  const showSinglePrice = !showPromoLine && options.showNormalPrice;
+  const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
+    .filter(Boolean)
+    .join(" • ");
   const cardLayout = resolveCatalogCardLayout({
     cardWidth: width,
     cardHeight: height,
     options,
     showDiscountBadge,
+    showMeta: Boolean(meta),
     showPromoLine,
     showNormalPrice,
+    showSinglePrice,
   });
   const imageRect = cardLayout.imageRect;
   const imageRenderRect = getCatalogMediaRenderRect(imageRect, options.cardImageScale, 0, 0);
@@ -253,11 +352,11 @@ function drawCard(
     doc
       .fillColor(options.discountBadgeTextColor)
       .font("Sarabun-Bold")
-      .fontSize(Math.max(options.skuFontSize, 10))
+      .fontSize(Math.max(cardLayout.metaFontSize, 10))
       .text(
         `ถูกลง ${formatCurrency(item.discountAmount)}`,
         originX + cardLayout.badgeRect.x,
-        originY + cardLayout.badgeRect.y + Math.max((cardLayout.badgeRect.height - Math.max(options.skuFontSize, 10)) / 2 - 1, 0),
+        originY + cardLayout.badgeRect.y + Math.max((cardLayout.badgeRect.height - Math.max(cardLayout.metaFontSize, 10)) / 2 - 1, 0),
         {
           width: cardLayout.badgeRect.width,
           align: "center",
@@ -265,18 +364,15 @@ function drawCard(
       );
   }
 
-  const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
-    .filter(Boolean)
-    .join(" • ");
-
   if (cardLayout.titleRect) {
-    drawPdfTextBlock(doc, originX, originY, {
+    drawPdfThaiTitleBlock(doc, originX, originY, {
       rect: cardLayout.titleRect,
       text: item.displayName,
       fontName: "Sarabun-SemiBold",
-      fontSize: options.titleFontSize,
+      fontSize: cardLayout.titleFontSize,
       color: options.titleColor,
       lineHeight: CATALOG_CARD_TITLE_LINE_HEIGHT,
+      ellipsis: false,
     });
   }
 
@@ -285,7 +381,7 @@ function drawCard(
       rect: cardLayout.metaRect,
       text: meta || " ",
       fontName: "Sarabun-Regular",
-      fontSize: options.skuFontSize,
+      fontSize: cardLayout.metaFontSize,
       color: options.metaColor,
       lineHeight: CATALOG_CARD_META_LINE_HEIGHT,
     });
@@ -296,7 +392,7 @@ function drawCard(
       rect: cardLayout.promoPriceRect,
       text: formatCurrency(item.promoPrice),
       fontName: "Sarabun-Bold",
-      fontSize: options.promoPriceFontSize,
+      fontSize: cardLayout.promoPriceFontSize,
       color: options.promoPriceColor,
       lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
     });
@@ -305,7 +401,7 @@ function drawCard(
       const normalY = originY + cardLayout.normalPriceRowRect.y;
       const normalX = originX + cardLayout.normalPriceRowRect.x;
       const normalPriceFontName = "Sarabun-Regular";
-      const normalPriceFontSize = options.normalPriceFontSize;
+      const normalPriceFontSize = cardLayout.normalPriceFontSize;
       const normalText = formatCurrency(item.normalPrice);
 
       drawPdfTextBlock(doc, originX, originY, {
@@ -318,7 +414,7 @@ function drawCard(
       });
 
       const measured = measurePdfTextWidth(doc, normalPriceFontName, normalPriceFontSize, normalText);
-      const strikeY = normalY + Math.max(options.normalPriceFontSize * 0.55, 6);
+      const strikeY = normalY + Math.max(cardLayout.normalPriceFontSize * 0.55, 6);
       doc
         .moveTo(normalX, strikeY)
         .lineTo(normalX + measured, strikeY)
@@ -336,20 +432,21 @@ function drawCard(
           },
           text: `${item.discountPercent.toFixed(0)}% off`,
           fontName: normalPriceFontName,
-          fontSize: Math.max(options.normalPriceFontSize - 2, 9),
+          fontSize: Math.max(cardLayout.normalPriceFontSize - 2, 9),
           color: options.normalPriceColor,
           lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
         });
       }
     }
-  } else if (cardLayout.singlePriceRect) {
+  } else if (showSinglePrice && cardLayout.singlePriceRect) {
     drawPdfTextBlock(doc, originX, originY, {
       rect: cardLayout.singlePriceRect,
       text: formatCurrency(item.normalPrice ?? item.promoPrice),
       fontName: "Sarabun-Bold",
       fontSize: cardLayout.singlePriceFontSize,
-      color: variant === "clean" ? options.titleColor : options.promoPriceColor,
+      color: options.flyerType === "normal" ? options.normalPriceColor : options.promoPriceColor,
       lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
+      align: options.flyerType === "normal" ? "center" : "left",
     });
   }
 
@@ -411,10 +508,12 @@ export async function renderCatalogPdf({
   footerMediaBuffer = null,
 }: RenderCatalogPdfInput) {
   void _theme;
+  const resolvedVariant = options?.variant ?? (options?.flyerType === "normal" ? "clean" : variant === "clean" ? "clean" : "promo");
   const style: CatalogStyleOptions = {
     ...DEFAULT_STYLE_OPTIONS,
     ...options,
-    variant: options?.variant ?? (variant === "clean" ? "clean" : "promo"),
+    flyerType: options?.flyerType ?? (resolvedVariant === "clean" ? "normal" : DEFAULT_STYLE_OPTIONS.flyerType),
+    variant: resolvedVariant,
   };
   const document = new PDFDocument({
     size: CATALOG_A4_PAGE_SIZE,
@@ -483,6 +582,8 @@ export async function renderCatalogPdf({
       style.footerMediaOffsetX,
       style.footerMediaOffsetY,
     );
+
+    drawPromoDateLabel(document, pageWidth, pageLayout.padding, style);
 
     pageItems.forEach((item, itemIndex) => {
       const column = itemIndex % pageLayout.columns;

@@ -7,19 +7,26 @@ import {
   type CatalogLayoutPreset,
   type CatalogMediaFit,
 } from "@/lib/catalog/layout";
+import type { FlyerType } from "@/lib/database.types";
 
 export type CatalogLayoutVariant = "promo" | "clean";
 export type CatalogBackgroundFit = CatalogMediaFit;
 
 export interface CatalogStyleOptions {
   variant: CatalogLayoutVariant;
+  flyerType: FlyerType;
   layoutPreset: CatalogLayoutPreset;
+  baseFontSize: number;
   showNormalPrice: boolean;
   showPromoPrice: boolean;
   showDiscountAmount: boolean;
   showDiscountPercent: boolean;
+  showBarcode: boolean;
+  showDates: boolean;
   showSku: boolean;
   showPackSize: boolean;
+  promoStartDate: string | null;
+  promoEndDate: string | null;
   pageBackgroundColor: string;
   pageBackgroundImageBucket: string | null;
   pageBackgroundImagePath: string | null;
@@ -85,6 +92,7 @@ export const CATALOG_STYLE_PRESETS: CatalogStylePreset[] = [
     label: "Warm Promo",
     options: {
       variant: "promo",
+      flyerType: "promo",
       pageBackgroundColor: "#fff8f2",
       cardBackgroundColor: "#ffffff",
       cardBorderColor: "#eedbcf",
@@ -102,6 +110,7 @@ export const CATALOG_STYLE_PRESETS: CatalogStylePreset[] = [
     label: "Clean Blue",
     options: {
       variant: "clean",
+      flyerType: "normal",
       pageBackgroundColor: "#f5f8ff",
       cardBackgroundColor: "#ffffff",
       cardBorderColor: "#dbe7ff",
@@ -119,6 +128,7 @@ export const CATALOG_STYLE_PRESETS: CatalogStylePreset[] = [
     label: "Soft Market",
     options: {
       variant: "promo",
+      flyerType: "promo",
       pageBackgroundColor: "#f7fbf7",
       cardBackgroundColor: "#ffffff",
       cardBorderColor: "#d9ead8",
@@ -137,6 +147,10 @@ function isVariant(value: unknown): value is CatalogLayoutVariant {
   return value === "promo" || value === "clean";
 }
 
+function isFlyerType(value: unknown): value is FlyerType {
+  return value === "promo" || value === "normal";
+}
+
 function isBackgroundFit(value: unknown): value is CatalogBackgroundFit {
   return isCatalogMediaFit(value);
 }
@@ -152,6 +166,15 @@ function asNullableString(value: unknown) {
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function asDateString(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
 }
 
 function asNumber(value: unknown, fallback: number, min: number, max: number) {
@@ -179,19 +202,37 @@ function asColor(value: unknown, fallback: string) {
 
 export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | undefined): CatalogStyleOptions {
   const source = raw ?? {};
+  const normalizedFlyerType = isFlyerType(source.flyerType)
+    ? source.flyerType
+    : isVariant(source.variant)
+      ? source.variant === "clean"
+        ? "normal"
+        : "promo"
+      : DEFAULT_STYLE_OPTIONS.flyerType;
+  const normalizedVariant = isVariant(source.variant)
+    ? source.variant
+    : normalizedFlyerType === "normal"
+      ? "clean"
+      : DEFAULT_STYLE_OPTIONS.variant;
 
   return {
     ...DEFAULT_STYLE_OPTIONS,
-    variant: isVariant(source.variant) ? source.variant : DEFAULT_STYLE_OPTIONS.variant,
+    variant: normalizedVariant,
+    flyerType: normalizedFlyerType,
     layoutPreset: isCatalogLayoutPreset(source.layoutPreset)
       ? source.layoutPreset
       : DEFAULT_STYLE_OPTIONS.layoutPreset,
+    baseFontSize: asNumber(source.baseFontSize, DEFAULT_STYLE_OPTIONS.baseFontSize, 10, 24),
     showNormalPrice: asBoolean(source.showNormalPrice, DEFAULT_STYLE_OPTIONS.showNormalPrice),
     showPromoPrice: asBoolean(source.showPromoPrice, DEFAULT_STYLE_OPTIONS.showPromoPrice),
     showDiscountAmount: asBoolean(source.showDiscountAmount, DEFAULT_STYLE_OPTIONS.showDiscountAmount),
     showDiscountPercent: asBoolean(source.showDiscountPercent, DEFAULT_STYLE_OPTIONS.showDiscountPercent),
+    showBarcode: asBoolean(source.showBarcode, DEFAULT_STYLE_OPTIONS.showBarcode),
+    showDates: asBoolean(source.showDates, DEFAULT_STYLE_OPTIONS.showDates),
     showSku: asBoolean(source.showSku, DEFAULT_STYLE_OPTIONS.showSku),
     showPackSize: asBoolean(source.showPackSize, DEFAULT_STYLE_OPTIONS.showPackSize),
+    promoStartDate: asDateString(source.promoStartDate),
+    promoEndDate: asDateString(source.promoEndDate),
     pageBackgroundColor: asColor(source.pageBackgroundColor, DEFAULT_STYLE_OPTIONS.pageBackgroundColor),
     pageBackgroundImageBucket: asNullableString(source.pageBackgroundImageBucket),
     pageBackgroundImagePath: asNullableString(source.pageBackgroundImagePath),
