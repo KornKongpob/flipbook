@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -242,13 +243,13 @@ export function ReviewGrid({
       <div className="rounded-2xl border border-line bg-card px-6 py-12 text-center shadow-sm">
         <CheckCircle className="mx-auto size-10 text-emerald-500 mb-3" />
         <p className="text-sm font-semibold text-foreground">All items reviewed!</p>
-        <p className="mt-1 text-sm text-muted">Ready to proceed to the editor.</p>
-        <a
-          href={`/catalogs/${jobId}/editor`}
+        <p className="mt-1 text-sm text-muted">Ready to proceed to the master card editor.</p>
+        <Link
+          href={`/catalogs/${jobId}/master-card`}
           className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
         >
-          Go to Editor
-        </a>
+          Continue to Master Card
+        </Link>
       </div>
     );
   }
@@ -436,7 +437,7 @@ export function ReviewGrid({
                     <label className="flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-line bg-white px-3 text-xs font-medium text-muted-strong transition hover:border-brand/30 hover:text-brand">
                       <Upload className="size-3.5" />
                       Upload image
-                      <input name="asset" type="file" accept="image/png,image/jpeg,image/webp" required className="sr-only" onChange={(e) => e.target.form?.requestSubmit()} />
+                      <input name="asset" type="file" accept="image/png,image/jpeg" required className="sr-only" onChange={(e) => e.target.form?.requestSubmit()} />
                     </label>
                   </form>
 

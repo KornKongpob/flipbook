@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  BookOpen, FolderOpen, LayoutDashboard, Menu, PlusCircle,
-  Settings, X, LogOut, Zap,
+  BookOpen,
+  FolderOpen,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  PlusCircle,
+  Settings,
+  X,
+  Zap,
 } from "lucide-react";
 import { signOutAction } from "@/app/(app)/actions";
 import { cn } from "@/lib/utils";
@@ -48,12 +55,13 @@ function SidebarContent({
         </div>
 
         <nav className="mt-4 flex flex-col gap-1.5 px-3">
-          <p className="px-3 mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-strong">
+          <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-strong">
             Workspace
           </p>
           {navigation.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
+
             return (
               <Link
                 key={item.href}
@@ -78,13 +86,13 @@ function SidebarContent({
           })}
         </nav>
 
-        <div className="mx-3 mt-auto mb-3 rounded-2xl border border-brand/20 bg-brand-soft/50 p-4 shadow-sm relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 size-24 rounded-full bg-brand/10 blur-xl"></div>
-          <div className="flex items-center gap-2 relative z-10">
+        <div className="relative mx-3 mb-3 mt-auto overflow-hidden rounded-2xl border border-brand/20 bg-brand-soft/50 p-4 shadow-sm">
+          <div className="absolute -right-6 -top-6 size-24 rounded-full bg-brand/10 blur-xl" />
+          <div className="relative z-10 flex items-center gap-2">
             <Zap className="size-4 text-brand" />
             <span className="text-sm font-bold text-brand-strong">Pro Tip</span>
           </div>
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-strong relative z-10">
+          <p className="relative z-10 mt-1.5 text-xs leading-relaxed text-muted-strong">
             Start with a spreadsheet, review low-confidence matches, then finish the design inside the editor.
           </p>
         </div>
@@ -92,7 +100,7 @@ function SidebarContent({
 
       <div className="border-t border-line/50 bg-gray-50/50 p-3">
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold bg-white text-brand shadow-sm border border-line">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-line bg-white text-xs font-bold text-brand shadow-sm">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
@@ -115,12 +123,71 @@ function SidebarContent({
 
 export function AppShell({ children, userLabel }: AppShellProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileDrawerState, setMobileDrawerState] = useState({
+    isOpen: false,
+    openedForPath: null as string | null,
+  });
+  const openMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousMobileOpenRef = useRef(false);
   const initials = userLabel.split("@")[0].slice(0, 2).toUpperCase();
+  const mobileOpen =
+    mobileDrawerState.isOpen && mobileDrawerState.openedForPath === pathname;
+
+  const openMobileMenu = useCallback(() => {
+    setMobileDrawerState({
+      isOpen: true,
+      openedForPath: pathname,
+    });
+  }, [pathname]);
+
+  const closeMobileMenu = useCallback(() => {
+    setMobileDrawerState({
+      isOpen: false,
+      openedForPath: pathname,
+    });
+  }, [pathname]);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (previousMobileOpenRef.current && !mobileOpen) {
+      openMenuButtonRef.current?.focus();
+    }
+
+    previousMobileOpenRef.current = mobileOpen;
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMobileMenu();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeMobileMenu, mobileOpen]);
 
   return (
     <div className="flex min-h-screen">
-      {/* ─── Mobile header ─── */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-white/90 px-4 backdrop-blur-lg lg:hidden">
         <div className="flex items-center gap-2.5">
           <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-sm">
@@ -129,44 +196,61 @@ export function AppShell({ children, userLabel }: AppShellProps) {
           <span className="text-sm font-bold text-foreground">Catalog Studio</span>
         </div>
         <button
-          onClick={() => setMobileOpen(true)}
+          ref={openMenuButtonRef}
+          type="button"
+          onClick={openMobileMenu}
           className="flex size-9 items-center justify-center rounded-lg border border-line bg-white text-muted-strong transition hover:text-foreground"
+          aria-controls="mobile-workspace-drawer"
+          aria-expanded={mobileOpen}
           aria-label="Open menu"
         >
           <Menu className="size-5" />
         </button>
       </header>
 
-      {/* ─── Mobile overlay ─── */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
-      )}
-
-      {/* ─── Mobile drawer ─── */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col overflow-hidden border-r border-line bg-white/70 backdrop-blur-xl transition-transform duration-200 ease-out lg:hidden",
-        mobileOpen ? "translate-x-0" : "-translate-x-full",
-      )}>
-        <div className="flex h-14 items-center justify-between px-4 border-b border-line/50">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-sm">
-              <BookOpen className="size-4 text-white" />
+      {mobileOpen ? (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+            onClick={closeMobileMenu}
+          />
+          <div
+            id="mobile-workspace-drawer"
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col overflow-hidden border-r border-line bg-white/70 backdrop-blur-xl lg:hidden"
+          >
+            <div className="flex h-14 items-center justify-between border-b border-line/50 px-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-sm">
+                  <BookOpen className="size-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">Catalog Studio</p>
+                  <p className="text-[11px] text-muted-strong">Promo workflow v2</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeMobileMenu}
+                className="rounded-md p-1 text-muted transition-colors hover:bg-white/50 hover:text-foreground"
+                aria-label="Close menu"
+              >
+                <X className="size-5" />
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">Catalog Studio</p>
-              <p className="text-[11px] text-muted-strong">Promo workflow v2</p>
-            </div>
+            <SidebarContent
+              pathname={pathname}
+              userLabel={userLabel}
+              initials={initials}
+              onLinkClick={closeMobileMenu}
+            />
           </div>
-          <button onClick={() => setMobileOpen(false)} className="p-1 rounded-md text-muted hover:bg-white/50 hover:text-foreground transition-colors">
-            <X className="size-5" />
-          </button>
-        </div>
-        <SidebarContent pathname={pathname} userLabel={userLabel} initials={initials} onLinkClick={() => setMobileOpen(false)} />
-      </div>
+        </>
+      ) : null}
 
-      {/* ─── Desktop sidebar ─── */}
       <aside className="hidden h-screen w-72 shrink-0 self-start flex-col overflow-hidden border-r border-line/60 bg-white/60 backdrop-blur-xl lg:sticky lg:top-0 lg:flex">
-        <div className="flex h-16 items-center gap-3 px-5 border-b border-line/50">
+        <div className="flex h-16 items-center gap-3 border-b border-line/50 px-5">
           <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 shadow-md shadow-brand/20">
             <BookOpen className="size-5 text-white" />
           </div>
@@ -179,7 +263,6 @@ export function AppShell({ children, userLabel }: AppShellProps) {
         <SidebarContent pathname={pathname} userLabel={userLabel} initials={initials} />
       </aside>
 
-      {/* ─── Main ─── */}
       <main className="flex min-w-0 flex-1 flex-col pt-14 lg:pt-0">
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-5 lg:p-8">
           {children}

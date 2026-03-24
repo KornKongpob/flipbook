@@ -60,10 +60,12 @@ interface EditState {
 type MediaSlotKey = "background" | "header" | "footer";
 
 function ItemEditPanel({
+  error,
   item,
   onSave,
   onCancel,
 }: {
+  error?: string | null;
   item: EditorItem;
   onSave: (fields: Partial<EditState>) => void;
   onCancel: () => void;
@@ -147,6 +149,9 @@ function ItemEditPanel({
           <Check className="size-3" /> Save
         </button>
       </div>
+      {error ? (
+        <p className="text-[11px] font-medium text-rose-600">{error}</p>
+      ) : null}
     </div>
   );
 }
@@ -178,6 +183,7 @@ export function EditorPanel({
   const [items, setItems] = useState<EditorItem[]>(initialItems);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [itemSaveErrors, setItemSaveErrors] = useState<Record<string, string | null>>({});
   const [style, setStyle] = useState<EditorCatalogStyleOptions>(initialStyle);
   const [styleSaving, setStyleSaving] = useState(false);
   const [styleSaveError, setStyleSaveError] = useState<string | null>(null);
@@ -564,6 +570,11 @@ export function EditorPanel({
 
   async function handleSaveItem(itemId: string, fields: Partial<EditState>) {
     setSaving(itemId);
+    setItemSaveErrors((previous) => ({
+      ...previous,
+      [itemId]: null,
+    }));
+
     try {
       const body: Record<string, unknown> = {};
       if (fields.displayName !== undefined) body.displayName = fields.displayName || null;
@@ -579,31 +590,56 @@ export function EditorPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Save failed");
+      const payload = (await res.json().catch(() => null)) as
+        | {
+            error?: string;
+            item?: {
+              displayName: string | null;
+              normalPrice: number | null;
+              promoPrice: number | null;
+              discountAmount: number | null;
+              discountPercent: number | null;
+              packSize: string | null;
+              unit: string | null;
+            };
+          }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Save failed.");
+      }
+
+      if (!payload?.item) {
+        throw new Error("Save succeeded but the updated item payload is missing.");
+      }
+      const updatedItem = payload.item;
 
       setItems((prev) =>
         prev.map((it) => {
           if (it.id !== itemId) return it;
           return {
             ...it,
-            displayName: fields.displayName !== undefined
-              ? (fields.displayName || null)
-              : it.displayName,
-            normalPrice: fields.normalPrice !== undefined
-              ? (fields.normalPrice ? parseFloat(fields.normalPrice) : null)
-              : it.normalPrice,
-            promoPrice: fields.promoPrice !== undefined
-              ? (fields.promoPrice ? parseFloat(fields.promoPrice) : null)
-              : it.promoPrice,
-            packSize: fields.packSize !== undefined
-              ? (fields.packSize || null)
-              : it.packSize,
-            unit: fields.unit !== undefined ? (fields.unit || null) : it.unit,
+            displayName: updatedItem.displayName,
+            normalPrice: updatedItem.normalPrice,
+            promoPrice: updatedItem.promoPrice,
+            discountAmount: updatedItem.discountAmount,
+            discountPercent: updatedItem.discountPercent,
+            packSize: updatedItem.packSize,
+            unit: updatedItem.unit,
           };
         }),
       );
 
+      setItemSaveErrors((previous) => ({
+        ...previous,
+        [itemId]: null,
+      }));
       setEditingId(null);
+    } catch (error) {
+      setItemSaveErrors((previous) => ({
+        ...previous,
+        [itemId]: error instanceof Error ? error.message : "Could not save item changes.",
+      }));
     } finally {
       setSaving(null);
     }
@@ -794,7 +830,13 @@ export function EditorPanel({
                       <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                          onClick={() => {
+                            setItemSaveErrors((previous) => ({
+                              ...previous,
+                              [item.id]: null,
+                            }));
+                            setEditingId(editingId === item.id ? null : item.id);
+                          }}
                           className={`flex size-8 items-center justify-center rounded-lg transition ${editingId === item.id ? "bg-brand-soft text-brand" : "text-muted hover:text-brand hover:bg-brand-soft"}`}
                         >
                           {saving === item.id ? (
@@ -844,6 +886,7 @@ export function EditorPanel({
 
                     {editingId === item.id && (
                       <ItemEditPanel
+                        error={itemSaveErrors[item.id] ?? null}
                         item={item}
                         onSave={(fields) => handleSaveItem(item.id, fields)}
                         onCancel={() => setEditingId(null)}

@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { normalizeName, normalizeSku } from "@/lib/utils";
 
 type ColumnKey =
@@ -285,15 +286,10 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
         return null;
       }
 
-      const hasPromo =
-        promoPrice !== null &&
-        normalPrice !== null &&
-        promoPrice > 0 &&
-        promoPrice < normalPrice;
-      const discountAmount = hasPromo ? Number((normalPrice - promoPrice).toFixed(2)) : null;
-      const discountPercent = hasPromo
-        ? Number((((normalPrice - promoPrice) / normalPrice) * 100).toFixed(2))
-        : null;
+      const pricing = deriveCatalogPricing({
+        normalPrice,
+        promoPrice,
+      });
 
       const normalizedRow: NormalizedCatalogRow = {
         rowNo,
@@ -301,10 +297,10 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
         productName: productName || sku,
         packSize: packSize || null,
         unit: unit || null,
-        normalPrice,
-        promoPrice,
-        discountAmount,
-        discountPercent,
+        normalPrice: pricing.normalPrice,
+        promoPrice: pricing.promoPrice,
+        discountAmount: pricing.discountAmount,
+        discountPercent: pricing.discountPercent,
         normalizedSku: sku ? normalizeSku(sku) : null,
         normalizedName: normalizeName(productName || sku),
         displayOrder: index,

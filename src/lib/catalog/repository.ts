@@ -13,6 +13,8 @@ import {
   type CatalogJobMediaSlot,
 } from "@/lib/catalog/storage";
 import { FILE_BUCKETS } from "@/lib/catalog/constants";
+import { validatePdfRenderableImageBuffer } from "@/lib/catalog/image-validation";
+import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { mergeCatalogStyleOptions, type CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { normalizeSku } from "@/lib/utils";
 
@@ -44,6 +46,16 @@ export interface CatalogJobBundle {
   events: EventRow[];
 }
 
+export interface CatalogItemCanonicalFields {
+  displayName: string | null;
+  normalPrice: number | null;
+  promoPrice: number | null;
+  discountAmount: number | null;
+  discountPercent: number | null;
+  packSize: string | null;
+  unit: string | null;
+}
+
 function asRow<T>(value: unknown) {
   return (value ?? null) as T;
 }
@@ -54,6 +66,32 @@ function asRows<T>(value: unknown) {
 
 function asJson(value: unknown) {
   return value as Json;
+}
+
+function toCatalogItemCanonicalFields(item: Pick<
+  CatalogItemRow,
+  | "display_name_override"
+  | "normal_price"
+  | "promo_price"
+  | "discount_amount"
+  | "discount_percent"
+  | "pack_size"
+  | "unit"
+>) {
+  const pricing = deriveCatalogPricing({
+    normalPrice: item.normal_price,
+    promoPrice: item.promo_price,
+  });
+
+  return {
+    displayName: item.display_name_override,
+    normalPrice: pricing.normalPrice,
+    promoPrice: pricing.promoPrice,
+    discountAmount: pricing.discountAmount,
+    discountPercent: pricing.discountPercent,
+    packSize: item.pack_size,
+    unit: item.unit,
+  } satisfies CatalogItemCanonicalFields;
 }
 
 function getAdminClientOrThrow() {
@@ -966,11 +1004,25 @@ export async function attachManualAssetToItem(args: {
   }
 
   const job = await ensureJobAccess(admin, item.job_id, args.userId);
+  let contentType: "image/png" | "image/jpeg";
+
+  try {
+    ({ contentType } = validatePdfRenderableImageBuffer(args.fileBuffer));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Uploaded image is invalid.";
+
+    if (message === "Manual uploads must be a valid PNG or JPEG image.") {
+      throw new Error(message);
+    }
+
+    throw new Error("Uploaded image could not be processed. Please use a valid PNG or JPEG image.");
+  }
+
   const target = buildManualAssetTarget(args.userId, job.id, item.id, args.fileName);
   const uploadResponse = await admin.storage
     .from(target.bucket)
     .upload(target.path, args.fileBuffer, {
-      contentType: args.contentType,
+      contentType,
       upsert: false,
     });
 
@@ -991,11 +1043,12 @@ export async function attachManualAssetToItem(args: {
       storage_path: target.path,
       image_url: null,
       fetched_at: new Date().toISOString(),
-      metadata_json: asJson({
-        uploadedBy: args.userId,
-        originalFileName: args.fileName,
-      }),
-    })
+        metadata_json: asJson({
+          uploadedBy: args.userId,
+          originalFileName: args.fileName,
+          validatedContentType: contentType,
+        }),
+      })
     .select("*")
     .single();
   const asset = asRow<ProductAssetRow | null>(assetResponse.data);
@@ -1094,21 +1147,21 @@ export async function bulkApproveCatalogItems(args: {
   const admin = getAdminClientOrThrow();
   await ensureJobAccess(admin, args.jobId, args.userId);
 
-  const query = admin
+  let query = admin
     .from("catalog_items")
     .select("id, selected_asset_id, match_status, confidence, job_id")
-    .eq("job_id", args.jobId)
-    .eq("match_status", "needs_review")
-    .not("selected_asset_id", "is", null);
+    .eq("job_id", args.jobId);
+
+  if (args.itemIds?.length) {
+    query = query.in("id", args.itemIds);
+  }
 
   const itemsResponse = await query;
   let candidates = asRows<
     Pick<CatalogItemRow, "id" | "selected_asset_id" | "match_status" | "confidence" | "job_id">
-  >(itemsResponse.data);
-
-  if (args.itemIds?.length) {
-    candidates = candidates.filter((candidate) => args.itemIds!.includes(candidate.id));
-  }
+  >(itemsResponse.data).filter(
+    (candidate) => candidate.match_status === "needs_review" && Boolean(candidate.selected_asset_id),
+  );
   if (args.minConfidence != null) {
     candidates = candidates.filter((candidate) => (candidate.confidence ?? 0) >= args.minConfidence!);
   }
@@ -1150,8 +1203,6 @@ export async function updateCatalogItemFields(
     displayName?: string | null;
     normalPrice?: number | null;
     promoPrice?: number | null;
-    discountAmount?: number | null;
-    discountPercent?: number | null;
     packSize?: string | null;
     unit?: string | null;
   },
@@ -1159,10 +1210,23 @@ export async function updateCatalogItemFields(
   const admin = getAdminClientOrThrow();
   const itemResponse = await admin
     .from("catalog_items")
-    .select("id, job_id")
+    .select(
+      "id, job_id, display_name_override, normal_price, promo_price, discount_amount, discount_percent, pack_size, unit",
+    )
     .eq("id", itemId)
     .maybeSingle();
-  const item = asRow<Pick<CatalogItemRow, "id" | "job_id"> | null>(itemResponse.data);
+  const item = asRow<Pick<
+    CatalogItemRow,
+    | "id"
+    | "job_id"
+    | "display_name_override"
+    | "normal_price"
+    | "promo_price"
+    | "discount_amount"
+    | "discount_percent"
+    | "pack_size"
+    | "unit"
+  > | null>(itemResponse.data);
 
   if (!item) throw new Error("Catalog item not found.");
 
@@ -1170,14 +1234,49 @@ export async function updateCatalogItemFields(
 
   const update: Record<string, unknown> = {};
   if ("displayName" in fields) update.display_name_override = fields.displayName?.trim() || null;
-  if ("normalPrice" in fields) update.normal_price = fields.normalPrice;
-  if ("promoPrice" in fields) update.promo_price = fields.promoPrice;
-  if ("discountAmount" in fields) update.discount_amount = fields.discountAmount;
-  if ("discountPercent" in fields) update.discount_percent = fields.discountPercent;
   if ("packSize" in fields) update.pack_size = fields.packSize?.trim() || null;
   if ("unit" in fields) update.unit = fields.unit?.trim() || null;
 
-  await admin.from("catalog_items").update(update).eq("id", itemId);
+  if ("normalPrice" in fields || "promoPrice" in fields) {
+    const pricing = deriveCatalogPricing({
+      normalPrice: "normalPrice" in fields ? fields.normalPrice : item.normal_price,
+      promoPrice: "promoPrice" in fields ? fields.promoPrice : item.promo_price,
+    });
+
+    update.normal_price = pricing.normalPrice;
+    update.promo_price = pricing.promoPrice;
+    update.discount_amount = pricing.discountAmount;
+    update.discount_percent = pricing.discountPercent;
+  }
+
+  if (!Object.keys(update).length) {
+    return toCatalogItemCanonicalFields(item);
+  }
+
+  const updateResponse = await admin
+    .from("catalog_items")
+    .update(update)
+    .eq("id", itemId)
+    .select(
+      "display_name_override, normal_price, promo_price, discount_amount, discount_percent, pack_size, unit",
+    )
+    .single();
+  const updatedItem = asRow<Pick<
+    CatalogItemRow,
+    | "display_name_override"
+    | "normal_price"
+    | "promo_price"
+    | "discount_amount"
+    | "discount_percent"
+    | "pack_size"
+    | "unit"
+  > | null>(updateResponse.data);
+
+  if (updateResponse.error || !updatedItem) {
+    throw updateResponse.error ?? new Error("Could not update catalog item.");
+  }
+
+  return toCatalogItemCanonicalFields(updatedItem);
 }
 
 export function getChecksum(buffer: Buffer) {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { renderCatalogPdf } from "@/lib/catalog/pdf/renderer";
 import { createHeyzineFlipbook } from "@/lib/catalog/flipbooks/heyzine";
+import { coercePdfRenderableImageBuffer } from "@/lib/catalog/image-validation";
+import { deriveCatalogPricing } from "@/lib/catalog/pricing";
+import { renderCatalogPdf } from "@/lib/catalog/pdf/renderer";
 import {
   beginPdfGeneration,
   createGeneratedFileRecord,
@@ -19,6 +21,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 const SEE_OTHER = 303;
 
+class RecoverablePdfGenerationError extends Error {}
+
+function getReturnPath(jobId: string, returnTo: string) {
+  return `/catalogs/${jobId}/${returnTo === "result" ? "result" : "generate"}`;
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ jobId: string }> },
@@ -33,43 +41,57 @@ export async function POST(
     return NextResponse.redirect(new URL("/login", request.url), SEE_OTHER);
   }
 
+  const formData = await request.formData().catch(() => null);
+  const returnTo = String(formData?.get("returnTo") ?? "generate");
+  const returnPath = getReturnPath(jobId, returnTo);
+
   try {
+    const bundle = await getCatalogJobBundle(jobId, user.id);
+
+    if (["uploaded", "parsing", "matching"].includes(bundle.job.status)) {
+      throw new RecoverablePdfGenerationError("Finish matching the catalog items before generating the PDF.");
+    }
+
+    if (bundle.job.review_required_count > 0) {
+      throw new RecoverablePdfGenerationError("Resolve all review-required items before generating the PDF.");
+    }
+
+    const visibleItems = bundle.items.filter((item) => item.is_visible);
+
+    if (!visibleItems.length) {
+      throw new RecoverablePdfGenerationError("At least one visible product is required to generate the PDF.");
+    }
+
     const didStartGeneration = await beginPdfGeneration(jobId, user.id);
 
     if (!didStartGeneration) {
-      return NextResponse.redirect(
-        new URL(`/catalogs/${jobId}/generate?error=${encodeURIComponent("PDF generation is already in progress.")}`, request.url),
-        SEE_OTHER,
-      );
-    }
-
-    const bundle = await getCatalogJobBundle(jobId, user.id);
-
-    if (bundle.job.review_required_count > 0) {
-      throw new Error("Resolve all review-required items before generating the PDF.");
+      throw new RecoverablePdfGenerationError("PDF generation is already in progress.");
     }
 
     const renderItems = await Promise.all(
-      bundle.items
-        .filter((item) => item.is_visible)
-        .map(async (item) => ({
+      visibleItems.map(async (item) => {
+        const pricing = deriveCatalogPricing({
+          normalPrice: item.normal_price,
+          promoPrice: item.promo_price,
+        });
+
+        return {
           id: item.id,
           sku: item.sku,
           productName: item.product_name,
           displayName: item.display_name_override || item.product_name,
           packSize: item.pack_size,
           unit: item.unit,
-          normalPrice: item.normal_price,
-          promoPrice: item.promo_price,
-          discountAmount: item.discount_amount,
-          discountPercent: item.discount_percent,
-          imageBuffer: await resolveProductAssetBuffer(item.selectedAsset),
-        })),
+        normalPrice: pricing.normalPrice,
+        promoPrice: pricing.promoPrice,
+        discountAmount: pricing.discountAmount,
+        discountPercent: pricing.discountPercent,
+        imageBuffer: coercePdfRenderableImageBuffer(
+          await resolveProductAssetBuffer(item.selectedAsset),
+        ),
+      };
+    }),
     );
-
-    if (!renderItems.length) {
-      throw new Error("At least one visible product is required to generate the PDF.");
-    }
 
     const theme = (bundle.template?.theme_json as Record<string, string>) ?? {};
     const styleOptions = mergeCatalogStyleOptions(
@@ -102,7 +124,6 @@ export async function POST(
 
     await updateCatalogJobAfterPdf(jobId, user.id, pageCount);
 
-    // Heyzine flipbook conversion is decoupled: PDF success is preserved even if Heyzine fails
     if (bundle.job.flipbook_mode === "client_id") {
       try {
         const pdfUrl = await getSignedFileUrl(pdfFile.id, user.id, 3600);
@@ -125,20 +146,26 @@ export async function POST(
           console.warn(`[generate-pdf] Heyzine client_id not configured for job ${jobId}, staying at pdf_ready`);
         }
       } catch (heyzineError) {
-        // PDF was generated successfully — do NOT mark job as failed
         const heyzineMessage = heyzineError instanceof Error ? heyzineError.message : "Flipbook conversion failed.";
         console.error(`[generate-pdf] Heyzine conversion failed for job ${jobId}: ${heyzineMessage}`);
-        // Job stays at pdf_ready status (set by updateCatalogJobAfterPdf), user can retry flipbook from result page
       }
     }
 
     return NextResponse.redirect(new URL(`/catalogs/${jobId}/result`, request.url), SEE_OTHER);
   } catch (error) {
     const message = error instanceof Error ? error.message : "PDF generation failed.";
+
+    if (error instanceof RecoverablePdfGenerationError) {
+      return NextResponse.redirect(
+        new URL(`${returnPath}?error=${encodeURIComponent(message)}`, request.url),
+        SEE_OTHER,
+      );
+    }
+
     await markJobStatus(jobId, user.id, "failed", message);
 
     return NextResponse.redirect(
-      new URL(`/catalogs/${jobId}/generate?error=${encodeURIComponent(message)}`, request.url),
+      new URL(`${returnPath}?error=${encodeURIComponent(message)}`, request.url),
       SEE_OTHER,
     );
   }

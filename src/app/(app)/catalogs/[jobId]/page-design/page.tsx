@@ -13,6 +13,7 @@ import {
   mergeCatalogStyleOptions,
   withCatalogMediaPreviews,
 } from "@/lib/catalog/style-options";
+import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 
 export default async function CatalogPageDesignPage({
   params,
@@ -48,21 +49,28 @@ export default async function CatalogPageDesignPage({
   );
 
   const items = await Promise.all(
-    bundle.items.map(async (item) => ({
-      id: item.id,
-      productName: item.product_name,
-      displayName: item.display_name_override,
-      sku: item.sku,
-      packSize: item.pack_size,
-      unit: item.unit,
-      normalPrice: item.normal_price,
-      promoPrice: item.promo_price,
-      discountAmount: item.discount_amount,
-      discountPercent: item.discount_percent,
-      previewUrl: await resolveProductAssetPreviewUrl(item.selectedAsset),
-      isVisible: item.is_visible,
-      displayOrder: item.display_order,
-    })),
+    bundle.items.map(async (item) => {
+      const pricing = deriveCatalogPricing({
+        normalPrice: item.normal_price,
+        promoPrice: item.promo_price,
+      });
+
+      return {
+        id: item.id,
+        productName: item.product_name,
+        displayName: item.display_name_override,
+        sku: item.sku,
+        packSize: item.pack_size,
+        unit: item.unit,
+        normalPrice: pricing.normalPrice,
+        promoPrice: pricing.promoPrice,
+        discountAmount: pricing.discountAmount,
+        discountPercent: pricing.discountPercent,
+        previewUrl: await resolveProductAssetPreviewUrl(item.selectedAsset),
+        isVisible: item.is_visible,
+        displayOrder: item.display_order,
+      };
+    }),
   );
 
   const pendingReview = bundle.items.filter((i) => i.match_status === "needs_review").length;

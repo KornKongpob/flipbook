@@ -129,7 +129,7 @@ export const FLIPBOOK_MODE_OPTIONS: Array<{
   {
     value: "client_id",
     label: "Auto to Heyzine",
-    description: "Automatically upload and create a digital flipbook on Heyzine using your API key.",
+    description: "Automatically upload and create a digital flipbook on Heyzine using your client_id integration.",
   },
   {
     value: "manual",

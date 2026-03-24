@@ -2,6 +2,7 @@ import { chunk } from "@/lib/utils";
 import { CatalogPageCanvas } from "@/components/catalog/catalog-page-canvas";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import { getCatalogItemsPerPage } from "@/lib/catalog/layout";
+import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import type { CatalogItemView } from "@/lib/catalog/repository";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
@@ -35,18 +36,25 @@ export function PagePreviewGrid({ items, options }: PagePreviewGridProps) {
       {pages.map((pageItems, pageIndex) => (
         <CatalogPageCanvas
           key={pageIndex}
-          items={pageItems.map((item) => ({
-            id: item.id,
-            title: item.display_name_override || item.product_name,
-            sku: item.sku,
-            packSize: item.pack_size,
-            unit: item.unit,
-            normalPrice: item.normal_price,
-            promoPrice: item.promo_price,
-            discountAmount: item.discount_amount,
-            discountPercent: item.discount_percent,
-            imageUrl: item.previewUrl,
-          }))}
+          items={pageItems.map((item) => {
+            const pricing = deriveCatalogPricing({
+              normalPrice: item.normal_price,
+              promoPrice: item.promo_price,
+            });
+
+            return {
+              id: item.id,
+              title: item.display_name_override || item.product_name,
+              sku: item.sku,
+              packSize: item.pack_size,
+              unit: item.unit,
+              normalPrice: pricing.normalPrice,
+              promoPrice: pricing.promoPrice,
+              discountAmount: pricing.discountAmount,
+              discountPercent: pricing.discountPercent,
+              imageUrl: item.previewUrl,
+            };
+          })}
           options={style}
         />
       ))}

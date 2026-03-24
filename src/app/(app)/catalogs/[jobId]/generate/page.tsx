@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { Loader2, Play, RefreshCw } from "lucide-react";
 import { CatalogJobHeader } from "@/components/catalog/catalog-job-header";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { SurfaceCard, SurfaceCardBody, SurfaceCardHeader } from "@/components/ui/surface-card";
 import { requireUser } from "@/lib/auth";
 import { getCatalogJobBundle, getLatestPdfFile } from "@/lib/catalog/repository";
-import { Loader2, Play, RefreshCw } from "lucide-react";
 
 export default async function CatalogGeneratePage({
   params,
@@ -26,6 +26,10 @@ export default async function CatalogGeneratePage({
       : null;
   const isGenerating = bundle.job.status === "generating_pdf";
   const isPdfReady = ["pdf_ready", "completed", "converting_flipbook"].includes(bundle.job.status);
+  const visibleCount = bundle.items.filter((item) => item.is_visible).length;
+  const hiddenCount = bundle.items.length - visibleCount;
+  const matchingInProgress = ["uploaded", "parsing", "matching"].includes(bundle.job.status);
+  const canGenerate = !isGenerating && !matchingInProgress && bundle.job.review_required_count === 0 && visibleCount > 0;
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -39,7 +43,7 @@ export default async function CatalogGeneratePage({
         actions={
           <div className="flex w-full flex-wrap items-center gap-2 sm:justify-end">
             <Link href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}>
-              ← Back to Page Design
+              Back to Page Design
             </Link>
             {isPdfReady ? (
               <Link href={`/catalogs/${jobId}/result`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}>
@@ -47,16 +51,17 @@ export default async function CatalogGeneratePage({
               </Link>
             ) : null}
             <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
-              <Button className="h-auto min-h-9 max-w-full gap-1.5 px-3 py-2 text-center text-xs leading-4" disabled={isGenerating}>
+              <input type="hidden" name="returnTo" value="generate" />
+              <Button className="h-auto min-h-9 max-w-full gap-1.5 px-3 py-2 text-center text-xs leading-4" disabled={!canGenerate}>
                 {isGenerating ? <Loader2 className="size-3.5 animate-spin" /> : latestPdf ? <RefreshCw className="size-3.5" /> : <Play className="size-3.5" />}
-                {isGenerating ? "Generating…" : latestPdf ? "Regenerate PDF" : "Generate PDF"}
+                {isGenerating ? "Generating..." : latestPdf ? "Regenerate PDF" : "Generate PDF"}
               </Button>
             </form>
           </div>
         }
         metrics={[
-          { label: "Visible products", value: `${bundle.items.filter((item) => item.is_visible).length}` },
-          { label: "Hidden products", value: `${bundle.items.filter((item) => !item.is_visible).length}` },
+          { label: "Visible products", value: `${visibleCount}` },
+          { label: "Hidden products", value: `${hiddenCount}` },
           { label: "Pages", value: bundle.job.page_count ? `${bundle.job.page_count}` : latestPdf ? "Generated" : "Pending" },
         ]}
       />
@@ -93,7 +98,7 @@ export default async function CatalogGeneratePage({
               </div>
               <div className="rounded-2xl border border-line bg-white/70 px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Visible products</p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{bundle.items.filter((item) => item.is_visible).length}</p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{visibleCount}</p>
               </div>
               <div className="rounded-2xl border border-line bg-white/70 px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Layout preset</p>
@@ -105,11 +110,23 @@ export default async function CatalogGeneratePage({
               </div>
             </div>
 
-            {bundle.job.review_required_count > 0 ? (
+            {matchingInProgress ? (
+              <StatusBanner
+                tone="warning"
+                title="Matching is still in progress"
+                description="Wait for matching and review preparation to finish before generating the PDF."
+              />
+            ) : bundle.job.review_required_count > 0 ? (
               <StatusBanner
                 tone="warning"
                 title="Review is not fully cleared"
                 description="Resolve remaining review-required items before generating the final PDF."
+              />
+            ) : visibleCount === 0 ? (
+              <StatusBanner
+                tone="warning"
+                title="No visible products to export"
+                description="Make at least one product visible in Page Design before generating the final PDF."
               />
             ) : (
               <StatusBanner
@@ -130,9 +147,10 @@ export default async function CatalogGeneratePage({
               Use this step whenever you want to create the current PDF output from the latest page design and master card settings.
             </p>
             <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
-              <Button className="h-10 w-full gap-2" disabled={isGenerating || bundle.job.review_required_count > 0}>
+              <input type="hidden" name="returnTo" value="generate" />
+              <Button className="h-10 w-full gap-2" disabled={!canGenerate}>
                 {isGenerating ? <Loader2 className="size-4 animate-spin" /> : latestPdf ? <RefreshCw className="size-4" /> : <Play className="size-4" />}
-                {isGenerating ? "Generating…" : latestPdf ? "Regenerate PDF" : "Generate PDF"}
+                {isGenerating ? "Generating..." : latestPdf ? "Regenerate PDF" : "Generate PDF"}
               </Button>
             </form>
             <Link href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-10 w-full text-sm")}>
