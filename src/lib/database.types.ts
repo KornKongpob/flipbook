@@ -31,21 +31,24 @@ export type CatalogItemStatus =
 export type FlipbookMode = "manual" | "client_id" | "disabled";
 export type FlyerType = "promo" | "normal";
 
-export interface CatalogCardElementPosition {
+export interface CatalogCardElementLayoutSettings {
   x?: number | null;
   y?: number | null;
+  width?: number | null;
+  height?: number | null;
+  visible?: boolean | null;
 }
 
 export interface MasterCardLayoutSettings {
-  image?: CatalogCardElementPosition;
-  discountBadge?: CatalogCardElementPosition;
-  title?: CatalogCardElementPosition;
-  meta?: CatalogCardElementPosition;
-  promoPrice?: CatalogCardElementPosition;
-  normalPrice?: CatalogCardElementPosition;
-  discountPercent?: CatalogCardElementPosition;
-  singlePrice?: CatalogCardElementPosition;
-  strikeLine?: CatalogCardElementPosition;
+  image?: CatalogCardElementLayoutSettings;
+  discountBadge?: CatalogCardElementLayoutSettings;
+  title?: CatalogCardElementLayoutSettings;
+  meta?: CatalogCardElementLayoutSettings;
+  promoPrice?: CatalogCardElementLayoutSettings;
+  normalPrice?: CatalogCardElementLayoutSettings;
+  discountPercent?: CatalogCardElementLayoutSettings;
+  singlePrice?: CatalogCardElementLayoutSettings;
+  strikeLine?: CatalogCardElementLayoutSettings;
 }
 
 export interface JobSettings {

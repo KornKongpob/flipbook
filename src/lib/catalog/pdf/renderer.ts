@@ -307,37 +307,30 @@ function drawCard(
     showDiscountPercent: Boolean(showDiscountPercent && item.discountPercent),
   });
   const imageRect = elementRects.imageRect;
-  const imageRenderRect = getCatalogMediaRenderRect(imageRect, options.cardImageScale, 0, 0);
+  const imageRenderRect = imageRect
+    ? getCatalogMediaRenderRect(imageRect, options.cardImageScale, 0, 0)
+    : null;
   const imageRadius = Math.max(options.cardRadius - 6, 8);
-  const imageOptions = options.cardImageFit === "contain"
-    ? {
-        fit: [imageRenderRect.width, imageRenderRect.height] as [number, number],
-        align: "center" as const,
-        valign: "center" as const,
-      }
-    : {
-        cover: [imageRenderRect.width, imageRenderRect.height] as [number, number],
-        align: "center" as const,
-        valign: "center" as const,
-      };
+  const imageOptions = imageRenderRect
+    ? options.cardImageFit === "contain"
+      ? {
+          fit: [imageRenderRect.width, imageRenderRect.height] as [number, number],
+          align: "center" as const,
+          valign: "center" as const,
+        }
+      : {
+          cover: [imageRenderRect.width, imageRenderRect.height] as [number, number],
+          align: "center" as const,
+          valign: "center" as const,
+        }
+    : null;
 
   doc.save();
   doc
     .roundedRect(originX, originY, width, height, options.cardRadius)
     .fillAndStroke(options.cardBackgroundColor, options.cardBorderColor);
 
-  doc
-    .roundedRect(
-      originX + imageRect.x,
-      originY + imageRect.y,
-      imageRect.width,
-      imageRect.height,
-      imageRadius,
-    )
-    .fill(options.imageBackgroundColor);
-
-  if (item.imageBuffer) {
-    doc.save();
+  if (imageRect) {
     doc
       .roundedRect(
         originX + imageRect.x,
@@ -346,20 +339,33 @@ function drawCard(
         imageRect.height,
         imageRadius,
       )
-      .clip();
-    doc.image(item.imageBuffer, originX + imageRenderRect.x, originY + imageRenderRect.y, imageOptions as never);
-    doc.restore();
-  } else {
-    drawFallbackImage(
-      doc,
-      originX + imageRect.x,
-      originY + imageRect.y,
-      imageRect.width,
-      imageRect.height,
-      options.imageBackgroundColor,
-      options.metaColor,
-      imageRadius,
-    );
+      .fill(options.imageBackgroundColor);
+
+    if (item.imageBuffer && imageRenderRect && imageOptions) {
+      doc.save();
+      doc
+        .roundedRect(
+          originX + imageRect.x,
+          originY + imageRect.y,
+          imageRect.width,
+          imageRect.height,
+          imageRadius,
+        )
+        .clip();
+      doc.image(item.imageBuffer, originX + imageRenderRect.x, originY + imageRenderRect.y, imageOptions as never);
+      doc.restore();
+    } else {
+      drawFallbackImage(
+        doc,
+        originX + imageRect.x,
+        originY + imageRect.y,
+        imageRect.width,
+        imageRect.height,
+        options.imageBackgroundColor,
+        options.metaColor,
+        imageRadius,
+      );
+    }
   }
 
   if (showDiscountBadge && elementRects.badgeRect) {

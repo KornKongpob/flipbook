@@ -17,6 +17,15 @@ export interface CatalogCardElementOffset {
   y: number;
 }
 
+export interface CatalogCardElementSizeAdjustment {
+  width: number;
+  height: number;
+}
+
+export interface CatalogMasterCardElementLayout extends CatalogCardElementOffset, CatalogCardElementSizeAdjustment {
+  visible: boolean;
+}
+
 export interface CatalogRectLike {
   x: number;
   y: number;
@@ -36,7 +45,7 @@ export interface CatalogBaseCardElementRects {
 }
 
 export interface CatalogResolvedCardElementRects {
-  imageRect: CatalogRectLike;
+  imageRect: CatalogRectLike | null;
   badgeRect: CatalogRectLike | null;
   titleRect: CatalogRectLike | null;
   metaRect: CatalogRectLike | null;
@@ -47,36 +56,51 @@ export interface CatalogResolvedCardElementRects {
   strikeLineRect: CatalogRectLike | null;
 }
 
-export type CatalogMasterCardLayout = Record<CatalogCardElementKey, CatalogCardElementOffset>;
+export type CatalogMasterCardLayout = Record<CatalogCardElementKey, CatalogMasterCardElementLayout>;
 
-const OFFSET_MIN = -160;
-const OFFSET_MAX = 160;
+const ADJUSTMENT_MIN = -160;
+const ADJUSTMENT_MAX = 160;
+const MIN_ELEMENT_SIZE = 1;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function asOffsetValue(value: unknown) {
+function asAdjustmentValue(value: unknown) {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
 
   if (!Number.isFinite(parsed)) {
     return 0;
   }
 
-  return clamp(parsed, OFFSET_MIN, OFFSET_MAX);
+  return clamp(parsed, ADJUSTMENT_MIN, ADJUSTMENT_MAX);
+}
+
+function asVisibleValue(value: unknown) {
+  return typeof value === "boolean" ? value : true;
+}
+
+export function createDefaultCatalogMasterCardElementLayout(): CatalogMasterCardElementLayout {
+  return {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    visible: true,
+  };
 }
 
 export function createDefaultCatalogMasterCardLayout(): CatalogMasterCardLayout {
   return {
-    image: { x: 0, y: 0 },
-    discountBadge: { x: 0, y: 0 },
-    title: { x: 0, y: 0 },
-    meta: { x: 0, y: 0 },
-    promoPrice: { x: 0, y: 0 },
-    normalPrice: { x: 0, y: 0 },
-    discountPercent: { x: 0, y: 0 },
-    singlePrice: { x: 0, y: 0 },
-    strikeLine: { x: 0, y: 0 },
+    image: createDefaultCatalogMasterCardElementLayout(),
+    discountBadge: createDefaultCatalogMasterCardElementLayout(),
+    title: createDefaultCatalogMasterCardElementLayout(),
+    meta: createDefaultCatalogMasterCardElementLayout(),
+    promoPrice: createDefaultCatalogMasterCardElementLayout(),
+    normalPrice: createDefaultCatalogMasterCardElementLayout(),
+    discountPercent: createDefaultCatalogMasterCardElementLayout(),
+    singlePrice: createDefaultCatalogMasterCardElementLayout(),
+    strikeLine: createDefaultCatalogMasterCardElementLayout(),
   };
 }
 
@@ -87,7 +111,13 @@ export function mergeCatalogMasterCardLayout(raw: unknown): CatalogMasterCardLay
     return fallback;
   }
 
-  const source = raw as Partial<Record<CatalogCardElementKey, { x?: unknown; y?: unknown }>>;
+  const source = raw as Partial<Record<CatalogCardElementKey, {
+    x?: unknown;
+    y?: unknown;
+    width?: unknown;
+    height?: unknown;
+    visible?: unknown;
+  }>>;
   const nextLayout = createDefaultCatalogMasterCardLayout();
 
   CATALOG_CARD_ELEMENT_KEYS.forEach((key) => {
@@ -98,38 +128,43 @@ export function mergeCatalogMasterCardLayout(raw: unknown): CatalogMasterCardLay
     }
 
     nextLayout[key] = {
-      x: asOffsetValue(entry.x),
-      y: asOffsetValue(entry.y),
+      x: asAdjustmentValue(entry.x),
+      y: asAdjustmentValue(entry.y),
+      width: asAdjustmentValue(entry.width),
+      height: asAdjustmentValue(entry.height),
+      visible: asVisibleValue(entry.visible),
     };
   });
 
   return nextLayout;
 }
 
-export function offsetCatalogRect<T extends { x: number; y: number }>(
+export function getCatalogCardElementLayout(
+  layout: CatalogMasterCardLayout | null | undefined,
+  key: CatalogCardElementKey,
+): CatalogMasterCardElementLayout {
+  if (!layout) {
+    return createDefaultCatalogMasterCardElementLayout();
+  }
+
+  return layout[key] ?? createDefaultCatalogMasterCardElementLayout();
+}
+
+export function adjustCatalogRect<T extends CatalogRectLike>(
   rect: T | null,
-  offset: CatalogCardElementOffset,
+  layoutEntry: CatalogMasterCardElementLayout,
 ): T | null {
-  if (!rect) {
+  if (!rect || !layoutEntry.visible) {
     return null;
   }
 
   return {
     ...rect,
-    x: rect.x + offset.x,
-    y: rect.y + offset.y,
+    x: rect.x + layoutEntry.x,
+    y: rect.y + layoutEntry.y,
+    width: Math.max(rect.width + layoutEntry.width, MIN_ELEMENT_SIZE),
+    height: Math.max(rect.height + layoutEntry.height, MIN_ELEMENT_SIZE),
   };
-}
-
-export function getCatalogCardElementOffset(
-  layout: CatalogMasterCardLayout | null | undefined,
-  key: CatalogCardElementKey,
-): CatalogCardElementOffset {
-  if (!layout) {
-    return { x: 0, y: 0 };
-  }
-
-  return layout[key] ?? { x: 0, y: 0 };
 }
 
 function createRect(x: number, y: number, width: number, height: number): CatalogRectLike | null {
@@ -152,9 +187,9 @@ export function resolveCatalogCardElementRects(args: {
     normalPriceTextWidth,
     showDiscountPercent,
   } = args;
-  const normalPriceRect = offsetCatalogRect(
+  const normalPriceRect = adjustCatalogRect(
     baseRects.normalPriceRect,
-    getCatalogCardElementOffset(masterCardLayout, "normalPrice"),
+    getCatalogCardElementLayout(masterCardLayout, "normalPrice"),
   );
   const strikeLineBaseRect = normalPriceRect
     ? createRect(
@@ -174,20 +209,20 @@ export function resolveCatalogCardElementRects(args: {
     : null;
 
   return {
-    imageRect: offsetCatalogRect(baseRects.imageRect, getCatalogCardElementOffset(masterCardLayout, "image")) ?? baseRects.imageRect,
-    badgeRect: offsetCatalogRect(baseRects.badgeRect, getCatalogCardElementOffset(masterCardLayout, "discountBadge")),
-    titleRect: offsetCatalogRect(baseRects.titleRect, getCatalogCardElementOffset(masterCardLayout, "title")),
-    metaRect: offsetCatalogRect(baseRects.metaRect, getCatalogCardElementOffset(masterCardLayout, "meta")),
-    promoPriceRect: offsetCatalogRect(baseRects.promoPriceRect, getCatalogCardElementOffset(masterCardLayout, "promoPrice")),
+    imageRect: adjustCatalogRect(baseRects.imageRect, getCatalogCardElementLayout(masterCardLayout, "image")),
+    badgeRect: adjustCatalogRect(baseRects.badgeRect, getCatalogCardElementLayout(masterCardLayout, "discountBadge")),
+    titleRect: adjustCatalogRect(baseRects.titleRect, getCatalogCardElementLayout(masterCardLayout, "title")),
+    metaRect: adjustCatalogRect(baseRects.metaRect, getCatalogCardElementLayout(masterCardLayout, "meta")),
+    promoPriceRect: adjustCatalogRect(baseRects.promoPriceRect, getCatalogCardElementLayout(masterCardLayout, "promoPrice")),
     normalPriceRect,
-    discountPercentRect: offsetCatalogRect(
+    discountPercentRect: adjustCatalogRect(
       discountPercentBaseRect,
-      getCatalogCardElementOffset(masterCardLayout, "discountPercent"),
+      getCatalogCardElementLayout(masterCardLayout, "discountPercent"),
     ),
-    singlePriceRect: offsetCatalogRect(baseRects.singlePriceRect, getCatalogCardElementOffset(masterCardLayout, "singlePrice")),
-    strikeLineRect: offsetCatalogRect(
+    singlePriceRect: adjustCatalogRect(baseRects.singlePriceRect, getCatalogCardElementLayout(masterCardLayout, "singlePrice")),
+    strikeLineRect: adjustCatalogRect(
       strikeLineBaseRect,
-      getCatalogCardElementOffset(masterCardLayout, "strikeLine"),
+      getCatalogCardElementLayout(masterCardLayout, "strikeLine"),
     ),
   } satisfies CatalogResolvedCardElementRects;
 }

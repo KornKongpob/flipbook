@@ -189,14 +189,15 @@ export function CatalogCardPreview({
       showDiscountPercent: Boolean(style.showDiscountPercent && discountPercent),
     });
   }, [cardLayout, discountPercent, normalPriceTextWidth, style.masterCardLayout, style.showDiscountPercent]);
+  const imageRect = elementRects?.imageRect ?? null;
+  const badgeRect = elementRects?.badgeRect ?? null;
   const imageRenderRect = useMemo(() => {
-    if (!cardLayout) {
+    if (!cardLayout || !imageRect) {
       return null;
     }
 
-    const adjustedImageRect = elementRects?.imageRect ?? cardLayout.imageRect;
-    return getCatalogMediaRenderRect(adjustedImageRect, style.cardImageScale, 0, 0);
-  }, [cardLayout, elementRects, style.cardImageScale]);
+    return getCatalogMediaRenderRect(imageRect, style.cardImageScale, 0, 0);
+  }, [cardLayout, imageRect, style.cardImageScale]);
 
   useEffect(() => {
     onResolvedElementRects?.(elementRects);
@@ -215,48 +216,50 @@ export function CatalogCardPreview({
     >
       {cardLayout ? (
         <>
-          <div
-            className="absolute overflow-hidden"
-            style={{
-              ...rectStyle(elementRects?.imageRect ?? cardLayout.imageRect),
-              borderRadius: `${Math.max(style.cardRadius - 6, 8)}px`,
-              backgroundColor: style.imageBackgroundColor,
-            }}
-          >
-            {imageUrl && !imgFailed && imageRenderRect ? (
-              <div
-                className="absolute"
-                style={{
-                  left: `${imageRenderRect.x - (elementRects?.imageRect ?? cardLayout.imageRect).x}px`,
-                  top: `${imageRenderRect.y - (elementRects?.imageRect ?? cardLayout.imageRect).y}px`,
-                  width: `${imageRenderRect.width}px`,
-                  height: `${imageRenderRect.height}px`,
-                }}
-              >
-                <div className="relative h-full w-full">
-                  <Image
-                    src={imageUrl}
-                    alt={title}
-                    fill
-                    className={style.cardImageFit === "cover" ? "object-cover" : "object-contain"}
-                    sizes="200px"
-                    unoptimized
-                    onError={() => setImgFailed(true)}
-                  />
+          {imageRect ? (
+            <div
+              className="absolute overflow-hidden"
+              style={{
+                ...rectStyle(imageRect),
+                borderRadius: `${Math.max(style.cardRadius - 6, 8)}px`,
+                backgroundColor: style.imageBackgroundColor,
+              }}
+            >
+              {imageUrl && !imgFailed && imageRenderRect ? (
+                <div
+                  className="absolute"
+                  style={{
+                    left: `${imageRenderRect.x - imageRect.x}px`,
+                    top: `${imageRenderRect.y - imageRect.y}px`,
+                    width: `${imageRenderRect.width}px`,
+                    height: `${imageRenderRect.height}px`,
+                  }}
+                >
+                  <div className="relative h-full w-full">
+                    <Image
+                      src={imageUrl}
+                      alt={title}
+                      fill
+                      className={style.cardImageFit === "cover" ? "object-cover" : "object-contain"}
+                      sizes="200px"
+                      unoptimized
+                      onError={() => setImgFailed(true)}
+                    />
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <span className="text-[10px] font-medium" style={{ color: style.metaColor }}>No image</span>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <span className="text-[10px] font-medium" style={{ color: style.metaColor }}>No image</span>
+                </div>
+              )}
+            </div>
+          ) : null}
 
-          {showDiscountBadge && cardLayout.badgeRect ? (
+          {showDiscountBadge && badgeRect ? (
             <div
               className="absolute flex items-center justify-center overflow-hidden rounded-full text-center font-bold"
               style={{
-                ...rectStyle(elementRects?.badgeRect ?? cardLayout.badgeRect),
+                ...rectStyle(badgeRect),
                 backgroundColor: style.discountBadgeBackgroundColor,
                 color: style.discountBadgeTextColor,
                 fontSize: `${Math.max(style.skuFontSize, 10)}px`,

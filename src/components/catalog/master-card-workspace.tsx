@@ -10,14 +10,17 @@ import { Input } from "@/components/ui/input";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { SurfaceCard, SurfaceCardBody, SurfaceCardHeader } from "@/components/ui/surface-card";
 import {
+  createDefaultCatalogMasterCardElementLayout,
   createDefaultCatalogMasterCardLayout,
   CATALOG_CARD_ELEMENT_KEYS,
   type CatalogCardElementKey,
+  type CatalogMasterCardElementLayout,
   type CatalogMasterCardLayout,
   type CatalogResolvedCardElementRects,
 } from "@/lib/catalog/master-card-layout";
+import type { FlyerType } from "@/lib/database.types";
 import { buildCatalogStyleFormData, serializeStyleFormData } from "@/lib/catalog/style-form-data";
-import type { EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
+import type { CatalogLayoutVariant, EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Grip, Loader2, RefreshCw, Save, Sparkles } from "lucide-react";
 
@@ -55,12 +58,16 @@ const NUDGE_STEP_OPTIONS = [1, 4, 8] as const;
 type GridSizeOption = (typeof GRID_SIZE_OPTIONS)[number];
 type NudgeStepOption = (typeof NUDGE_STEP_OPTIONS)[number];
 
-function clampOffset(value: number) {
+function clampAdjustment(value: number) {
   return Math.min(160, Math.max(-160, value));
 }
 
-function snapOffsetToGrid(value: number, step: number) {
+function snapAdjustmentToGrid(value: number, step: number) {
   return Math.round(value / step) * step;
+}
+
+function getVariantFromFlyerType(flyerType: FlyerType): CatalogLayoutVariant {
+  return flyerType === "normal" ? "clean" : "promo";
 }
 
 function layoutsEqual(left: CatalogMasterCardLayout, right: CatalogMasterCardLayout) {
@@ -94,6 +101,7 @@ export function MasterCardWorkspace({
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [gridSize, setGridSize] = useState<GridSizeOption>(8);
   const [nudgeStep, setNudgeStep] = useState<NudgeStepOption>(1);
+  const [previewFlyerType, setPreviewFlyerType] = useState<FlyerType>(initialStyle.flyerType);
 
   const visibleItems = useMemo(
     () => [...initialItems].sort((left, right) => left.displayOrder - right.displayOrder).filter((item) => item.isVisible),
@@ -110,9 +118,11 @@ export function MasterCardWorkspace({
   const previewStyle = useMemo(
     () => ({
       ...style,
+      flyerType: previewFlyerType,
+      variant: getVariantFromFlyerType(previewFlyerType),
       masterCardLayout: draftLayout,
     }),
-    [draftLayout, style],
+    [draftLayout, previewFlyerType, style],
   );
   const hasUnappliedChanges = useMemo(
     () => !layoutsEqual(draftLayout, style.masterCardLayout),
@@ -233,7 +243,23 @@ export function MasterCardWorkspace({
     }
   }, [draftLayout, hasUnappliedChanges, jobId, persistStyle, router, style]);
 
-  const updateDraftOffset = useCallback(
+  const updateDraftLayoutEntry = useCallback(
+    (
+      key: CatalogCardElementKey,
+      updates: Partial<CatalogMasterCardElementLayout>,
+    ) => {
+      setDraftLayout((previous) => ({
+        ...previous,
+        [key]: {
+          ...previous[key],
+          ...updates,
+        },
+      }));
+    },
+    [],
+  );
+
+  const updateDraftPosition = useCallback(
     (
       key: CatalogCardElementKey,
       nextX: number,
@@ -241,30 +267,65 @@ export function MasterCardWorkspace({
       options: { snap?: boolean } = {},
     ) => {
       const shouldSnap = options.snap ?? false;
-      const resolvedX = shouldSnap ? snapOffsetToGrid(nextX, gridSize) : nextX;
-      const resolvedY = shouldSnap ? snapOffsetToGrid(nextY, gridSize) : nextY;
+      const resolvedX = shouldSnap ? snapAdjustmentToGrid(nextX, gridSize) : nextX;
+      const resolvedY = shouldSnap ? snapAdjustmentToGrid(nextY, gridSize) : nextY;
 
-      setDraftLayout((previous) => ({
-        ...previous,
-        [key]: {
-          x: clampOffset(resolvedX),
-          y: clampOffset(resolvedY),
-        },
-      }));
+      updateDraftLayoutEntry(key, {
+        x: clampAdjustment(resolvedX),
+        y: clampAdjustment(resolvedY),
+      });
     },
-    [gridSize],
+    [gridSize, updateDraftLayoutEntry],
+  );
+
+  const updateDraftSize = useCallback(
+    (
+      key: CatalogCardElementKey,
+      nextWidth: number,
+      nextHeight: number,
+      options: { snap?: boolean } = {},
+    ) => {
+      const shouldSnap = options.snap ?? false;
+      const resolvedWidth = shouldSnap ? snapAdjustmentToGrid(nextWidth, gridSize) : nextWidth;
+      const resolvedHeight = shouldSnap ? snapAdjustmentToGrid(nextHeight, gridSize) : nextHeight;
+
+      updateDraftLayoutEntry(key, {
+        width: clampAdjustment(resolvedWidth),
+        height: clampAdjustment(resolvedHeight),
+      });
+    },
+    [gridSize, updateDraftLayoutEntry],
+  );
+
+  const updateDraftVisibility = useCallback(
+    (key: CatalogCardElementKey, nextVisible: boolean) => {
+      updateDraftLayoutEntry(key, { visible: nextVisible });
+    },
+    [updateDraftLayoutEntry],
   );
 
   const nudgeSelectedElement = useCallback(
     (deltaX: number, deltaY: number) => {
-      const currentOffset = draftLayout[selectedElement];
-      updateDraftOffset(
+      const currentLayout = draftLayout[selectedElement];
+      updateDraftPosition(
         selectedElement,
-        currentOffset.x + deltaX * nudgeStep,
-        currentOffset.y + deltaY * nudgeStep,
+        currentLayout.x + deltaX * nudgeStep,
+        currentLayout.y + deltaY * nudgeStep,
       );
     },
-    [draftLayout, nudgeStep, selectedElement, updateDraftOffset],
+    [draftLayout, nudgeStep, selectedElement, updateDraftPosition],
+  );
+
+  const resizeSelectedElement = useCallback(
+    (deltaWidth: number, deltaHeight: number) => {
+      const currentLayout = draftLayout[selectedElement];
+      updateDraftSize(
+        selectedElement,
+        currentLayout.width + deltaWidth * nudgeStep,
+        currentLayout.height + deltaHeight * nudgeStep,
+      );
+    },
+    [draftLayout, nudgeStep, selectedElement, updateDraftSize],
   );
 
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, key: CatalogCardElementKey) => {
@@ -276,12 +337,12 @@ export function MasterCardWorkspace({
 
     const startX = event.clientX;
     const startY = event.clientY;
-    const startOffset = draftLayout[key];
+    const startLayout = draftLayout[key];
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
-      updateDraftOffset(key, startOffset.x + deltaX, startOffset.y + deltaY, { snap: snapToGrid });
+      updateDraftPosition(key, startLayout.x + deltaX, startLayout.y + deltaY, { snap: snapToGrid });
     };
 
     const handlePointerUp = () => {
@@ -298,10 +359,51 @@ export function MasterCardWorkspace({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-  }, [draftLayout, snapToGrid, updateDraftOffset]);
+  }, [draftLayout, snapToGrid, updateDraftPosition]);
 
-  const selectedOffset = draftLayout[selectedElement];
+  const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, key: CatalogCardElementKey) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedElement(key);
+
+    dragCleanupRef.current?.();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startLayout = draftLayout[key];
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      updateDraftSize(key, startLayout.width + deltaX, startLayout.height + deltaY, { snap: snapToGrid });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      dragCleanupRef.current = null;
+    };
+
+    dragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      dragCleanupRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, [draftLayout, snapToGrid, updateDraftSize]);
+
+  const selectedLayout = draftLayout[selectedElement];
   const selectedRect = selectedElement ? resolvedRects?.[ELEMENT_LABELS[selectedElement].rectKey] ?? null : null;
+  const visibleElementCount = useMemo(
+    () => CATALOG_CARD_ELEMENT_KEYS.filter((key) => draftLayout[key].visible).length,
+    [draftLayout],
+  );
+  const renderedElementCount = useMemo(
+    () => CATALOG_CARD_ELEMENT_KEYS.filter((key) => Boolean(resolvedRects?.[ELEMENT_LABELS[key].rectKey])).length,
+    [resolvedRects],
+  );
 
   if (!selectedItem) {
     return (
@@ -321,14 +423,14 @@ export function MasterCardWorkspace({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Step 3</p>
-                <h2 className="mt-1 text-sm font-semibold text-foreground">Master Card Controls</h2>
+                <h2 className="mt-1 text-sm font-semibold text-foreground">Master Card Layout</h2>
               </div>
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
                 {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved" : "Saved"}
               </span>
             </div>
             <p className="text-xs leading-5 text-muted-strong">
-              Drag individual card elements on X/Y axes, apply the layout to the job, then continue to page design.
+              Define the shared product-card structure once: move, resize, and show or hide reusable elements before applying the layout to every card.
             </p>
           </div>
         </SurfaceCardHeader>
@@ -344,67 +446,73 @@ export function MasterCardWorkspace({
           <div className="rounded-2xl border border-line bg-slate-50/70 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Card rendering</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These settings affect how prices and promo elements appear in the shared card layout.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Layout preview mode</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">Switch between promo and normal previews to inspect which shared elements exist in each card mode. This does not save style changes.</p>
               </div>
+              <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                {previewFlyerType === "promo" ? "Promo preview" : "Normal preview"}
+              </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => setStyle((previous) => ({ ...previous, flyerType: "promo", variant: "promo" }))}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${style.flyerType === "promo" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                onClick={() => setPreviewFlyerType("promo")}
+                className={`rounded-2xl border px-3 py-3 text-left transition ${previewFlyerType === "promo" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
               >
                 <p className="text-sm font-semibold">Promo</p>
-                <p className="mt-1 text-[11px] leading-5">Show promo price, badge, and discount context.</p>
+                <p className="mt-1 text-[11px] leading-5">Preview promo-price, discount badge, strike-through, and savings elements.</p>
               </button>
               <button
                 type="button"
-                onClick={() => setStyle((previous) => ({ ...previous, flyerType: "normal", variant: "clean" }))}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${style.flyerType === "normal" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                onClick={() => setPreviewFlyerType("normal")}
+                className={`rounded-2xl border px-3 py-3 text-left transition ${previewFlyerType === "normal" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
               >
                 <p className="text-sm font-semibold">Normal</p>
-                <p className="mt-1 text-[11px] leading-5">Hide promo extras and focus on image + regular price.</p>
+                <p className="mt-1 text-[11px] leading-5">Preview the simplified card with image, title, meta, and a single regular price.</p>
               </button>
             </div>
-            <label className="flex items-center gap-3 rounded-2xl border border-line bg-white px-3 py-3 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={style.showPriceDecimals}
-                onChange={(event) => setStyle((previous) => ({ ...previous, showPriceDecimals: event.target.checked }))}
-                className="accent-brand"
-              />
-              <div>
-                <p className="font-medium">Show satang / decimals</p>
-                <p className="mt-0.5 text-[11px] text-muted-strong">Apply the same currency formatting across preview and PDF.</p>
-              </div>
-            </label>
+            <div className="flex flex-wrap gap-2 text-[11px] text-muted-strong">
+              <span className="rounded-full border border-line bg-white px-2.5 py-1">{visibleElementCount} visible in shared layout</span>
+              <span className="rounded-full border border-line bg-white px-2.5 py-1">{renderedElementCount} rendered in this preview</span>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Editable elements</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">Select an element, drag it on the sample card, snap it to the grid, or fine tune it with nudges and exact offsets.</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">Select any shared card element, then move it, resize its box, or hide it from the reusable layout.</p>
               </div>
               <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                {CATALOG_CARD_ELEMENT_KEYS.filter((key) => resolvedRects?.[ELEMENT_LABELS[key].rectKey]).length}/{CATALOG_CARD_ELEMENT_KEYS.length}
+                {renderedElementCount}/{CATALOG_CARD_ELEMENT_KEYS.length} rendered
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {CATALOG_CARD_ELEMENT_KEYS.map((key) => {
-                const isAvailable = Boolean(resolvedRects?.[ELEMENT_LABELS[key].rectKey]);
                 const isSelected = selectedElement === key;
+                const isVisible = draftLayout[key].visible;
+                const rect = resolvedRects?.[ELEMENT_LABELS[key].rectKey] ?? null;
 
                 return (
                   <button
                     key={key}
                     type="button"
-                    disabled={!isAvailable}
                     onClick={() => setSelectedElement(key)}
-                    className={`rounded-2xl border px-3 py-3 text-left transition ${isSelected ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"} ${!isAvailable ? "cursor-not-allowed opacity-45" : ""}`}
+                    className={`rounded-2xl border px-3 py-3 text-left transition ${isSelected ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
                   >
-                    <p className="text-sm font-semibold">{ELEMENT_LABELS[key].label}</p>
-                    <p className="mt-1 text-[11px] leading-5">{isAvailable ? `X ${draftLayout[key].x}px · Y ${draftLayout[key].y}px` : "Hidden in current card mode"}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold">{ELEMENT_LABELS[key].label}</p>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${isVisible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                        {isVisible ? "Visible" : "Hidden"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-5">
+                      {!isVisible
+                        ? "Hidden from the shared layout"
+                        : rect
+                          ? `X ${draftLayout[key].x}px · Y ${draftLayout[key].y}px · W ${draftLayout[key].width}px · H ${draftLayout[key].height}px`
+                          : `Not rendered in ${previewFlyerType} preview`}
+                    </p>
                   </button>
                 );
               })}
@@ -445,7 +553,7 @@ export function MasterCardWorkspace({
               <Sparkles className="size-4" />
               Apply master card
             </Button>
-            <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => updateDraftOffset(selectedElement, 0, 0)}>
+            <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => updateDraftLayoutEntry(selectedElement, createDefaultCatalogMasterCardElementLayout())}>
               <RefreshCw className="size-4" />
               Reset selected
             </Button>
@@ -466,14 +574,14 @@ export function MasterCardWorkspace({
               onClick={() => setDraftLayout(createDefaultCatalogMasterCardLayout())}
             >
               <RefreshCw className="size-4" />
-              Reset all offsets
+              Reset all layout
             </Button>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
             <Button type="button" className="h-10 gap-2" onClick={() => { void handleSave(); }} disabled={styleSaving || pageDesignPending}>
               {styleSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save style
+              Save layout
             </Button>
             <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => { void handleOpenPageDesign(); }} disabled={styleSaving || pageDesignPending}>
               {pageDesignPending ? <Loader2 className="size-4 animate-spin" /> : <Grip className="size-4" />}
@@ -489,11 +597,14 @@ export function MasterCardWorkspace({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Master card canvas</p>
-                <h2 className="mt-1 text-sm font-semibold text-foreground">Drag the active card elements</h2>
+                <h2 className="mt-1 text-sm font-semibold text-foreground">Drag and resize the active card elements</h2>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
                   {ELEMENT_LABELS[selectedElement].label}
+                </span>
+                <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                  {previewFlyerType === "promo" ? "Promo preview" : "Normal preview"}
                 </span>
                 <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
                   {snapToGrid ? `Snap ${gridSize}px` : "Free drag"}
@@ -541,13 +652,9 @@ export function MasterCardWorkspace({
                     const isSelected = selectedElement === key;
 
                     return (
-                      <button
+                      <div
                         key={key}
-                        type="button"
-                        aria-label={`Move ${ELEMENT_LABELS[key].label}`}
-                        onClick={() => setSelectedElement(key)}
-                        onPointerDown={(event) => handlePointerDown(event, key)}
-                        className={`absolute cursor-grab rounded-xl border-2 border-dashed text-left transition active:cursor-grabbing ${isSelected ? "border-brand bg-brand/10 shadow-sm" : "border-sky-300/90 bg-sky-100/35 hover:border-brand/40 hover:bg-brand-soft/10"}`}
+                        className="absolute"
                         style={{
                           left: `${rect.x}px`,
                           top: `${rect.y}px`,
@@ -555,10 +662,27 @@ export function MasterCardWorkspace({
                           height: `${Math.max(rect.height, 12)}px`,
                         }}
                       >
-                        <span className={`absolute -top-6 left-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm ${isSelected ? "bg-brand text-white" : "bg-white text-foreground border border-line"}`}>
-                          {ELEMENT_LABELS[key].label}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          aria-label={`Move ${ELEMENT_LABELS[key].label}`}
+                          onClick={() => setSelectedElement(key)}
+                          onPointerDown={(event) => handlePointerDown(event, key)}
+                          className={`absolute inset-0 cursor-grab rounded-xl border-2 border-dashed text-left transition active:cursor-grabbing ${isSelected ? "border-brand bg-brand/10 shadow-sm" : "border-sky-300/90 bg-sky-100/35 hover:border-brand/40 hover:bg-brand-soft/10"}`}
+                        >
+                          <span className={`absolute -top-6 left-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm ${isSelected ? "bg-brand text-white" : "bg-white text-foreground border border-line"}`}>
+                            {ELEMENT_LABELS[key].label}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Resize ${ELEMENT_LABELS[key].label}`}
+                          onClick={() => setSelectedElement(key)}
+                          onPointerDown={(event) => handleResizePointerDown(event, key)}
+                          className={`absolute -bottom-3 -right-3 flex size-6 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm ${isSelected ? "border-brand bg-brand text-white" : "border-line bg-white text-foreground hover:border-brand/30 hover:bg-brand-soft/10"}`}
+                        >
+                          ↘
+                        </button>
+                      </div>
                     );
                   }) : null}
                 </div>
@@ -572,14 +696,26 @@ export function MasterCardWorkspace({
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Selected element</p>
                     <p className="mt-2 text-sm font-semibold text-foreground">{ELEMENT_LABELS[selectedElement].label}</p>
                     <p className="mt-1 text-[11px] leading-5 text-muted-strong">
-                      Drag directly on the canvas, toggle the grid for alignment, and use exact nudges when you need sub-grid adjustments.
+                      Move the element on the canvas, drag the corner handle to resize its box, or fine-tune the shared layout adjustments below.
                     </p>
                   </div>
-                  <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                    X {selectedOffset.x}px · Y {selectedOffset.y}px
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${selectedLayout.visible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                    {selectedLayout.visible ? "Visible" : "Hidden"}
                   </span>
                 </div>
                 <div className="mt-4 space-y-3">
+                  <label className="flex items-center gap-3 rounded-2xl border border-line bg-slate-50 px-3 py-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={selectedLayout.visible}
+                      onChange={(event) => updateDraftVisibility(selectedElement, event.target.checked)}
+                      className="accent-brand"
+                    />
+                    <div>
+                      <p className="font-medium">Show element in shared layout</p>
+                      <p className="mt-0.5 text-[11px] text-muted-strong">Turn this off when every product card should hide this element by default.</p>
+                    </div>
+                  </label>
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="inline-flex items-center gap-2 rounded-full border border-line bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-foreground">
                       <input
@@ -621,9 +757,9 @@ export function MasterCardWorkspace({
               <div className="rounded-2xl border border-line bg-white p-4 shadow-sm space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Precise positioning</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Position & size adjustments</p>
                     <p className="mt-1 text-[11px] leading-5 text-muted-strong">
-                      Use the nudge pad for quick adjustments or type exact X/Y offsets when aligning tricky elements.
+                      Use nudges for quick edits, then enter exact X/Y and width/height adjustments when you need a repeatable card template.
                     </p>
                   </div>
                   <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
@@ -645,60 +781,110 @@ export function MasterCardWorkspace({
                     ))}
                   </div>
                 </div>
-                <div className="mx-auto grid max-w-[176px] grid-cols-3 gap-2">
-                  <div />
-                  <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(0, -1)}>
-                    <ArrowUp className="size-4" />
-                  </Button>
-                  <div />
-                  <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(-1, 0)}>
-                    <ArrowLeft className="size-4" />
-                  </Button>
-                  <div className="flex h-10 items-center justify-center rounded-xl border border-line bg-slate-50 text-[11px] font-medium text-muted-strong">
-                    ±{nudgeStep}px
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-medium text-muted">Move element</p>
+                    <div className="mx-auto grid max-w-[176px] grid-cols-3 gap-2">
+                      <div />
+                      <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(0, -1)}>
+                        <ArrowUp className="size-4" />
+                      </Button>
+                      <div />
+                      <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(-1, 0)}>
+                        <ArrowLeft className="size-4" />
+                      </Button>
+                      <div className="flex h-10 items-center justify-center rounded-xl border border-line bg-slate-50 text-[11px] font-medium text-muted-strong">
+                        ±{nudgeStep}px
+                      </div>
+                      <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(1, 0)}>
+                        <ArrowRight className="size-4" />
+                      </Button>
+                      <div />
+                      <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(0, 1)}>
+                        <ArrowDown className="size-4" />
+                      </Button>
+                      <div />
+                    </div>
                   </div>
-                  <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(1, 0)}>
-                    <ArrowRight className="size-4" />
-                  </Button>
-                  <div />
-                  <Button type="button" variant="secondary" className="h-10 px-0" onClick={() => nudgeSelectedElement(0, 1)}>
-                    <ArrowDown className="size-4" />
-                  </Button>
-                  <div />
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-medium text-muted">Resize element box</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(-1, 0)}>
+                        Narrower
+                      </Button>
+                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(1, 0)}>
+                        Wider
+                      </Button>
+                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(0, -1)}>
+                        Shorter
+                      </Button>
+                      <Button type="button" variant="secondary" className="h-10 text-xs" onClick={() => resizeSelectedElement(0, 1)}>
+                        Taller
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-[11px] text-muted">
-                    <span>X offset</span>
+                    <span>X adjustment</span>
                     <Input
                       type="number"
                       min={-160}
                       max={160}
                       step={nudgeStep}
-                      value={String(selectedOffset.x)}
-                      onChange={(event) => updateDraftOffset(selectedElement, Number(event.target.value), selectedOffset.y)}
+                      value={String(selectedLayout.x)}
+                      onChange={(event) => updateDraftPosition(selectedElement, Number(event.target.value), selectedLayout.y)}
                       className="h-10 text-sm"
                     />
                   </label>
                   <label className="space-y-1 text-[11px] text-muted">
-                    <span>Y offset</span>
+                    <span>Y adjustment</span>
                     <Input
                       type="number"
                       min={-160}
                       max={160}
                       step={nudgeStep}
-                      value={String(selectedOffset.y)}
-                      onChange={(event) => updateDraftOffset(selectedElement, selectedOffset.x, Number(event.target.value))}
+                      value={String(selectedLayout.y)}
+                      onChange={(event) => updateDraftPosition(selectedElement, selectedLayout.x, Number(event.target.value))}
+                      className="h-10 text-sm"
+                    />
+                  </label>
+                  <label className="space-y-1 text-[11px] text-muted">
+                    <span>Width adjustment</span>
+                    <Input
+                      type="number"
+                      min={-160}
+                      max={160}
+                      step={nudgeStep}
+                      value={String(selectedLayout.width)}
+                      onChange={(event) => updateDraftSize(selectedElement, Number(event.target.value), selectedLayout.height)}
+                      className="h-10 text-sm"
+                    />
+                  </label>
+                  <label className="space-y-1 text-[11px] text-muted">
+                    <span>Height adjustment</span>
+                    <Input
+                      type="number"
+                      min={-160}
+                      max={160}
+                      step={nudgeStep}
+                      value={String(selectedLayout.height)}
+                      onChange={(event) => updateDraftSize(selectedElement, selectedLayout.width, Number(event.target.value))}
                       className="h-10 text-sm"
                     />
                   </label>
                 </div>
                 {selectedRect ? (
                   <div className="rounded-2xl border border-line bg-slate-50 px-3 py-3 text-[11px] text-muted-strong">
-                    Active box: {Math.round(selectedRect.width)} × {Math.round(selectedRect.height)} px · Offset {selectedOffset.x}, {selectedOffset.y}
+                    Resolved box: {Math.round(selectedRect.width)} × {Math.round(selectedRect.height)} px at {Math.round(selectedRect.x)}, {Math.round(selectedRect.y)} · Adjustments {selectedLayout.x}, {selectedLayout.y}, {selectedLayout.width}, {selectedLayout.height}
+                  </div>
+                ) : !selectedLayout.visible ? (
+                  <div className="rounded-2xl border border-dashed border-line px-3 py-3 text-[11px] text-muted">
+                    This element is hidden in the shared layout. Turn it back on to render it on the sample card.
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-line px-3 py-3 text-[11px] text-muted">
-                    This element is hidden in the current flyer configuration.
+                    This element is not rendered in the current {previewFlyerType} preview. Switch preview mode to position it on canvas.
                   </div>
                 )}
               </div>
