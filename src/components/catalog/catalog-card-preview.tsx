@@ -11,6 +11,10 @@ import {
 } from "@/lib/catalog/card-layout";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import { getCatalogMediaRenderRect } from "@/lib/catalog/layout";
+import {
+  resolveCatalogCardElementRects,
+  type CatalogResolvedCardElementRects,
+} from "@/lib/catalog/master-card-layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
 
@@ -25,6 +29,7 @@ interface CatalogCardPreviewProps {
   discountPercent?: number | null;
   imageUrl?: string | null;
   options?: Partial<CatalogStyleOptions>;
+  onResolvedElementRects?: (rects: CatalogResolvedCardElementRects | null) => void;
 }
 
 function rectStyle(rect: { x: number; y: number; width: number; height: number }) {
@@ -34,6 +39,24 @@ function rectStyle(rect: { x: number; y: number; width: number; height: number }
     width: `${rect.width}px`,
     height: `${rect.height}px`,
   };
+}
+
+let browserTextMeasureCanvas: HTMLCanvasElement | null = null;
+
+function measureBrowserTextWidth(text: string, fontSize: number, fontWeight = 400) {
+  if (typeof document === "undefined" || !text) {
+    return 0;
+  }
+
+  const canvas = browserTextMeasureCanvas ?? (browserTextMeasureCanvas = document.createElement("canvas"));
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return 0;
+  }
+
+  context.font = `${fontWeight} ${fontSize}px Sarabun, sans-serif`;
+  return context.measureText(text).width;
 }
 
 export function CatalogCardPreview({
@@ -47,6 +70,7 @@ export function CatalogCardPreview({
   discountPercent,
   imageUrl,
   options,
+  onResolvedElementRects,
 }: CatalogCardPreviewProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -71,10 +95,10 @@ export function CatalogCardPreview({
   const meta = [style.showSku ? sku : null, style.showPackSize ? packSize : null, unit]
     .filter(Boolean)
     .join(" • ");
-  const normalPriceLabel = formatCurrency(normalPrice);
-  const promoPriceLabel = formatCurrency(promoPrice);
+  const normalPriceLabel = formatCurrency(normalPrice, { showDecimals: style.showPriceDecimals });
+  const promoPriceLabel = formatCurrency(promoPrice, { showDecimals: style.showPriceDecimals });
   const showSinglePrice = !showPromoLine && style.showNormalPrice;
-  const singlePriceLabel = formatCurrency(normalPrice ?? promoPrice);
+  const singlePriceLabel = formatCurrency(normalPrice ?? promoPrice, { showDecimals: style.showPriceDecimals });
 
   useEffect(() => {
     const element = cardRef.current;
@@ -137,13 +161,46 @@ export function CatalogCardPreview({
       showSinglePrice,
     });
   }, [cardSize.height, cardSize.width, meta, showDiscountBadge, showNormalPrice, showPromoLine, showSinglePrice, style]);
+  const normalPriceTextWidth = useMemo(() => {
+    if (!cardLayout?.normalPriceRowRect || !showPromoLine || !showNormalPrice) {
+      return 0;
+    }
+
+    return measureBrowserTextWidth(normalPriceLabel, cardLayout.normalPriceFontSize);
+  }, [cardLayout, normalPriceLabel, showNormalPrice, showPromoLine]);
+  const elementRects = useMemo(() => {
+    if (!cardLayout) {
+      return null;
+    }
+
+    return resolveCatalogCardElementRects({
+      baseRects: {
+        imageRect: cardLayout.imageRect,
+        badgeRect: cardLayout.badgeRect,
+        titleRect: cardLayout.titleRect,
+        metaRect: cardLayout.metaRect,
+        promoPriceRect: cardLayout.promoPriceRect,
+        normalPriceRect: cardLayout.normalPriceRowRect,
+        singlePriceRect: cardLayout.singlePriceRect,
+        normalPriceFontSize: cardLayout.normalPriceFontSize,
+      },
+      masterCardLayout: style.masterCardLayout,
+      normalPriceTextWidth,
+      showDiscountPercent: Boolean(style.showDiscountPercent && discountPercent),
+    });
+  }, [cardLayout, discountPercent, normalPriceTextWidth, style.masterCardLayout, style.showDiscountPercent]);
   const imageRenderRect = useMemo(() => {
     if (!cardLayout) {
       return null;
     }
 
-    return getCatalogMediaRenderRect(cardLayout.imageRect, style.cardImageScale, 0, 0);
-  }, [cardLayout, style.cardImageScale]);
+    const adjustedImageRect = elementRects?.imageRect ?? cardLayout.imageRect;
+    return getCatalogMediaRenderRect(adjustedImageRect, style.cardImageScale, 0, 0);
+  }, [cardLayout, elementRects, style.cardImageScale]);
+
+  useEffect(() => {
+    onResolvedElementRects?.(elementRects);
+  }, [elementRects, onResolvedElementRects]);
 
   return (
     <div
@@ -161,7 +218,7 @@ export function CatalogCardPreview({
           <div
             className="absolute overflow-hidden"
             style={{
-              ...rectStyle(cardLayout.imageRect),
+              ...rectStyle(elementRects?.imageRect ?? cardLayout.imageRect),
               borderRadius: `${Math.max(style.cardRadius - 6, 8)}px`,
               backgroundColor: style.imageBackgroundColor,
             }}
@@ -170,8 +227,8 @@ export function CatalogCardPreview({
               <div
                 className="absolute"
                 style={{
-                  left: `${imageRenderRect.x - cardLayout.imageRect.x}px`,
-                  top: `${imageRenderRect.y - cardLayout.imageRect.y}px`,
+                  left: `${imageRenderRect.x - (elementRects?.imageRect ?? cardLayout.imageRect).x}px`,
+                  top: `${imageRenderRect.y - (elementRects?.imageRect ?? cardLayout.imageRect).y}px`,
                   width: `${imageRenderRect.width}px`,
                   height: `${imageRenderRect.height}px`,
                 }}
@@ -199,22 +256,22 @@ export function CatalogCardPreview({
             <div
               className="absolute flex items-center justify-center overflow-hidden rounded-full text-center font-bold"
               style={{
-                ...rectStyle(cardLayout.badgeRect),
+                ...rectStyle(elementRects?.badgeRect ?? cardLayout.badgeRect),
                 backgroundColor: style.discountBadgeBackgroundColor,
                 color: style.discountBadgeTextColor,
                 fontSize: `${Math.max(style.skuFontSize, 10)}px`,
                 lineHeight: 1,
               }}
             >
-              ถูกลง {formatCurrency(discountAmount)}
+              ถูกลง {formatCurrency(discountAmount, { showDecimals: style.showPriceDecimals })}
             </div>
           ) : null}
 
-          {cardLayout.titleRect ? (
+          {elementRects?.titleRect ? (
             <h3
               className="absolute overflow-hidden font-semibold"
               style={{
-                ...rectStyle(cardLayout.titleRect),
+                ...rectStyle(elementRects.titleRect),
                 color: style.titleColor,
                 fontSize: `${cardLayout.titleFontSize}px`,
                 lineHeight: CATALOG_CARD_TITLE_LINE_HEIGHT,
@@ -228,11 +285,11 @@ export function CatalogCardPreview({
             </h3>
           ) : null}
 
-          {cardLayout.metaRect ? (
+          {elementRects?.metaRect ? (
             <p
               className="absolute overflow-hidden text-ellipsis whitespace-nowrap"
               style={{
-                ...rectStyle(cardLayout.metaRect),
+                ...rectStyle(elementRects.metaRect),
                 color: style.metaColor,
                 fontSize: `${cardLayout.metaFontSize}px`,
                 lineHeight: CATALOG_CARD_META_LINE_HEIGHT,
@@ -242,11 +299,11 @@ export function CatalogCardPreview({
             </p>
           ) : null}
 
-          {showPromoLine && cardLayout.promoPriceRect ? (
+          {showPromoLine && elementRects?.promoPriceRect ? (
             <div
               className="absolute overflow-hidden font-bold"
               style={{
-                ...rectStyle(cardLayout.promoPriceRect),
+                ...rectStyle(elementRects.promoPriceRect),
                 color: style.promoPriceColor,
                 fontSize: `${cardLayout.promoPriceFontSize}px`,
                 lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
@@ -256,42 +313,52 @@ export function CatalogCardPreview({
             </div>
           ) : null}
 
-          {showPromoLine && showNormalPrice && cardLayout.normalPriceRowRect ? (
+          {showPromoLine && showNormalPrice && elementRects?.normalPriceRect ? (
             <div
               className="absolute overflow-hidden whitespace-nowrap"
               style={{
-                ...rectStyle(cardLayout.normalPriceRowRect),
+                ...rectStyle(elementRects.normalPriceRect),
                 color: style.normalPriceColor,
                 fontSize: `${cardLayout.normalPriceFontSize}px`,
                 lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
               }}
             >
-              <span className="inline-flex items-start gap-2">
-                <span className="relative inline-block">
-                  <span>{normalPriceLabel}</span>
-                  <span
-                    aria-hidden="true"
-                    className="absolute left-0 right-0"
-                    style={{
-                      top: `${Math.max(style.normalPriceFontSize * 0.55, 6)}px`,
-                      borderTop: `1px solid ${style.normalPriceColor}`,
-                    }}
-                  />
-                </span>
-              {style.showDiscountPercent && discountPercent ? (
-                <span style={{ fontSize: `${Math.max(style.normalPriceFontSize - 2, 9)}px` }}>
-                  {discountPercent.toFixed(0)}% off
-                </span>
-              ) : null}
-              </span>
+              <span>{normalPriceLabel}</span>
             </div>
           ) : null}
 
-          {showSinglePrice && !showPromoLine && cardLayout.singlePriceRect ? (
+          {showPromoLine && showNormalPrice && elementRects?.strikeLineRect ? (
+            <span
+              aria-hidden="true"
+              className="absolute"
+              style={{
+                left: `${elementRects.strikeLineRect.x}px`,
+                top: `${elementRects.strikeLineRect.y}px`,
+                width: `${elementRects.strikeLineRect.width}px`,
+                borderTop: `1px solid ${style.normalPriceColor}`,
+              }}
+            />
+          ) : null}
+
+          {showPromoLine && showNormalPrice && elementRects?.discountPercentRect && style.showDiscountPercent && discountPercent ? (
+            <div
+              className="absolute overflow-hidden whitespace-nowrap"
+              style={{
+                ...rectStyle(elementRects.discountPercentRect),
+                color: style.normalPriceColor,
+                fontSize: `${Math.max(cardLayout.normalPriceFontSize - 2, 9)}px`,
+                lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
+              }}
+            >
+              {discountPercent.toFixed(0)}% off
+            </div>
+          ) : null}
+
+          {showSinglePrice && !showPromoLine && elementRects?.singlePriceRect ? (
             <div
               className="absolute overflow-hidden font-bold"
               style={{
-                ...rectStyle(cardLayout.singlePriceRect),
+                ...rectStyle(elementRects.singlePriceRect),
                 color: style.flyerType === "normal" ? style.normalPriceColor : style.promoPriceColor,
                 fontSize: `${cardLayout.singlePriceFontSize}px`,
                 lineHeight: 1,

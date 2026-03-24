@@ -289,7 +289,7 @@ export function CatalogPageCanvas({
 
             {promoDateLabel ? (
               <div
-                className="absolute z-20 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-right text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur"
+                className="absolute z-20 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-center text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur"
                 style={{
                   top: `${Math.max(layout.padding * 0.55, 10)}px`,
                   right: `${layout.padding}px`,

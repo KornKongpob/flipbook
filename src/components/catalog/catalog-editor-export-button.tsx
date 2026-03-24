@@ -12,7 +12,7 @@ export function CatalogEditorExportButton() {
 
   return (
     <Button type="button" className="h-9 text-xs" onClick={handleClick}>
-      Open export →
+      Generate PDF step →
     </Button>
   );
 }

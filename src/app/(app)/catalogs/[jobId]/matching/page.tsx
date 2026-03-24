@@ -49,7 +49,7 @@ function getNextHref(jobId: string, status: string) {
   if (["pdf_ready", "completed", "converting_flipbook", "generating_pdf"].includes(status)) {
     return `/catalogs/${jobId}/result`;
   }
-  return `/catalogs/${jobId}/editor`;
+  return `/catalogs/${jobId}/master-card`;
 }
 
 export default function CatalogMatchingPage({
@@ -111,7 +111,7 @@ export default function CatalogMatchingPage({
       : 0;
   const nextHref = jobId && data ? getNextHref(jobId, data.status) : null;
   const actionHref = isDone ? nextHref : null;
-  const nextLabel = data?.status === "needs_review" ? "Go to Review" : "Continue to Editor";
+  const nextLabel = data?.status === "needs_review" ? "Go to Review" : "Continue to Master Card";
 
   return (
     <div className="space-y-6 animate-fade-in">

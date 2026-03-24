@@ -38,7 +38,7 @@ export async function POST(
 
     if (!didStartGeneration) {
       return NextResponse.redirect(
-        new URL(`/catalogs/${jobId}/result?error=${encodeURIComponent("PDF generation is already in progress.")}`, request.url),
+        new URL(`/catalogs/${jobId}/generate?error=${encodeURIComponent("PDF generation is already in progress.")}`, request.url),
         SEE_OTHER,
       );
     }
@@ -138,7 +138,7 @@ export async function POST(
     await markJobStatus(jobId, user.id, "failed", message);
 
     return NextResponse.redirect(
-      new URL(`/catalogs/${jobId}/result?error=${encodeURIComponent(message)}`, request.url),
+      new URL(`/catalogs/${jobId}/generate?error=${encodeURIComponent(message)}`, request.url),
       SEE_OTHER,
     );
   }

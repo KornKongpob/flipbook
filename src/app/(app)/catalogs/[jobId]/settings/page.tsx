@@ -6,5 +6,5 @@ export default async function CatalogSettingsPage({
   params: Promise<{ jobId: string }>;
 }) {
   const { jobId } = await params;
-  redirect(`/catalogs/${jobId}/editor`);
+  redirect(`/catalogs/${jobId}/page-design`);
 }

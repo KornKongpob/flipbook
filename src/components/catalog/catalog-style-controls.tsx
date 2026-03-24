@@ -546,6 +546,22 @@ export function CatalogStyleControls({
               </div>
             </div>
 
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line/80 bg-white px-4 py-3 text-xs text-muted-strong shadow-sm transition hover:border-brand/20 has-[:checked]:border-brand/30 has-[:checked]:bg-brand-soft/10 has-[:checked]:text-foreground">
+              <input
+                type="checkbox"
+                name="showPriceDecimals"
+                checked={style.showPriceDecimals}
+                onChange={(event) => onStyleChange("showPriceDecimals", event.target.checked)}
+                className="mt-0.5 accent-brand"
+              />
+              <div className="min-w-0">
+                <span className="block text-xs font-semibold">Show satang / decimals</span>
+                <span className="mt-0.5 block text-[10px] text-muted-strong">
+                  Apply currency formatting globally in the live preview and exported PDF.
+                </span>
+              </div>
+            </label>
+
             <div className="grid grid-cols-2 gap-2">
             {DISPLAY_FIELDS.map((field) => (
               <label
@@ -758,7 +774,7 @@ export function CatalogStyleControls({
                     className="h-8 w-10 shrink-0 rounded border-0 bg-transparent p-0"
                   />
                   <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-foreground">
-                    {style[field.key]}
+                    {String(style[field.key])}
                   </span>
                 </div>
               </label>
@@ -897,15 +913,15 @@ export function CatalogStyleControls({
         </StyleSection>
 
         <StyleSection
-          title="Export"
-          description="Check save status and open the export workspace once the design is ready."
+          title="Generate PDF"
+          description="Check save status and move into the PDF generation step once the design is ready."
           defaultOpen
         >
           <div className="space-y-3">
             <div className={`rounded-2xl border p-4 shadow-sm ${styleSaveError ? "border-rose-200 bg-rose-50/80" : hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50/80" : "border-emerald-200 bg-emerald-50/80"}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Ready to export</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Ready to generate</p>
                   <p className="mt-1 text-[11px] leading-5 text-muted-strong">
                     {styleSaveError ? styleSaveError : styleStatusLabel}
                   </p>
@@ -934,7 +950,7 @@ export function CatalogStyleControls({
                 onClick={onOpenExport}
               >
                 {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
-                {hasUnsavedStyleChanges ? "Save + export" : "Open export"}
+                {hasUnsavedStyleChanges ? "Save + generate" : "Generate PDF step"}
               </Button>
             </div>
           </div>

@@ -24,11 +24,14 @@ import {
   getCatalogLayoutPresetDefinition,
 } from "@/lib/catalog/layout";
 import {
+  buildCatalogStyleFormData,
+  serializeStyleFormData,
+} from "@/lib/catalog/style-form-data";
+import {
   CATALOG_STYLE_PRESETS,
-  type CatalogStyleOptions,
   type EditorCatalogStyleOptions,
 } from "@/lib/catalog/style-options";
-import { formatThaiFlyerDateRange } from "@/lib/utils";
+import { formatCurrency, formatThaiFlyerDateRange } from "@/lib/utils";
 
 interface EditorItem {
   id: string;
@@ -154,114 +157,12 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-const BOOLEAN_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
-  "showNormalPrice",
-  "showPromoPrice",
-  "showDiscountAmount",
-  "showDiscountPercent",
-  "showBarcode",
-  "showDates",
-  "showSku",
-  "showPackSize",
-];
-
-const NULLABLE_STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
-  "promoStartDate",
-  "promoEndDate",
-  "pageBackgroundImageBucket",
-  "pageBackgroundImagePath",
-  "headerMediaBucket",
-  "headerMediaPath",
-  "footerMediaBucket",
-  "footerMediaPath",
-];
-
-const STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
-  "variant",
-  "flyerType",
-  "layoutPreset",
-  "pageBackgroundColor",
-  "pageBackgroundFit",
-  "pageBackgroundAnchor",
-  "headerMediaFit",
-  "footerMediaFit",
-  "cardImageFit",
-  "cardBackgroundColor",
-  "cardBorderColor",
-  "imageBackgroundColor",
-  "titleColor",
-  "metaColor",
-  "promoPriceColor",
-  "normalPriceColor",
-  "discountBadgeBackgroundColor",
-  "discountBadgeTextColor",
-];
-
-const NUMBER_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
-  "baseFontSize",
-  "pageBackgroundOpacity",
-  "pageBackgroundOffsetX",
-  "pageBackgroundOffsetY",
-  "pageBackgroundScale",
-  "headerMediaOpacity",
-  "headerMediaOffsetX",
-  "headerMediaOffsetY",
-  "headerMediaScale",
-  "footerMediaOpacity",
-  "footerMediaOffsetX",
-  "footerMediaOffsetY",
-  "footerMediaScale",
-  "pagePadding",
-  "pageGap",
-  "headerSpace",
-  "footerSpace",
-  "cardPadding",
-  "cardRadius",
-  "imageAreaHeight",
-  "cardImageScale",
-  "titleFontSize",
-  "skuFontSize",
-  "promoPriceFontSize",
-  "normalPriceFontSize",
-];
-
 function getVariantFromFlyerType(flyerType: EditorCatalogStyleOptions["flyerType"]) {
   return flyerType === "normal" ? "clean" : "promo";
 }
 
 function getFlyerTypeFromVariant(variant: EditorCatalogStyleOptions["variant"]) {
   return variant === "clean" ? "normal" : "promo";
-}
-
-function serializeFormData(formData: FormData) {
-  return JSON.stringify(
-    Array.from(formData.entries()).map(([key, value]) => [key, typeof value === "string" ? value : value.name]),
-  );
-}
-
-function buildStyleFormData(jobId: string, style: EditorCatalogStyleOptions) {
-  const formData = new FormData();
-  formData.set("jobId", jobId);
-
-  BOOLEAN_STYLE_KEYS.forEach((key) => {
-    if (style[key]) {
-      formData.set(key, "on");
-    }
-  });
-
-  NULLABLE_STRING_STYLE_KEYS.forEach((key) => {
-    formData.set(key, String(style[key] ?? ""));
-  });
-
-  STRING_STYLE_KEYS.forEach((key) => {
-    formData.set(key, String(style[key]));
-  });
-
-  NUMBER_STYLE_KEYS.forEach((key) => {
-    formData.set(key, String(style[key]));
-  });
-
-  return formData;
 }
 
 export function EditorPanel({
@@ -283,6 +184,7 @@ export function EditorPanel({
   const [styleStatusLabel, setStyleStatusLabel] = useState("All changes saved.");
   const [exportPending, setExportPending] = useState(false);
   const [orderSaving, setOrderSaving] = useState(false);
+  const persistedStyleSignatureRef = useRef<string | null>(serializeStyleFormData(buildCatalogStyleFormData(jobId, initialStyle)));
   const [orderError, setOrderError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
   const [mediaUploading, setMediaUploading] = useState<Record<MediaSlotKey, boolean>>({
@@ -297,9 +199,6 @@ export function EditorPanel({
   });
   const [sidebarMode, setSidebarMode] = useState<"products" | "design">("products");
   const [productFilter, setProductFilter] = useState<"all" | "visible" | "hidden">("all");
-  const persistedStyleSignatureRef = useRef<string | null>(
-    serializeFormData(buildStyleFormData(jobId, initialStyle)),
-  );
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
 
   const setStyleStatus = useCallback((label: string) => {
@@ -355,8 +254,7 @@ export function EditorPanel({
     setPreviewPage((current) => Math.min(current, Math.max(pages.length - 1, 0)));
   }, [pages.length]);
 
-  const captureStyleFormData = useCallback(() => buildStyleFormData(jobId, style), [jobId, style]);
-  const currentStyleSignature = serializeFormData(buildStyleFormData(jobId, style));
+  const currentStyleSignature = serializeStyleFormData(buildCatalogStyleFormData(jobId, style));
   const hasUnsavedStyleChanges = currentStyleSignature !== persistedStyleSignatureRef.current;
 
   const persistStyle = useCallback(
@@ -364,9 +262,8 @@ export function EditorPanel({
       const reason = options.reason ?? "manual";
 
       const runPersist = async () => {
-        const formData = captureStyleFormData();
-
-        const signature = serializeFormData(formData);
+        const formData = buildCatalogStyleFormData(jobId, style);
+        const signature = serializeStyleFormData(formData);
 
         if (signature === persistedStyleSignatureRef.current) {
           clearStyleSaveError();
@@ -396,7 +293,7 @@ export function EditorPanel({
       saveQueueRef.current = queuedSave.catch(() => false);
       return queuedSave;
     },
-    [captureStyleFormData, clearStyleSaveError, setStyleStatus],
+    [clearStyleSaveError, jobId, setStyleStatus, style],
   );
 
   useEffect(() => {
@@ -647,7 +544,7 @@ export function EditorPanel({
         : true;
 
       if (didSaveSucceed) {
-        router.push(`/catalogs/${jobId}/result`);
+        router.push(`/catalogs/${jobId}/generate`);
       }
     } finally {
       setExportPending(false);
@@ -885,8 +782,12 @@ export function EditorPanel({
                         </div>
                         <p className="mt-1 truncate text-[11px] text-muted">{item.sku ?? "No SKU"}</p>
                         <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-strong">
-                          <span>Normal: {item.normalPrice != null ? item.normalPrice.toFixed(2) : "—"}</span>
-                          <span>Promo: {item.promoPrice != null ? item.promoPrice.toFixed(2) : "—"}</span>
+                          <span>
+                            Normal: {formatCurrency(item.normalPrice, { showDecimals: style.showPriceDecimals })}
+                          </span>
+                          <span>
+                            Promo: {formatCurrency(item.promoPrice, { showDecimals: style.showPriceDecimals })}
+                          </span>
                         </div>
                       </div>
 
@@ -992,7 +893,7 @@ export function EditorPanel({
                 disabled={exportPending || styleSaving || isUploadingMedia || orderSaving}
                 className="inline-flex h-8 items-center justify-center rounded-lg bg-brand px-3 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-60 transition"
               >
-                {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + export" : "Open export"}
+                {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + generate" : "Generate PDF step"}
               </button>
               <button
                 type="button"

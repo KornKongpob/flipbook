@@ -7,6 +7,10 @@ import {
   type CatalogLayoutPreset,
   type CatalogMediaFit,
 } from "@/lib/catalog/layout";
+import {
+  mergeCatalogMasterCardLayout,
+  type CatalogMasterCardLayout,
+} from "@/lib/catalog/master-card-layout";
 import type { FlyerType } from "@/lib/database.types";
 
 export type CatalogLayoutVariant = "promo" | "clean";
@@ -25,6 +29,8 @@ export interface CatalogStyleOptions {
   showDates: boolean;
   showSku: boolean;
   showPackSize: boolean;
+  showPriceDecimals: boolean;
+  masterCardLayout: CatalogMasterCardLayout;
   promoStartDate: string | null;
   promoEndDate: string | null;
   pageBackgroundColor: string;
@@ -200,6 +206,18 @@ function asColor(value: unknown, fallback: string) {
   return fallback;
 }
 
+function asMasterCardLayout(value: unknown) {
+  if (typeof value === "string") {
+    try {
+      return mergeCatalogMasterCardLayout(JSON.parse(value) as unknown);
+    } catch {
+      return DEFAULT_STYLE_OPTIONS.masterCardLayout;
+    }
+  }
+
+  return mergeCatalogMasterCardLayout(value);
+}
+
 export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | undefined): CatalogStyleOptions {
   const source = raw ?? {};
   const normalizedFlyerType = isFlyerType(source.flyerType)
@@ -231,6 +249,8 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
     showDates: asBoolean(source.showDates, DEFAULT_STYLE_OPTIONS.showDates),
     showSku: asBoolean(source.showSku, DEFAULT_STYLE_OPTIONS.showSku),
     showPackSize: asBoolean(source.showPackSize, DEFAULT_STYLE_OPTIONS.showPackSize),
+    showPriceDecimals: asBoolean(source.showPriceDecimals, DEFAULT_STYLE_OPTIONS.showPriceDecimals),
+    masterCardLayout: asMasterCardLayout(source.masterCardLayout),
     promoStartDate: asDateString(source.promoStartDate),
     promoEndDate: asDateString(source.promoEndDate),
     pageBackgroundColor: asColor(source.pageBackgroundColor, DEFAULT_STYLE_OPTIONS.pageBackgroundColor),

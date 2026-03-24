@@ -36,7 +36,10 @@ export async function approveCandidateAction(formData: FormData) {
   });
 
   revalidatePath(`/catalogs/${jobId}/review`);
-  revalidatePath(`/catalogs/${jobId}/editor`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidatePath(`/catalogs/${jobId}/result`);
 }
 
 export async function saveDisplayNameAction(formData: FormData) {
@@ -47,7 +50,9 @@ export async function saveDisplayNameAction(formData: FormData) {
 
   await updateCatalogItemDisplayName(user.id, itemId, displayName || null);
 
-  revalidatePath(`/catalogs/${jobId}/editor`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
 }
 
 export async function moveItemAction(formData: FormData) {
@@ -58,7 +63,9 @@ export async function moveItemAction(formData: FormData) {
 
   await moveCatalogItem(user.id, itemId, direction);
 
-  revalidatePath(`/catalogs/${jobId}/editor`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
 }
 
 export async function reorderItemsAction(jobId: string, orderedItemIds: string[]) {
@@ -66,7 +73,9 @@ export async function reorderItemsAction(jobId: string, orderedItemIds: string[]
 
   await reorderCatalogItems(user.id, jobId, orderedItemIds);
 
-  revalidatePath(`/catalogs/${jobId}/editor`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
 }
 
 export async function toggleItemVisibilityAction(formData: FormData) {
@@ -77,7 +86,9 @@ export async function toggleItemVisibilityAction(formData: FormData) {
 
   await toggleCatalogItemVisibility(user.id, itemId, nextVisible);
 
-  revalidatePath(`/catalogs/${jobId}/editor`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
 }
 
 export async function saveStyleOptionsAction(formData: FormData) {
@@ -100,6 +111,8 @@ export async function saveStyleOptionsAction(formData: FormData) {
       showDates: formData.get("showDates") === "on",
       showSku: formData.get("showSku") === "on",
       showPackSize: formData.get("showPackSize") === "on",
+      showPriceDecimals: formData.get("showPriceDecimals") === "on",
+      masterCardLayout: formData.get("masterCardLayout"),
       promoStartDate: formData.get("promoStartDate"),
       promoEndDate: formData.get("promoEndDate"),
       pageBackgroundColor: formData.get("pageBackgroundColor"),
@@ -150,7 +163,10 @@ export async function saveStyleOptionsAction(formData: FormData) {
     }),
   );
 
-  revalidatePath(`/catalogs/${jobId}/editor`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidatePath(`/catalogs/${jobId}/result`);
 }
 
 export async function duplicateJobAction(formData: FormData) {
@@ -158,5 +174,5 @@ export async function duplicateJobAction(formData: FormData) {
   const jobId = String(formData.get("jobId"));
   const newJobId = await duplicateCatalogJob(jobId, user.id);
 
-  redirect(`/catalogs/${newJobId}/editor`);
+  redirect(`/catalogs/${newJobId}/master-card`);
 }

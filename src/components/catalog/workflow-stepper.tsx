@@ -12,40 +12,54 @@ interface WorkflowStep {
 const STEPS: WorkflowStep[] = [
   { key: "matching", label: "Matching", href: "matching" },
   { key: "review", label: "Review", href: "review" },
-  { key: "editor", label: "Editor", href: "editor" },
-  { key: "result", label: "Result", href: "result" },
+  { key: "master-card", label: "Master Card", href: "master-card" },
+  { key: "page-design", label: "Page Design", href: "page-design" },
+  { key: "generate", label: "Generate PDF", href: "generate" },
 ];
 
-const STATUS_STEP_INDEX: Record<CatalogJobStatus, number> = {
-  draft: -1,
-  uploaded: 0,
-  parsing: 0,
-  matching: 0,
-  needs_review: 1,
-  ready_to_generate: 2,
-  generating_pdf: 2,
-  pdf_ready: 3,
-  converting_flipbook: 3,
-  completed: 3,
-  failed: -1,
-  cancelled: -1,
-};
+function getUnlockedStepIndex(jobStatus: CatalogJobStatus) {
+  if (jobStatus === "needs_review") {
+    return 1;
+  }
+
+  if (["ready_to_generate", "generating_pdf", "pdf_ready", "converting_flipbook", "completed"].includes(jobStatus)) {
+    return 4;
+  }
+
+  if (["uploaded", "parsing", "matching"].includes(jobStatus)) {
+    return 0;
+  }
+
+  return -1;
+}
 
 interface WorkflowStepperProps {
   jobId: string;
-  currentStep: WorkflowStep["key"];
+  currentStep: WorkflowStep["key"] | "result";
   jobStatus: CatalogJobStatus;
 }
 
 export function WorkflowStepper({ jobId, currentStep, jobStatus }: WorkflowStepperProps) {
-  const completedUpTo = STATUS_STEP_INDEX[jobStatus];
+  const unlockedUpTo = getUnlockedStepIndex(jobStatus);
+  const currentStepIndex = STEPS.findIndex((step) => step.key === currentStep);
+  const completedUpTo = currentStep === "result"
+    ? STEPS.length - 1
+    : currentStepIndex > 0
+      ? currentStepIndex - 1
+      : currentStep === "matching" && unlockedUpTo === 0
+        ? -1
+        : currentStep === "review" && unlockedUpTo >= 1
+          ? 0
+          : -1;
 
   return (
     <nav aria-label="Catalog workflow" className="flex items-center gap-0 overflow-x-auto thin-scrollbar py-1">
       {STEPS.map((step, index) => {
         const isCurrent = step.key === currentStep;
-        const isCompleted = index < completedUpTo || (index === completedUpTo && !isCurrent && completedUpTo >= 0);
-        const isAccessible = index <= completedUpTo + 1 || isCompleted;
+        const isCompleted = currentStep === "result"
+          ? index <= completedUpTo
+          : index <= completedUpTo;
+        const isAccessible = index <= unlockedUpTo;
 
         const inner = isAccessible ? (
           <Link

@@ -20,6 +20,7 @@ import {
   resolveCatalogPageLayout,
   type CatalogRect,
 } from "@/lib/catalog/layout";
+import { resolveCatalogCardElementRects } from "@/lib/catalog/master-card-layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export interface RenderableCatalogItem {
@@ -228,7 +229,7 @@ function drawPromoDateLabel(
 
   drawPdfTextBlock(doc, 0, 0, {
     rect: {
-      x,
+      x: x + horizontalPadding,
       y,
       width: pillWidth - horizontalPadding * 2,
       height: pillHeight,
@@ -238,7 +239,7 @@ function drawPromoDateLabel(
     fontSize,
     color: "#334155",
     lineHeight: 1.05,
-    align: "right",
+    align: "center",
     verticalAlign: "middle",
     ellipsis: false,
   });
@@ -272,6 +273,10 @@ function drawCard(
   const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
     .filter(Boolean)
     .join(" • ");
+  const normalPriceLabel = formatCurrency(item.normalPrice, { showDecimals: options.showPriceDecimals });
+  const promoPriceLabel = formatCurrency(item.promoPrice, { showDecimals: options.showPriceDecimals });
+  const singlePriceLabel = formatCurrency(item.normalPrice ?? item.promoPrice, { showDecimals: options.showPriceDecimals });
+  const discountAmountLabel = formatCurrency(item.discountAmount, { showDecimals: options.showPriceDecimals });
   const cardLayout = resolveCatalogCardLayout({
     cardWidth: width,
     cardHeight: height,
@@ -282,7 +287,26 @@ function drawCard(
     showNormalPrice,
     showSinglePrice,
   });
-  const imageRect = cardLayout.imageRect;
+  const normalPriceFontName = "Sarabun-Regular";
+  const normalPriceTextWidth = showPromoLine && showNormalPrice && cardLayout.normalPriceRowRect
+    ? measurePdfTextWidth(doc, normalPriceFontName, cardLayout.normalPriceFontSize, normalPriceLabel)
+    : 0;
+  const elementRects = resolveCatalogCardElementRects({
+    baseRects: {
+      imageRect: cardLayout.imageRect,
+      badgeRect: cardLayout.badgeRect,
+      titleRect: cardLayout.titleRect,
+      metaRect: cardLayout.metaRect,
+      promoPriceRect: cardLayout.promoPriceRect,
+      normalPriceRect: cardLayout.normalPriceRowRect,
+      singlePriceRect: cardLayout.singlePriceRect,
+      normalPriceFontSize: cardLayout.normalPriceFontSize,
+    },
+    masterCardLayout: options.masterCardLayout,
+    normalPriceTextWidth,
+    showDiscountPercent: Boolean(showDiscountPercent && item.discountPercent),
+  });
+  const imageRect = elementRects.imageRect;
   const imageRenderRect = getCatalogMediaRenderRect(imageRect, options.cardImageScale, 0, 0);
   const imageRadius = Math.max(options.cardRadius - 6, 8);
   const imageOptions = options.cardImageFit === "contain"
@@ -338,14 +362,14 @@ function drawCard(
     );
   }
 
-  if (showDiscountBadge && cardLayout.badgeRect) {
+  if (showDiscountBadge && elementRects.badgeRect) {
     doc
       .roundedRect(
-        originX + cardLayout.badgeRect.x,
-        originY + cardLayout.badgeRect.y,
-        cardLayout.badgeRect.width,
-        cardLayout.badgeRect.height,
-        cardLayout.badgeRect.height / 2,
+        originX + elementRects.badgeRect.x,
+        originY + elementRects.badgeRect.y,
+        elementRects.badgeRect.width,
+        elementRects.badgeRect.height,
+        elementRects.badgeRect.height / 2,
       )
       .fill(options.discountBadgeBackgroundColor);
 
@@ -354,19 +378,19 @@ function drawCard(
       .font("Sarabun-Bold")
       .fontSize(Math.max(cardLayout.metaFontSize, 10))
       .text(
-        `ถูกลง ${formatCurrency(item.discountAmount)}`,
-        originX + cardLayout.badgeRect.x,
-        originY + cardLayout.badgeRect.y + Math.max((cardLayout.badgeRect.height - Math.max(cardLayout.metaFontSize, 10)) / 2 - 1, 0),
+        `ถูกลง ${discountAmountLabel}`,
+        originX + elementRects.badgeRect.x,
+        originY + elementRects.badgeRect.y + Math.max((elementRects.badgeRect.height - Math.max(cardLayout.metaFontSize, 10)) / 2 - 1, 0),
         {
-          width: cardLayout.badgeRect.width,
+          width: elementRects.badgeRect.width,
           align: "center",
         },
       );
   }
 
-  if (cardLayout.titleRect) {
+  if (elementRects.titleRect) {
     drawPdfThaiTitleBlock(doc, originX, originY, {
-      rect: cardLayout.titleRect,
+      rect: elementRects.titleRect,
       text: item.displayName,
       fontName: "Sarabun-SemiBold",
       fontSize: cardLayout.titleFontSize,
@@ -376,9 +400,9 @@ function drawCard(
     });
   }
 
-  if (cardLayout.metaRect) {
+  if (elementRects.metaRect) {
     drawPdfTextBlock(doc, originX, originY, {
-      rect: cardLayout.metaRect,
+      rect: elementRects.metaRect,
       text: meta || " ",
       fontName: "Sarabun-Regular",
       fontSize: cardLayout.metaFontSize,
@@ -387,49 +411,40 @@ function drawCard(
     });
   }
 
-  if (showPromoLine && cardLayout.promoPriceRect) {
+  if (showPromoLine && elementRects.promoPriceRect) {
     drawPdfTextBlock(doc, originX, originY, {
-      rect: cardLayout.promoPriceRect,
-      text: formatCurrency(item.promoPrice),
+      rect: elementRects.promoPriceRect,
+      text: promoPriceLabel,
       fontName: "Sarabun-Bold",
       fontSize: cardLayout.promoPriceFontSize,
       color: options.promoPriceColor,
       lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
     });
 
-    if (showNormalPrice && cardLayout.normalPriceRowRect) {
-      const normalY = originY + cardLayout.normalPriceRowRect.y;
-      const normalX = originX + cardLayout.normalPriceRowRect.x;
-      const normalPriceFontName = "Sarabun-Regular";
+    if (showNormalPrice && elementRects.normalPriceRect) {
       const normalPriceFontSize = cardLayout.normalPriceFontSize;
-      const normalText = formatCurrency(item.normalPrice);
 
       drawPdfTextBlock(doc, originX, originY, {
-        rect: cardLayout.normalPriceRowRect,
-        text: normalText,
+        rect: elementRects.normalPriceRect,
+        text: normalPriceLabel,
         fontName: normalPriceFontName,
         fontSize: normalPriceFontSize,
         color: options.normalPriceColor,
         lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
       });
 
-      const measured = measurePdfTextWidth(doc, normalPriceFontName, normalPriceFontSize, normalText);
-      const strikeY = normalY + Math.max(cardLayout.normalPriceFontSize * 0.55, 6);
-      doc
-        .moveTo(normalX, strikeY)
-        .lineTo(normalX + measured, strikeY)
-        .lineWidth(1)
-        .strokeColor(options.normalPriceColor)
-        .stroke();
+      if (elementRects.strikeLineRect) {
+        doc
+          .moveTo(originX + elementRects.strikeLineRect.x, originY + elementRects.strikeLineRect.y)
+          .lineTo(originX + elementRects.strikeLineRect.x + elementRects.strikeLineRect.width, originY + elementRects.strikeLineRect.y)
+          .lineWidth(1)
+          .strokeColor(options.normalPriceColor)
+          .stroke();
+      }
 
-      if (showDiscountPercent && item.discountPercent) {
+      if (showDiscountPercent && item.discountPercent && elementRects.discountPercentRect) {
         drawPdfTextBlock(doc, originX, originY, {
-          rect: {
-            x: cardLayout.normalPriceRowRect.x + measured + 8,
-            y: cardLayout.normalPriceRowRect.y,
-            width: Math.max(cardLayout.normalPriceRowRect.width - measured - 8, 0),
-            height: cardLayout.normalPriceRowRect.height,
-          },
+          rect: elementRects.discountPercentRect,
           text: `${item.discountPercent.toFixed(0)}% off`,
           fontName: normalPriceFontName,
           fontSize: Math.max(cardLayout.normalPriceFontSize - 2, 9),
@@ -438,10 +453,10 @@ function drawCard(
         });
       }
     }
-  } else if (showSinglePrice && cardLayout.singlePriceRect) {
+  } else if (showSinglePrice && elementRects.singlePriceRect) {
     drawPdfTextBlock(doc, originX, originY, {
-      rect: cardLayout.singlePriceRect,
-      text: formatCurrency(item.normalPrice ?? item.promoPrice),
+      rect: elementRects.singlePriceRect,
+      text: singlePriceLabel,
       fontName: "Sarabun-Bold",
       fontSize: cardLayout.singlePriceFontSize,
       color: options.flyerType === "normal" ? options.normalPriceColor : options.promoPriceColor,

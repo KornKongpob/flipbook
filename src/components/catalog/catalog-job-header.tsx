@@ -12,7 +12,7 @@ interface CatalogJobMetric {
 
 interface CatalogJobHeaderProps {
   actions?: ReactNode;
-  currentStep: "matching" | "review" | "editor" | "result";
+  currentStep: "matching" | "review" | "master-card" | "page-design" | "generate" | "result";
   description: string;
   eyebrow?: string;
   jobId: string;

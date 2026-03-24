@@ -41,8 +41,11 @@ export default async function CatalogResultPage({
         }
         actions={
           <div className="flex shrink-0 items-center gap-2">
-            <a href={`/catalogs/${jobId}/editor`} className={buttonClassName("secondary", "h-9 text-xs") }>
-              ← Back to Editor
+            <a href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-9 text-xs") }>
+              ← Back to Page Design
+            </a>
+            <a href={`/catalogs/${jobId}/generate`} className={buttonClassName("secondary", "h-9 text-xs") }>
+              Generate step
             </a>
             <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
               <Button className="h-9 gap-1.5 text-xs" disabled={isGenerating}>

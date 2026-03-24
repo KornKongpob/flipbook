@@ -5,16 +5,31 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value?: number | null, currency = "THB") {
+interface FormatCurrencyOptions {
+  currency?: string;
+  showDecimals?: boolean;
+}
+
+export function formatCurrency(
+  value?: number | null,
+  currencyOrOptions: string | FormatCurrencyOptions = "THB",
+) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "-";
   }
 
+  const options = typeof currencyOrOptions === "string"
+    ? { currency: currencyOrOptions, showDecimals: true }
+    : {
+        currency: currencyOrOptions.currency ?? "THB",
+        showDecimals: currencyOrOptions.showDecimals ?? true,
+      };
+
   return new Intl.NumberFormat("th-TH", {
     style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    currency: options.currency,
+    minimumFractionDigits: options.showDecimals ? 2 : 0,
+    maximumFractionDigits: options.showDecimals ? 2 : 0,
   }).format(value);
 }
 

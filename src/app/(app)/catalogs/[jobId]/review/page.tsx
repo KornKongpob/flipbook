@@ -57,8 +57,8 @@ export default async function CatalogReviewPage({
         title="Review product matches"
         description="Approve confident image matches, correct uncertain items, and clear blockers before moving into page design."
         actions={
-          <Link href={`/catalogs/${jobId}/editor`} className={`shrink-0 ${buttonClassName("secondary")}`}>
-            Skip to Editor
+          <Link href={`/catalogs/${jobId}/master-card`} className={`shrink-0 ${buttonClassName("secondary")}`}>
+            Continue to Master Card
           </Link>
         }
         metrics={[

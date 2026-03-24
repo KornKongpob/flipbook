@@ -4,6 +4,7 @@ import type {
   FlipbookMode,
 } from "@/lib/database.types";
 import type { CatalogLayoutPreset } from "@/lib/catalog/layout";
+import { createDefaultCatalogMasterCardLayout } from "@/lib/catalog/master-card-layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 
 export const FILE_BUCKETS = {
@@ -39,6 +40,8 @@ export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   showDates: true,
   showSku: true,
   showPackSize: true,
+  showPriceDecimals: true,
+  masterCardLayout: createDefaultCatalogMasterCardLayout(),
   promoStartDate: null,
   promoEndDate: null,
   pageBackgroundColor: "#fff8f2",
