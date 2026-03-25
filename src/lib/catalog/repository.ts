@@ -730,6 +730,7 @@ export async function updateCatalogJobAfterPdf(
   jobId: string,
   userId: string,
   pageCount: number,
+  metadataJson: Record<string, unknown> = {},
 ) {
   const admin = getAdminClientOrThrow();
   await ensureJobAccess(admin, jobId, userId);
@@ -743,7 +744,10 @@ export async function updateCatalogJobAfterPdf(
     })
     .eq("id", jobId);
 
-  await appendJobEvent(jobId, "pdf", "Generated the catalog PDF.", { pageCount });
+  await appendJobEvent(jobId, "pdf", "Generated the catalog PDF.", {
+    pageCount,
+    ...metadataJson,
+  });
 }
 
 export async function upsertFlipbookRecord(args: {

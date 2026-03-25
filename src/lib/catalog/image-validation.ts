@@ -1,4 +1,5 @@
 import { inflateSync } from "node:zlib";
+import sharp from "sharp";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPEG_START_OF_IMAGE = 0xffd8;
@@ -21,6 +22,14 @@ const JPEG_FRAME_MARKERS = new Set([
 ]);
 
 export type PdfRenderableImageFormat = "png" | "jpeg";
+
+export interface PdfRenderableImageNormalizationResult {
+  buffer: Buffer | null;
+  contentType: "image/png" | "image/jpeg" | null;
+  format: PdfRenderableImageFormat | null;
+  wasNormalized: boolean;
+  warning: string | null;
+}
 
 function isPngBuffer(buffer: Buffer) {
   return buffer.length >= PNG_SIGNATURE.length && buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE);
@@ -148,5 +157,61 @@ export function coercePdfRenderableImageBuffer(buffer: Buffer | null) {
     return buffer;
   } catch {
     return null;
+  }
+}
+
+export async function normalizePdfRenderableImageBuffer(
+  buffer: Buffer | null,
+): Promise<PdfRenderableImageNormalizationResult> {
+  if (!buffer) {
+    return {
+      buffer: null,
+      contentType: null,
+      format: null,
+      wasNormalized: false,
+      warning: null,
+    };
+  }
+
+  try {
+    const validated = validatePdfRenderableImageBuffer(buffer);
+
+    return {
+      buffer,
+      contentType: validated.contentType,
+      format: validated.format,
+      wasNormalized: false,
+      warning: null,
+    };
+  } catch {
+    try {
+      const normalizedBuffer = await sharp(buffer, {
+        animated: false,
+        pages: 1,
+      })
+        .png()
+        .toBuffer();
+      const validated = validatePdfRenderableImageBuffer(normalizedBuffer);
+
+      return {
+        buffer: normalizedBuffer,
+        contentType: validated.contentType,
+        format: validated.format,
+        wasNormalized: true,
+        warning: null,
+      };
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Image could not be prepared for PDF export.";
+
+      return {
+        buffer: null,
+        contentType: null,
+        format: null,
+        wasNormalized: false,
+        warning: message,
+      };
+    }
   }
 }

@@ -1,3 +1,6 @@
+import { CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT } from "@/lib/catalog/card-layout";
+import { resolveCatalogStrikeLineOffset } from "@/lib/catalog/pdf/text-layout";
+
 export const CATALOG_CARD_ELEMENT_KEYS = [
   "image",
   "discountBadge",
@@ -194,7 +197,11 @@ export function resolveCatalogCardElementRects(args: {
   const strikeLineBaseRect = normalPriceRect
     ? createRect(
         normalPriceRect.x,
-        normalPriceRect.y + Math.max(baseRects.normalPriceFontSize * 0.55, 6),
+        normalPriceRect.y + resolveCatalogStrikeLineOffset({
+          fontSize: baseRects.normalPriceFontSize,
+          lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
+          rectHeight: normalPriceRect.height,
+        }),
         Math.max(normalPriceTextWidth, 0),
         1,
       )

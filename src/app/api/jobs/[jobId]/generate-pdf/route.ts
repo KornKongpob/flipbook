@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHeyzineFlipbook } from "@/lib/catalog/flipbooks/heyzine";
-import { coercePdfRenderableImageBuffer } from "@/lib/catalog/image-validation";
+import { normalizePdfRenderableImageBuffer } from "@/lib/catalog/image-validation";
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { renderCatalogPdf } from "@/lib/catalog/pdf/renderer";
 import {
@@ -68,30 +68,49 @@ export async function POST(
       throw new RecoverablePdfGenerationError("PDF generation is already in progress.");
     }
 
-    const renderItems = await Promise.all(
+    const renderItemResults = await Promise.all(
       visibleItems.map(async (item) => {
         const pricing = deriveCatalogPricing({
           normalPrice: item.normal_price,
           promoPrice: item.promo_price,
         });
+        const resolvedAssetBuffer = await resolveProductAssetBuffer(item.selectedAsset);
+        const normalizedImage = await normalizePdfRenderableImageBuffer(resolvedAssetBuffer);
+        const hasImageSource = Boolean(
+          item.selectedAsset?.image_url
+          || (item.selectedAsset?.storage_bucket && item.selectedAsset?.storage_path),
+        );
+        const imageWarning = hasImageSource && !normalizedImage.buffer
+          ? {
+              itemId: item.id,
+              sku: item.sku,
+              displayName: item.display_name_override || item.product_name,
+              reason: normalizedImage.warning ?? "Image could not be downloaded for PDF export.",
+            }
+          : null;
 
         return {
-          id: item.id,
-          sku: item.sku,
-          productName: item.product_name,
-          displayName: item.display_name_override || item.product_name,
-          packSize: item.pack_size,
-          unit: item.unit,
-        normalPrice: pricing.normalPrice,
-        promoPrice: pricing.promoPrice,
-        discountAmount: pricing.discountAmount,
-        discountPercent: pricing.discountPercent,
-        imageBuffer: coercePdfRenderableImageBuffer(
-          await resolveProductAssetBuffer(item.selectedAsset),
-        ),
-      };
-    }),
+          renderItem: {
+            id: item.id,
+            sku: item.sku,
+            productName: item.product_name,
+            displayName: item.display_name_override || item.product_name,
+            packSize: item.pack_size,
+            unit: item.unit,
+            normalPrice: pricing.normalPrice,
+            promoPrice: pricing.promoPrice,
+            discountAmount: pricing.discountAmount,
+            discountPercent: pricing.discountPercent,
+            imageBuffer: normalizedImage.buffer,
+          },
+          imageWarning,
+        };
+      }),
     );
+    const renderItems = renderItemResults.map((entry) => entry.renderItem);
+    const imageWarnings = renderItemResults
+      .map((entry) => entry.imageWarning)
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
     const theme = (bundle.template?.theme_json as Record<string, string>) ?? {};
     const styleOptions = mergeCatalogStyleOptions(
@@ -122,7 +141,10 @@ export async function POST(
       fileType: "generated_pdf",
     });
 
-    await updateCatalogJobAfterPdf(jobId, user.id, pageCount);
+    await updateCatalogJobAfterPdf(jobId, user.id, pageCount, {
+      warningCount: imageWarnings.length,
+      imageWarnings,
+    });
 
     if (bundle.job.flipbook_mode === "client_id") {
       try {

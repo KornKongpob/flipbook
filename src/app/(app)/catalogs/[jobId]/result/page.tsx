@@ -6,6 +6,10 @@ import { Button, buttonClassName } from "@/components/ui/button";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { SurfaceCard, SurfaceCardBody, SurfaceCardHeader } from "@/components/ui/surface-card";
 import { requireUser } from "@/lib/auth";
+import {
+  formatCatalogPdfImageWarningDescription,
+  getLatestCatalogPdfImageWarningSummary,
+} from "@/lib/catalog/pdf-warnings";
 import { getCatalogJobBundle, getLatestPdfFile } from "@/lib/catalog/repository";
 
 export default async function CatalogResultPage({
@@ -29,6 +33,7 @@ export default async function CatalogResultPage({
   const isGenerating = bundle.job.status === "generating_pdf";
   const matchingInProgress = ["uploaded", "parsing", "matching"].includes(bundle.job.status);
   const canGenerate = !isGenerating && !matchingInProgress && bundle.job.review_required_count === 0 && visibleCount > 0;
+  const pdfImageWarningSummary = getLatestCatalogPdfImageWarningSummary(bundle.events);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -72,6 +77,14 @@ export default async function CatalogResultPage({
           tone="danger"
           title="Issue with generation"
           description={errorMessage}
+        />
+      ) : null}
+
+      {pdfImageWarningSummary ? (
+        <StatusBanner
+          tone="warning"
+          title="Some images used placeholders in the latest PDF"
+          description={formatCatalogPdfImageWarningDescription(pdfImageWarningSummary)}
         />
       ) : null}
 

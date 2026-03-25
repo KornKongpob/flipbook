@@ -18,6 +18,13 @@ export interface ThaiTextLayoutResult {
 
 export type CatalogTextVerticalAlign = "top" | "middle" | "bottom";
 
+const SARABUN_FONT_METRICS = {
+  unitsPerEm: 1000,
+  ascender: 1068,
+  descender: -232,
+  xHeight: 500,
+} as const;
+
 interface SingleLineTextLayoutArgs {
   fontSize: number;
   lineHeight: number;
@@ -204,6 +211,31 @@ export function resolveSingleLineTextBlockLayout({
     textHeight,
     yOffset: getCatalogTextVerticalOffset(availableHeight, textHeight, verticalAlign),
   };
+}
+
+export function resolveCatalogStrikeLineOffset({
+  fontSize,
+  lineHeight,
+  rectHeight,
+  verticalAlign = "top",
+}: SingleLineTextLayoutArgs) {
+  const layout = resolveSingleLineTextBlockLayout({
+    fontSize,
+    lineHeight,
+    rectHeight,
+    verticalAlign,
+  });
+  const lineBoxHeight = layout.lineHeightPx;
+  const baselineOffset =
+    lineBoxHeight * (
+      SARABUN_FONT_METRICS.ascender /
+      (SARABUN_FONT_METRICS.ascender - SARABUN_FONT_METRICS.descender)
+    );
+  const xHeightPx = fontSize * (SARABUN_FONT_METRICS.xHeight / SARABUN_FONT_METRICS.unitsPerEm);
+  const strikeOffsetWithinLineBox = baselineOffset - xHeightPx / 2;
+  const maxOffset = Math.max(layout.textHeight - 1, 0);
+
+  return layout.yOffset + Math.min(Math.max(strikeOffsetWithinLineBox, 0), maxOffset);
 }
 
 export function wrapThaiTextWithAutoScaling({
