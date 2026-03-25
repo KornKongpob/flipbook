@@ -107,7 +107,7 @@ export default async function CatalogPageDesignPage({
         title="Design Catalog"
         description={
           mode === "card"
-            ? "Adjust the shared master card inside the same design workspace, then jump back to page preview without leaving the canonical design route."
+            ? "Edit the shared product card in a focused workspace, then return to Page preview when you want to verify the full A4 composition."
             : "Arrange the A4 catalog, manage included products, and switch into card layout only when you need shared element adjustments."
         }
         actions={

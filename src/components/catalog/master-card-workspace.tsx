@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { saveStyleOptionsAction } from "@/app/(app)/actions";
 import { CatalogCardPreview } from "@/components/catalog/catalog-card-preview";
-import { CatalogPageCanvas, type CatalogPageCanvasResolvedCardPreviewSize } from "@/components/catalog/catalog-page-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { SurfaceCard, SurfaceCardBody, SurfaceCardHeader } from "@/components/ui/surface-card";
 import {
@@ -21,7 +21,6 @@ import {
 import {
   CATALOG_A4_PAGE_HEIGHT,
   CATALOG_A4_PAGE_WIDTH,
-  getCatalogItemsPerPage,
   resolveCatalogPageLayout,
 } from "@/lib/catalog/layout";
 import type { FlyerType } from "@/lib/database.types";
@@ -29,12 +28,10 @@ import { buildCatalogStyleFormData, serializeStyleFormData } from "@/lib/catalog
 import type { CatalogLayoutVariant, EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
 import {
-  ArrowDown,
   ArrowDownRight,
   ArrowLeft,
   ArrowRight,
-  ArrowUp,
-  Check,
+  ChevronDown,
   Grip,
   Loader2,
   Minus,
@@ -73,13 +70,9 @@ const ELEMENT_LABELS: Record<CatalogCardElementKey, { label: string; rectKey: ke
 };
 
 const MASTER_CARD_GRID_SIZE = 8;
-const MASTER_CARD_TARGET_PREVIEW_WIDTH = 300;
-const MASTER_CARD_MAX_PREVIEW_WIDTH = 360;
+const MASTER_CARD_TARGET_CANVAS_WIDTH = 520;
+const MASTER_CARD_MAX_CANVAS_WIDTH = 640;
 const MASTER_CARD_MAX_EDITOR_CANVAS_ZOOM = 4;
-const MASTER_CARD_FOCUSED_COMPARE_WIDTH = 280;
-const MASTER_CARD_FOCUSED_COMPARE_MAX_WIDTH = 320;
-const GRID_SIZE_OPTIONS = [8, 12, 16] as const;
-const NUDGE_STEP_OPTIONS = [2, 4, 8] as const;
 type MasterCardDisplayFieldKey =
   | "showPromoPrice"
   | "showNormalPrice"
@@ -207,6 +200,45 @@ function layoutsEqual(left: CatalogMasterCardLayout, right: CatalogMasterCardLay
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function InspectorSection({
+  title,
+  description,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  description: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="group rounded-2xl border border-line bg-white shadow-sm [&_summary::-webkit-details-marker]:hidden"
+    >
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-4 py-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{title}</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-strong">{description}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {badge ? (
+            <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-muted-strong">
+              {badge}
+            </span>
+          ) : null}
+          <span className="flex size-7 items-center justify-center rounded-full border border-line bg-white text-muted-strong transition group-open:rotate-180">
+            <ChevronDown className="size-4" />
+          </span>
+        </div>
+      </summary>
+      <div className="border-t border-line/70 px-4 pb-4 pt-3">{children}</div>
+    </details>
+  );
+}
+
 export function MasterCardWorkspace({
   initialItems,
   jobId,
@@ -233,15 +265,6 @@ export function MasterCardWorkspace({
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [previewFlyerType, setPreviewFlyerType] = useState<FlyerType>(initialStyle.flyerType);
-  const [resolvedPagePreviewCardSize, setResolvedPagePreviewCardSize] = useState<CatalogPageCanvasResolvedCardPreviewSize | null>(null);
-  const gridSize = MASTER_CARD_GRID_SIZE;
-  const nudgeStep = MASTER_CARD_GRID_SIZE;
-  const setGridSize = useCallback((nextValue: number) => {
-    void nextValue;
-  }, []);
-  const setNudgeStep = useCallback((nextValue: number) => {
-    void nextValue;
-  }, []);
 
   const visibleItems = useMemo(
     () => [...initialItems].sort((left, right) => left.displayOrder - right.displayOrder).filter((item) => item.isVisible),
@@ -264,53 +287,12 @@ export function MasterCardWorkspace({
     }),
     [draftLayout, previewFlyerType, style],
   );
-  const liveCurrentJobPreviewStyle = useMemo(
-    () => ({
-      ...style,
-      masterCardLayout: draftLayout,
-    }),
-    [draftLayout, style],
-  );
   const hasUnappliedChanges = useMemo(
     () => !layoutsEqual(draftLayout, style.masterCardLayout),
     [draftLayout, style.masterCardLayout],
   );
   const currentStyleSignature = serializeStyleFormData(buildCatalogStyleFormData(jobId, style));
   const hasUnsavedStyleChanges = currentStyleSignature !== persistedStyleSignatureRef.current;
-  const previewItemsPerPage = useMemo(
-    () => getCatalogItemsPerPage(style.layoutPreset),
-    [style.layoutPreset],
-  );
-  const previewPageIndex = useMemo(() => {
-    if (!selectedItem) {
-      return 0;
-    }
-
-    const selectedIndex = previewItems.findIndex((item) => item.id === selectedItem.id);
-
-    if (selectedIndex < 0) {
-      return 0;
-    }
-
-    return Math.floor(selectedIndex / previewItemsPerPage);
-  }, [previewItems, previewItemsPerPage, selectedItem]);
-  const pagePreviewItems = useMemo(
-    () => previewItems
-      .slice(previewPageIndex * previewItemsPerPage, (previewPageIndex + 1) * previewItemsPerPage)
-      .map((item) => ({
-      id: item.id,
-      title: item.displayName ?? item.productName,
-      sku: item.sku,
-      packSize: item.packSize,
-      unit: item.unit,
-      normalPrice: item.normalPrice,
-      promoPrice: item.promoPrice,
-      discountAmount: item.discountAmount,
-      discountPercent: item.discountPercent,
-      imageUrl: item.previewUrl,
-    })),
-    [previewItems, previewItemsPerPage, previewPageIndex],
-  );
   const fallbackPageLayout = useMemo(
     () => resolveCatalogPageLayout(CATALOG_A4_PAGE_WIDTH, CATALOG_A4_PAGE_HEIGHT, {
       layoutPreset: style.layoutPreset,
@@ -321,23 +303,13 @@ export function MasterCardWorkspace({
     }),
     [style.footerSpace, style.headerSpace, style.layoutPreset, style.pageGap, style.pagePadding],
   );
-  const editorCardBaseSize = useMemo(() => {
-    if (
-      resolvedPagePreviewCardSize &&
-      resolvedPagePreviewCardSize.cardWidth > 0 &&
-      resolvedPagePreviewCardSize.cardHeight > 0
-    ) {
-      return {
-        width: resolvedPagePreviewCardSize.cardWidth,
-        height: resolvedPagePreviewCardSize.cardHeight,
-      };
-    }
-
-    return {
+  const editorCardBaseSize = useMemo(
+    () => ({
       width: fallbackPageLayout.cardWidth,
       height: fallbackPageLayout.cardHeight,
-    };
-  }, [fallbackPageLayout.cardHeight, fallbackPageLayout.cardWidth, resolvedPagePreviewCardSize]);
+    }),
+    [fallbackPageLayout.cardHeight, fallbackPageLayout.cardWidth],
+  );
   const editorCanvasZoom = useMemo(() => {
     if (editorCardBaseSize.width <= 0) {
       return 1;
@@ -345,8 +317,8 @@ export function MasterCardWorkspace({
 
     const targetWidth = clampNumber(
       editorCardBaseSize.width,
-      MASTER_CARD_TARGET_PREVIEW_WIDTH,
-      MASTER_CARD_MAX_PREVIEW_WIDTH,
+      MASTER_CARD_TARGET_CANVAS_WIDTH,
+      MASTER_CARD_MAX_CANVAS_WIDTH,
     );
 
     const nextZoom = targetWidth / editorCardBaseSize.width;
@@ -360,100 +332,13 @@ export function MasterCardWorkspace({
     }),
     [editorCanvasZoom, editorCardBaseSize.height, editorCardBaseSize.width],
   );
-  const focusedCompareZoom = useMemo(() => {
-    if (editorCardBaseSize.width <= 0) {
-      return 1;
-    }
-
-    const targetWidth = clampNumber(
-      editorCardBaseSize.width,
-      MASTER_CARD_FOCUSED_COMPARE_WIDTH,
-      MASTER_CARD_FOCUSED_COMPARE_MAX_WIDTH,
-    );
-
-    return clampNumber(targetWidth / editorCardBaseSize.width, 1, 2.4);
-  }, [editorCardBaseSize.width]);
-  const focusedCompareViewportSize = useMemo(
-    () => ({
-      width: editorCardBaseSize.width * focusedCompareZoom,
-      height: editorCardBaseSize.height * focusedCompareZoom,
-    }),
-    [editorCardBaseSize.height, editorCardBaseSize.width, focusedCompareZoom],
-  );
-  const previewPageCount = Math.max(Math.ceil(previewItems.length / previewItemsPerPage), 1);
-  const selectedItemPageSlotIndex = useMemo(() => {
+  const selectedItemIndex = useMemo(() => {
     if (!selectedItem) {
-      return 0;
+      return -1;
     }
 
-    const selectedIndex = pagePreviewItems.findIndex((item) => item.id === selectedItem.id);
-
-    return selectedIndex >= 0 ? selectedIndex : 0;
-  }, [pagePreviewItems, selectedItem]);
-  const focusedCompareSlotRects = useMemo(
-    () =>
-      Array.from({ length: previewItemsPerPage }, (_, index) => {
-        const column = index % fallbackPageLayout.columns;
-        const row = Math.floor(index / fallbackPageLayout.columns);
-
-        return {
-          index,
-          x: fallbackPageLayout.frameX + column * (fallbackPageLayout.cardWidth + fallbackPageLayout.gap),
-          y: fallbackPageLayout.frameY + row * (fallbackPageLayout.cardHeight + fallbackPageLayout.gap),
-          width: fallbackPageLayout.cardWidth,
-          height: fallbackPageLayout.cardHeight,
-        };
-      }),
-    [fallbackPageLayout.cardHeight, fallbackPageLayout.cardWidth, fallbackPageLayout.columns, fallbackPageLayout.frameX, fallbackPageLayout.frameY, fallbackPageLayout.gap, previewItemsPerPage],
-  );
-  const focusedCompareSelectedSlot = focusedCompareSlotRects[selectedItemPageSlotIndex] ?? null;
-  const focusedCompareScale = useMemo(() => {
-    if (editorCardBaseSize.width <= 0) {
-      return 1;
-    }
-
-    return focusedCompareViewportSize.width / editorCardBaseSize.width;
-  }, [editorCardBaseSize.width, focusedCompareViewportSize.width]);
-  const focusedCompareViewportHeight = useMemo(
-    () => clampNumber(focusedCompareViewportSize.height + 110, 340, 500),
-    [focusedCompareViewportSize.height],
-  );
-  const focusedCompareViewportWidth = clampNumber(
-    focusedCompareViewportSize.width + 52,
-    MASTER_CARD_FOCUSED_COMPARE_WIDTH + 24,
-    MASTER_CARD_FOCUSED_COMPARE_MAX_WIDTH + 40,
-  );
-  const focusedComparePageSize = useMemo(
-    () => ({
-      width: fallbackPageLayout.pageWidth * focusedCompareScale,
-      height: fallbackPageLayout.pageHeight * focusedCompareScale,
-    }),
-    [fallbackPageLayout.pageHeight, fallbackPageLayout.pageWidth, focusedCompareScale],
-  );
-  const focusedCompareOffset = useMemo(() => {
-    if (!focusedCompareSelectedSlot) {
-      return { x: 0, y: 0 };
-    }
-
-    const slotCenterX = (focusedCompareSelectedSlot.x + focusedCompareSelectedSlot.width / 2) * focusedCompareScale;
-    const slotCenterY = (focusedCompareSelectedSlot.y + focusedCompareSelectedSlot.height / 2) * focusedCompareScale;
-    const maxTranslateX = 0;
-    const minTranslateX = Math.min(focusedCompareViewportWidth - focusedComparePageSize.width, 0);
-    const maxTranslateY = 0;
-    const minTranslateY = Math.min(focusedCompareViewportHeight - focusedComparePageSize.height, 0);
-
-    return {
-      x: clampNumber(focusedCompareViewportWidth / 2 - slotCenterX, minTranslateX, maxTranslateX),
-      y: clampNumber(focusedCompareViewportHeight / 2 - slotCenterY, minTranslateY, maxTranslateY),
-    };
-  }, [
-    focusedComparePageSize.height,
-    focusedComparePageSize.width,
-    focusedCompareScale,
-    focusedCompareSelectedSlot,
-    focusedCompareViewportHeight,
-    focusedCompareViewportWidth,
-  ]);
+    return previewItems.findIndex((item) => item.id === selectedItem.id);
+  }, [previewItems, selectedItem]);
 
   useEffect(() => {
     if (!selectedItemId && previewItems.length) {
@@ -651,30 +536,21 @@ export function MasterCardWorkspace({
     },
     [updateDraftLayoutEntry],
   );
-  const nudgeSelectedElement = useCallback(
-    (deltaXMultiplier: number, deltaYMultiplier: number) => {
-      const elementLayout = draftLayout[selectedElement];
+  const handleSelectPreviousSample = useCallback(() => {
+    if (selectedItemIndex <= 0) {
+      return;
+    }
 
-      updateDraftPosition(
-        selectedElement,
-        elementLayout.x + deltaXMultiplier * nudgeStep,
-        elementLayout.y + deltaYMultiplier * nudgeStep,
-      );
-    },
-    [draftLayout, nudgeStep, selectedElement, updateDraftPosition],
-  );
-  const resizeSelectedElement = useCallback(
-    (deltaWidthMultiplier: number, deltaHeightMultiplier: number) => {
-      const elementLayout = draftLayout[selectedElement];
+    setSelectedItemId(previewItems[selectedItemIndex - 1]?.id ?? null);
+  }, [previewItems, selectedItemIndex]);
 
-      updateDraftSize(
-        selectedElement,
-        elementLayout.width + deltaWidthMultiplier * nudgeStep,
-        elementLayout.height + deltaHeightMultiplier * nudgeStep,
-      );
-    },
-    [draftLayout, nudgeStep, selectedElement, updateDraftSize],
-  );
+  const handleSelectNextSample = useCallback(() => {
+    if (selectedItemIndex < 0 || selectedItemIndex >= previewItems.length - 1) {
+      return;
+    }
+
+    setSelectedItemId(previewItems[selectedItemIndex + 1]?.id ?? null);
+  }, [previewItems, selectedItemIndex]);
 
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, key: CatalogCardElementKey) => {
     event.preventDefault();
@@ -843,6 +719,7 @@ export function MasterCardWorkspace({
     style.showPromoPrice,
     style.showSku,
   ]);
+  const selectedItemLabel = selectedItem ? selectedItem.displayName ?? selectedItem.productName : "";
 
   if (!selectedItem) {
     return (
@@ -855,82 +732,148 @@ export function MasterCardWorkspace({
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[390px_minmax(0,1fr)]">
-      <SurfaceCard className="overflow-hidden xl:sticky xl:top-24 xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
-        <SurfaceCardHeader>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Design catalog</p>
-                <h2 className="mt-1 text-sm font-semibold text-foreground">Card layout mode</h2>
-              </div>
+    <div className="space-y-4">
+      <SurfaceCard className="overflow-hidden border-line/80 bg-white/90 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.35)]">
+        <SurfaceCardBody className="space-y-3 bg-gradient-to-br from-slate-50 via-white to-brand-soft/10">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Design catalog</p>
+              <h2 className="text-base font-semibold text-foreground">Edit shared card</h2>
+              <p className="max-w-3xl text-[11px] leading-5 text-muted-strong">
+                Edit the reusable product card here. Use Page preview only when you want to check the final A4 balance.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${hasUnappliedChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                {hasUnappliedChanges ? "Apply needed" : "Draft applied"}
+              </span>
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-                {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved" : "Saved"}
+                {styleSaveError ? "Save failed" : styleSaving ? "Saving..." : hasUnsavedStyleChanges ? "Unsaved" : "Saved"}
               </span>
             </div>
-            <p className="text-xs leading-5 text-muted-strong">
-              Adjust the shared product-card structure inside the same design workspace, then jump back to page preview when the reusable card layout feels right.
+          </div>
+
+          {styleSaveError ? (
+            <StatusBanner tone="danger" title="Could not save card layout" description={styleSaveError} />
+          ) : null}
+
+          <div className="rounded-2xl border border-line/80 bg-white/90 p-3 shadow-sm">
+            <div className="grid gap-3 2xl:grid-cols-[minmax(0,1.4fr)_auto_auto] 2xl:items-end">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Sample product</p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted-strong">Pick one live card sample while editing the shared layout.</p>
+                  </div>
+                  <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                    {selectedItemIndex + 1} of {previewItems.length}
+                  </span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                  <Button type="button" variant="secondary" className="h-10 px-3" onClick={handleSelectPreviousSample} disabled={selectedItemIndex <= 0}>
+                    <ArrowLeft className="size-4" />
+                    Previous
+                  </Button>
+                  <Select
+                    aria-label="Select sample product"
+                    value={selectedItem.id}
+                    onChange={(event) => setSelectedItemId(event.target.value)}
+                    className="h-10 min-w-0 text-sm"
+                  >
+                    {previewItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {(item.displayName ?? item.productName).slice(0, 80)}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button type="button" variant="secondary" className="h-10 px-3" onClick={handleSelectNextSample} disabled={selectedItemIndex < 0 || selectedItemIndex >= previewItems.length - 1}>
+                    Next
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] text-muted-strong">
+                  <span className="rounded-full border border-line bg-white px-2.5 py-1">SKU {selectedItem.sku ?? "N/A"}</span>
+                  <span className="rounded-full border border-line bg-white px-2.5 py-1">Normal {formatCurrency(selectedItem.normalPrice, { showDecimals: style.showPriceDecimals })}</span>
+                  <span className="rounded-full border border-line bg-white px-2.5 py-1">Promo {formatCurrency(selectedItem.promoPrice, { showDecimals: style.showPriceDecimals })}</span>
+                  <span className="rounded-full border border-line bg-white px-2.5 py-1">{visibleElementCount} visible</span>
+                  <span className="rounded-full border border-line bg-white px-2.5 py-1">{renderedElementCount} on canvas</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Preview mode</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFlyerType("promo")}
+                    className={`rounded-full border px-3 py-2 text-xs font-medium transition ${previewFlyerType === "promo" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                  >
+                    Promo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFlyerType("normal")}
+                    className={`rounded-full border px-3 py-2 text-xs font-medium transition ${previewFlyerType === "normal" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                  >
+                    Normal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGrid((previous) => !previous)}
+                    className={`rounded-full border px-3 py-2 text-xs font-medium transition ${showGrid ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                  >
+                    {showGrid ? "Grid on" : "Grid off"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSnapToGrid((previous) => !previous)}
+                    className={`rounded-full border px-3 py-2 text-xs font-medium transition ${snapToGrid ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                  >
+                    {snapToGrid ? `Snap ${MASTER_CARD_GRID_SIZE}px` : "Free drag"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 2xl:justify-end">
+              <Button type="button" variant="secondary" className="h-10 gap-2" onClick={applyDraftLayout} disabled={!hasUnappliedChanges}>
+                <Sparkles className="size-4" />
+                Apply draft
+              </Button>
+              <Button type="button" className="h-10 gap-2" onClick={() => { void handleSave(); }} disabled={styleSaving || pageDesignPending}>
+                {styleSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Save layout
+              </Button>
+              <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => { void handleOpenPageDesign(); }} disabled={styleSaving || pageDesignPending}>
+                {pageDesignPending ? <Loader2 className="size-4 animate-spin" /> : <Grip className="size-4" />}
+                Check on page preview
+              </Button>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] leading-5 text-muted">
+            Page preview is the final A4 check. This workspace stays focused on the reusable card component only.
+          </p>
+        </SurfaceCardBody>
+      </SurfaceCard>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_336px]">
+      <SurfaceCard className="relative z-10 order-2 overflow-hidden border-line/80 bg-white/95 xl:order-2">
+        <SurfaceCardHeader>
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Inspector</p>
+            <h2 className="text-sm font-semibold text-foreground">Shared elements, content, and type</h2>
+            <p className="text-[11px] leading-5 text-muted-strong">
+              Keep only the controls that matter while editing the reusable card. The canvas stays the main workspace.
             </p>
           </div>
         </SurfaceCardHeader>
-        <SurfaceCardBody className="space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:thin-scrollbar">
-          {styleSaveError ? (
-            <StatusBanner tone="danger" title="Could not save card layout" description={styleSaveError} />
-          ) : hasUnappliedChanges ? (
-            <StatusBanner tone="warning" title="Draft changes not applied" description="Apply the current draft layout before saving or moving to page design. Display toggles and text sizing update live, but shared layout box changes still need Apply." />
-          ) : (
-            <StatusBanner tone="success" title="Card layout is applied" description={styleStatusLabel} />
-          )}
-
-          <div className="rounded-2xl border border-brand/20 bg-brand-soft/10 px-4 py-3 text-[11px] leading-5 text-muted-strong">
-            <p className="font-semibold text-foreground">Display settings and text size update the preview immediately.</p>
-            <p className="mt-1">Position, size, and shared element visibility still belong to the layout draft, so they need Apply before Save.</p>
-          </div>
-
-          <div className="rounded-2xl border border-line bg-slate-50/70 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Layout preview mode</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">Switch between promo and normal previews to inspect which shared elements exist in each card mode. This does not save style changes.</p>
-              </div>
-              <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                {previewFlyerType === "promo" ? "Promo preview" : "Normal preview"}
-              </span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setPreviewFlyerType("promo")}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${previewFlyerType === "promo" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
-              >
-                <p className="text-sm font-semibold">Promo</p>
-                <p className="mt-1 text-[11px] leading-5">Preview promo-price, discount badge, strike-through, and savings elements.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewFlyerType("normal")}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${previewFlyerType === "normal" ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
-              >
-                <p className="text-sm font-semibold">Normal</p>
-                <p className="mt-1 text-[11px] leading-5">Preview the simplified card with image, title, meta, and a single regular price.</p>
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[11px] text-muted-strong">
-              <span className="rounded-full border border-line bg-white px-2.5 py-1">{visibleElementCount} visible in shared layout</span>
-              <span className="rounded-full border border-line bg-white px-2.5 py-1">{renderedElementCount} rendered in this preview</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Card display settings</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These are job-level content toggles. They reuse the existing style settings and only need Save, not Apply.</p>
-              </div>
-              <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                {enabledDisplayFieldCount}/{MASTER_CARD_DISPLAY_FIELDS.length} enabled
-              </span>
-            </div>
+        <SurfaceCardBody className="space-y-3">
+          <InspectorSection
+            title="Card content"
+            description="Toggle job-level content rows. These update the live card immediately and only need Save, not Apply."
+            badge={`${enabledDisplayFieldCount}/${MASTER_CARD_DISPLAY_FIELDS.length} enabled`}
+          >
             <div className="grid gap-2">
               {MASTER_CARD_DISPLAY_FIELDS.map((field) => (
                 <label
@@ -953,18 +896,13 @@ export function MasterCardWorkspace({
                 </label>
               ))}
             </div>
-          </div>
+          </InspectorSection>
 
-          <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Text sizing</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These values reuse the shared card typography settings, so the live preview and PDF stay aligned.</p>
-              </div>
-              <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                Live preview
-              </span>
-            </div>
+          <InspectorSection
+            title="Typography"
+            description="Adjust the shared type sizes used by the live preview and PDF renderer."
+            badge="Live preview"
+          >
             <div className="grid gap-3">
               {MASTER_CARD_FONT_SIZE_FIELDS.map((field) => (
                 <div key={field.key} className="rounded-2xl border border-line/80 bg-slate-50/70 p-3 shadow-sm">
@@ -1008,18 +946,14 @@ export function MasterCardWorkspace({
                 </div>
               ))}
             </div>
-          </div>
+          </InspectorSection>
 
-          <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Shared layout elements</p>
-                <p className="mt-1 text-[11px] leading-5 text-muted-strong">These controls belong to the shared layout draft. Select any element to move its box, resize it, or hide it from the reusable layout.</p>
-              </div>
-              <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                Apply required
-              </span>
-            </div>
+          <InspectorSection
+            title="Shared elements"
+            description="Select a shared element, review whether it is active on the current sample, and quickly show or hide it from the reusable layout."
+            badge={hasUnappliedChanges ? "Apply needed" : "Draft applied"}
+            defaultOpen
+          >
             <div className="grid gap-2">
               {CATALOG_CARD_ELEMENT_KEYS.map((key) => {
                 const isSelected = selectedElement === key;
@@ -1055,89 +989,52 @@ export function MasterCardWorkspace({
                 );
               })}
             </div>
-          </div>
+          </InspectorSection>
 
-          <div className="rounded-2xl border border-line bg-white p-4 space-y-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Sample products</p>
-              <p className="mt-1 text-[11px] leading-5 text-muted-strong">Choose a visible product card to use as the live master-card sample while editing.</p>
+          <InspectorSection
+            title="Reset options"
+            description="Secondary actions live here so the top bar stays focused on edit, apply, save, and page checking."
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => updateDraftLayoutEntry(selectedElement, createDefaultCatalogMasterCardElementLayout())}>
+                <RefreshCw className="size-4" />
+                Reset selected box
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-10 gap-2"
+                onClick={() => setDraftLayout(style.masterCardLayout)}
+                disabled={!hasUnappliedChanges}
+              >
+                <RefreshCw className="size-4" />
+                Discard draft
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-10 gap-2 sm:col-span-2"
+                onClick={() => setDraftLayout(createDefaultCatalogMasterCardLayout())}
+              >
+                <RefreshCw className="size-4" />
+                Reset shared layout
+              </Button>
             </div>
-            <div className="space-y-2 max-h-72 overflow-y-auto thin-scrollbar pr-1">
-              {previewItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedItemId(item.id)}
-                  className={`w-full rounded-2xl border px-3 py-3 text-left transition ${selectedItem.id === item.id ? "border-brand/30 bg-brand-soft/15" : "border-line bg-white hover:border-brand/20"}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">{item.displayName ?? item.productName}</p>
-                      <p className="mt-1 truncate text-[11px] text-muted">{item.sku ?? "No SKU"}</p>
-                    </div>
-                    {selectedItem.id === item.id ? <Check className="size-4 text-brand" /> : null}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-strong">
-                    <span>Normal: {formatCurrency(item.normalPrice, { showDecimals: style.showPriceDecimals })}</span>
-                    <span>Promo: {formatCurrency(item.promoPrice, { showDecimals: style.showPriceDecimals })}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button type="button" variant="secondary" className="h-10 gap-2" onClick={applyDraftLayout} disabled={!hasUnappliedChanges}>
-              <Sparkles className="size-4" />
-              Apply layout draft
-            </Button>
-            <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => updateDraftLayoutEntry(selectedElement, createDefaultCatalogMasterCardElementLayout())}>
-              <RefreshCw className="size-4" />
-              Reset selected box
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-10 gap-2"
-              onClick={() => setDraftLayout(style.masterCardLayout)}
-              disabled={!hasUnappliedChanges}
-            >
-              <RefreshCw className="size-4" />
-              Discard draft
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-10 gap-2"
-              onClick={() => setDraftLayout(createDefaultCatalogMasterCardLayout())}
-            >
-              <RefreshCw className="size-4" />
-              Reset shared layout
-            </Button>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button type="button" className="h-10 gap-2" onClick={() => { void handleSave(); }} disabled={styleSaving || pageDesignPending}>
-              {styleSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save card layout
-            </Button>
-            <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => { void handleOpenPageDesign(); }} disabled={styleSaving || pageDesignPending}>
-              {pageDesignPending ? <Loader2 className="size-4 animate-spin" /> : <Grip className="size-4" />}
-              Back to Page Preview
-            </Button>
-          </div>
+            <p className="mt-3 text-[11px] leading-5 text-muted">{styleStatusLabel}</p>
+          </InspectorSection>
         </SurfaceCardBody>
       </SurfaceCard>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="relative z-0 order-1 grid gap-4">
         <SurfaceCard>
           <SurfaceCardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Card layout canvas</p>
-                <h2 className="mt-1 text-sm font-semibold text-foreground">Drag and resize the active card elements</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Card canvas</p>
+                <h2 className="mt-1 text-sm font-semibold text-foreground">Drag and resize shared elements</h2>
+                <p className="mt-1 text-[11px] leading-5 text-muted-strong">Selected sample: {selectedItemLabel}</p>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
                   {ELEMENT_LABELS[selectedElement].label}
                 </span>
@@ -1147,26 +1044,16 @@ export function MasterCardWorkspace({
                 <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
                   Zoom {editorCanvasZoom.toFixed(2)}x
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowGrid((previous) => !previous)}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${showGrid ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
-                >
-                  {showGrid ? "Grid on" : "Grid off"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSnapToGrid((previous) => !previous)}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${snapToGrid ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
-                >
-                  {snapToGrid ? `Snap ${MASTER_CARD_GRID_SIZE}px` : "Free drag"}
-                </button>
               </div>
             </div>
           </SurfaceCardHeader>
-          <SurfaceCardBody className="space-y-5">
-            <div className="rounded-[28px] border border-line bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 p-5">
-              <div className="mx-auto flex max-w-[430px] justify-center">
+          <SurfaceCardBody className="space-y-4 bg-gradient-to-br from-slate-50/70 via-white to-brand-soft/10">
+            <div className="rounded-[30px] border border-line bg-white/70 p-4 shadow-inner sm:p-7">
+              <div className="overflow-auto">
+                <div
+                  className="mx-auto flex min-w-fit justify-center"
+                  style={{ minHeight: `${Math.max(editorCardViewportSize.height + 48, 560)}px` }}
+                >
                 <div
                   className="relative shrink-0"
                   style={{
@@ -1184,7 +1071,7 @@ export function MasterCardWorkspace({
                     }}
                   >
                     <CatalogCardPreview
-                      title={selectedItem.displayName ?? selectedItem.productName}
+                      title={selectedItemLabel}
                       sku={selectedItem.sku}
                       packSize={selectedItem.packSize}
                       unit={selectedItem.unit}
@@ -1255,6 +1142,7 @@ export function MasterCardWorkspace({
                     }) : null}
                   </div>
                 </div>
+                </div>
               </div>
             </div>
 
@@ -1287,6 +1175,7 @@ export function MasterCardWorkspace({
               )}
             </div>
 
+            {/* Legacy precision controls removed from the focused editor redesign.
             <div className="hidden">
               <div className="rounded-2xl border border-line bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
@@ -1500,10 +1389,12 @@ export function MasterCardWorkspace({
                 </div>
               </div>
             </div>
+            */}
           </SurfaceCardBody>
         </SurfaceCard>
 
-        <div className="space-y-5 xl:sticky xl:top-24">
+        {/* Legacy compare surfaces removed in the focused editor redesign.
+        <div className="hidden space-y-5">
           <SurfaceCard className="overflow-hidden">
             <SurfaceCardHeader>
               <div className="flex items-center justify-between gap-3">
@@ -1688,6 +1579,8 @@ export function MasterCardWorkspace({
             </div>
           </SurfaceCardBody>
         </SurfaceCard>
+        */}
+      </div>
       </div>
     </div>
   );
