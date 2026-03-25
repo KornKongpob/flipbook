@@ -294,12 +294,12 @@ export function MasterCardWorkspace({
   const editorCardBaseSize = useMemo(() => {
     if (
       resolvedPagePreviewCardSize &&
-      resolvedPagePreviewCardSize.renderedCardWidth > 0 &&
-      resolvedPagePreviewCardSize.renderedCardHeight > 0
+      resolvedPagePreviewCardSize.cardWidth > 0 &&
+      resolvedPagePreviewCardSize.cardHeight > 0
     ) {
       return {
-        width: resolvedPagePreviewCardSize.renderedCardWidth,
-        height: resolvedPagePreviewCardSize.renderedCardHeight,
+        width: resolvedPagePreviewCardSize.cardWidth,
+        height: resolvedPagePreviewCardSize.cardHeight,
       };
     }
 

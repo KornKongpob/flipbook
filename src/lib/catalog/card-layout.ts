@@ -120,24 +120,6 @@ export function resolveCatalogCardLayout(args: {
     Math.max(padding * CATALOG_CARD_IMAGE_TOP_INSET_FACTOR, 4 * scale),
     padding,
   );
-  const normalImageBoost = isNormalFlyer
-    ? Math.max(20 * scale, scaledTitleFontSize * 0.75 + scaledNormalPriceFontSize * 0.55)
-    : 0;
-  const imageHeight = clamp(
-    scaledImageAreaHeight + Math.max(padding - imageTopInset, 0) + normalImageBoost,
-    0,
-    innerBottom - imageTopInset,
-  );
-  const imageRect = rect(innerRect.x, imageTopInset, innerRect.width, imageHeight);
-  const badgeRect = effectiveShowDiscountBadge
-    ? optionalRect(
-        innerRect.x,
-        imageRect.y + imageRect.height + scaledImageGap,
-        innerRect.width,
-        scaledBadgeHeight,
-      )
-    : null;
-  const contentTop = imageRect.y + imageRect.height + scaledImageGap + (badgeRect ? scaledBadgeHeight + scaledBadgeGap : 0);
   const singlePriceFontSize = isNormalFlyer
     ? Math.max(scaledPromoPriceFontSize, scaledNormalPriceFontSize + 10 * scale)
     : Math.max(
@@ -152,6 +134,35 @@ export function resolveCatalogCardLayout(args: {
     : effectiveShowSinglePrice
       ? singlePriceLineHeight
       : 0;
+  const metaHeight = scaledSkuFontSize * CATALOG_CARD_META_LINE_HEIGHT;
+  const reservedMetaHeight = effectiveShowMeta && metaHeight > 0 ? metaHeight + scaledTitleMetaGap : 0;
+  const titleLineHeight = scaledTitleFontSize * CATALOG_CARD_TITLE_LINE_HEIGHT;
+  const titleMaxHeight = titleLineHeight * CATALOG_CARD_TITLE_MAX_LINES;
+  const minimumContentHeight = Math.min(titleLineHeight, titleMaxHeight) + reservedMetaHeight;
+  const contentGapAfterImage = scaledImageGap + (effectiveShowDiscountBadge ? scaledBadgeHeight + scaledBadgeGap : 0);
+  const priceBlockGap = priceBlockHeight > 0 && isNormalFlyer ? scaledTitleMetaGap : 0;
+  const normalImageBoost = isNormalFlyer
+    ? Math.max(20 * scale, scaledTitleFontSize * 0.75 + scaledNormalPriceFontSize * 0.55)
+    : 0;
+  const maxImageHeight = Math.max(
+    innerBottom - imageTopInset - contentGapAfterImage - priceBlockGap - priceBlockHeight - minimumContentHeight,
+    0,
+  );
+  const imageHeight = clamp(
+    scaledImageAreaHeight + Math.max(padding - imageTopInset, 0) + normalImageBoost,
+    0,
+    maxImageHeight,
+  );
+  const imageRect = rect(innerRect.x, imageTopInset, innerRect.width, imageHeight);
+  const badgeRect = effectiveShowDiscountBadge
+    ? optionalRect(
+        innerRect.x,
+        imageRect.y + imageRect.height + scaledImageGap,
+        innerRect.width,
+        scaledBadgeHeight,
+      )
+    : null;
+  const contentTop = imageRect.y + imageRect.height + scaledImageGap + (badgeRect ? scaledBadgeHeight + scaledBadgeGap : 0);
   const priceBlockTop = priceBlockHeight <= 0
     ? innerBottom
     : isNormalFlyer
@@ -159,10 +170,6 @@ export function resolveCatalogCardLayout(args: {
       : Math.max(contentTop, innerBottom - priceBlockHeight);
   const availablePriceHeight = Math.max(innerBottom - priceBlockTop, 0);
   const availableContentHeight = Math.max(priceBlockTop - contentTop, 0);
-  const metaHeight = scaledSkuFontSize * CATALOG_CARD_META_LINE_HEIGHT;
-  const reservedMetaHeight = effectiveShowMeta && metaHeight > 0 ? metaHeight + scaledTitleMetaGap : 0;
-  const titleLineHeight = scaledTitleFontSize * CATALOG_CARD_TITLE_LINE_HEIGHT;
-  const titleMaxHeight = titleLineHeight * CATALOG_CARD_TITLE_MAX_LINES;
   const titleHeight = Math.min(Math.max(availableContentHeight - reservedMetaHeight, 0), titleMaxHeight);
   const titleRect = optionalRect(innerRect.x, contentTop, innerRect.width, titleHeight);
   const metaTop = contentTop + titleHeight + (titleRect ? scaledTitleMetaGap : 0);
