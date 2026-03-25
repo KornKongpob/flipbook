@@ -4,6 +4,7 @@ import { ReviewGrid } from "@/components/catalog/review-grid";
 import { buttonClassName } from "@/components/ui/button";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { requireUser } from "@/lib/auth";
+import { getLatestCatalogPdfImageWarningSummary } from "@/lib/catalog/pdf-warnings";
 import { getCatalogJobBundle, resolveProductAssetPreviewUrl } from "@/lib/catalog/repository";
 
 export default async function CatalogReviewPage({
@@ -18,6 +19,10 @@ export default async function CatalogReviewPage({
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
   const reviewItems = bundle.items.filter((item) => item.match_status === "needs_review");
+  const latestPdfWarningSummary = getLatestCatalogPdfImageWarningSummary(bundle.events);
+  const latestPdfWarningItemIds = new Set(
+    latestPdfWarningSummary?.items.map((item) => item.itemId) ?? [],
+  );
   const errorMessage = resolvedSearchParams.error
     ? decodeURIComponent(resolvedSearchParams.error)
     : null;
@@ -32,6 +37,7 @@ export default async function CatalogReviewPage({
           productName: c.asset?.product_name ?? "Unnamed",
           previewUrl: await resolveProductAssetPreviewUrl(c.asset),
           confidence: c.row.confidence,
+          isExactSkuMatch: (c.row.match_reason ?? "").split(",").includes("exact_sku"),
         })),
       );
       return {
@@ -41,6 +47,7 @@ export default async function CatalogReviewPage({
         confidence: item.confidence,
         reviewNote: item.review_note,
         currentImageUrl,
+        usedPdfPlaceholder: latestPdfWarningItemIds.has(item.id),
         candidates,
         jobId,
       };

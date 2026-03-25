@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
-import type { Database, Json } from "@/lib/database.types";
+import type { Database } from "@/lib/database.types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MakroSearchProvider } from "@/lib/catalog/matching/makro-provider";
 import { scoreMatch } from "@/lib/catalog/matching/scoring";
+import {
+  getProductAssetSkuVariants,
+  getProviderAssetSkuVariants,
+  upsertMakroProductAsset,
+} from "@/lib/catalog/product-assets";
+import { resolveProductAssetPreviewUrl } from "@/lib/catalog/repository";
 
 export const runtime = "nodejs";
 
 const provider = new MakroSearchProvider();
 type CatalogItemRow = Database["public"]["Tables"]["catalog_items"]["Row"];
 type CatalogJobRow = Database["public"]["Tables"]["catalog_jobs"]["Row"];
-type ProductAssetRow = Database["public"]["Tables"]["product_assets"]["Row"];
 
 export async function GET(
   request: Request,
@@ -62,36 +67,7 @@ export async function GET(
 
   const results = await Promise.all(
     providerResults.map(async (candidate) => {
-      const existing = candidate.sourceProductId
-        ? await admin
-            .from("product_assets")
-            .select("*")
-            .eq("source", "makro")
-            .eq("source_product_id", candidate.sourceProductId)
-            .maybeSingle()
-        : { data: null, error: null };
-      const existingAsset = existing.data as ProductAssetRow | null;
-
-      const createdAssetResponse = existingAsset
-        ? null
-        : await admin
-            .from("product_assets")
-            .insert({
-              source: "makro",
-              source_product_id: candidate.sourceProductId,
-              sku: candidate.sku,
-              normalized_sku: candidate.normalizedSku,
-              product_name: candidate.productName,
-              normalized_name: candidate.normalizedName,
-              product_url: candidate.productUrl,
-              image_url: candidate.imageUrl,
-              fetched_at: new Date().toISOString(),
-              metadata_json: candidate.metadata as unknown as Json,
-            })
-            .select("*")
-            .single();
-      const asset =
-        existingAsset ?? ((createdAssetResponse?.data as ProductAssetRow | null) ?? null);
+      const asset = await upsertMakroProductAsset(admin, candidate).catch(() => null);
 
       const score = scoreMatch(
         {
@@ -104,21 +80,37 @@ export async function GET(
         {
           sku: asset?.sku,
           normalizedSku: asset?.normalized_sku,
+          alternateSkus: asset
+            ? getProductAssetSkuVariants(asset)
+            : getProviderAssetSkuVariants(candidate),
           productName: asset?.product_name ?? candidate.productName,
           normalizedName: asset?.normalized_name ?? candidate.normalizedName,
         },
       );
+      const previewUrl = asset
+        ? await resolveProductAssetPreviewUrl(asset)
+        : candidate.imageUrl
+          ? `/api/images/proxy?url=${encodeURIComponent(candidate.imageUrl)}`
+          : null;
 
       return {
         ...candidate,
         assetId: asset?.id,
+        previewUrl,
         confidence: score.confidence,
         reasons: score.reasons,
+        exactSkuMatch: score.reasons.includes("exact_sku"),
       };
     }),
   );
 
   return NextResponse.json({
-    results: results.sort((left, right) => right.confidence - left.confidence),
+    results: results.sort((left, right) => {
+      if (left.exactSkuMatch !== right.exactSkuMatch) {
+        return left.exactSkuMatch ? -1 : 1;
+      }
+
+      return right.confidence - left.confidence;
+    }),
   });
 }

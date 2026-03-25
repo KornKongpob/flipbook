@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createHeyzineFlipbook } from "@/lib/catalog/flipbooks/heyzine";
-import { normalizePdfRenderableImageBuffer } from "@/lib/catalog/image-validation";
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { renderCatalogPdf } from "@/lib/catalog/pdf/renderer";
 import {
@@ -74,18 +73,18 @@ export async function POST(
           normalPrice: item.normal_price,
           promoPrice: item.promo_price,
         });
-        const resolvedAssetBuffer = await resolveProductAssetBuffer(item.selectedAsset);
-        const normalizedImage = await normalizePdfRenderableImageBuffer(resolvedAssetBuffer);
+        const resolvedImage = await resolveProductAssetBuffer(item.selectedAsset);
         const hasImageSource = Boolean(
           item.selectedAsset?.image_url
           || (item.selectedAsset?.storage_bucket && item.selectedAsset?.storage_path),
         );
-        const imageWarning = hasImageSource && !normalizedImage.buffer
+        const imageWarning = hasImageSource && !resolvedImage.buffer
           ? {
               itemId: item.id,
               sku: item.sku,
               displayName: item.display_name_override || item.product_name,
-              reason: normalizedImage.warning ?? "Image could not be downloaded for PDF export.",
+              reason: resolvedImage.warning ?? "Image could not be downloaded for PDF export.",
+              reasonCode: resolvedImage.reasonCode,
             }
           : null;
 
@@ -101,7 +100,7 @@ export async function POST(
             promoPrice: pricing.promoPrice,
             discountAmount: pricing.discountAmount,
             discountPercent: pricing.discountPercent,
-            imageBuffer: normalizedImage.buffer,
+            imageBuffer: resolvedImage.buffer,
           },
           imageWarning,
         };

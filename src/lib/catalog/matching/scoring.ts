@@ -11,6 +11,7 @@ export interface MatchableItem {
 export interface MatchableAsset {
   sku?: string | null;
   normalizedSku?: string | null;
+  alternateSkus?: Array<string | null | undefined>;
   productName: string;
   normalizedName?: string | null;
 }
@@ -38,12 +39,21 @@ export function scoreMatch(item: MatchableItem, asset: MatchableAsset) {
 
   const itemSku = item.normalizedSku ?? normalizeSku(item.sku);
   const assetSku = asset.normalizedSku ?? normalizeSku(asset.sku);
+  const assetSkuVariants = new Set(
+    [
+      assetSku,
+      ...(asset.alternateSkus ?? []).map((value) => normalizeSku(value)),
+    ].filter(Boolean),
+  );
 
-  if (itemSku && assetSku && itemSku === assetSku) {
-    score += 0.7;
+  if (itemSku && assetSkuVariants.has(itemSku)) {
+    score = Math.max(score, 0.95);
     reasons.push("exact_sku");
-  } else if (itemSku && assetSku && assetSku.includes(itemSku)) {
-    score += 0.45;
+  } else if (
+    itemSku
+    && [...assetSkuVariants].some((variant) => variant.includes(itemSku) || itemSku.includes(variant))
+  ) {
+    score = Math.max(score, 0.45);
     reasons.push("normalized_sku");
   }
 

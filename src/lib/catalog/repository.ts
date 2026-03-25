@@ -13,7 +13,14 @@ import {
   type CatalogJobMediaSlot,
 } from "@/lib/catalog/storage";
 import { FILE_BUCKETS } from "@/lib/catalog/constants";
-import { validatePdfRenderableImageBuffer } from "@/lib/catalog/image-validation";
+import {
+  normalizePdfRenderableImageBuffer,
+  validatePdfRenderableImageBuffer,
+} from "@/lib/catalog/image-validation";
+import {
+  ensureProductAssetStorageBacked,
+  type ProductAssetImageReasonCode,
+} from "@/lib/catalog/product-assets";
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { mergeCatalogStyleOptions, type CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { normalizeSku } from "@/lib/utils";
@@ -54,6 +61,14 @@ export interface CatalogItemCanonicalFields {
   discountPercent: number | null;
   packSize: string | null;
   unit: string | null;
+}
+
+export interface ResolvedProductAssetBufferResult {
+  asset: ProductAssetRow | null;
+  buffer: Buffer | null;
+  reasonCode: ProductAssetImageReasonCode | null;
+  warning: string | null;
+  recoveredFromRemote: boolean;
 }
 
 function asRow<T>(value: unknown) {
@@ -434,6 +449,20 @@ export async function approveCatalogItem(args: {
   }
 
   const job = await ensureJobAccess(admin, item.job_id, args.userId);
+  const assetResponse = await admin
+    .from("product_assets")
+    .select("*")
+    .eq("id", args.assetId)
+    .maybeSingle();
+  const asset = asRow<ProductAssetRow | null>(assetResponse.data);
+
+  if (!asset) {
+    throw new Error("Product asset not found.");
+  }
+
+  if (asset.image_url && (!asset.storage_bucket || !asset.storage_path)) {
+    await ensureProductAssetStorageBacked(admin, asset).catch(() => null);
+  }
 
   await admin
     .from("catalog_items")
@@ -854,38 +883,77 @@ async function createSignedStorageUrl(bucket: string, path: string, expiresIn = 
   return signedUrlResponse.data.signedUrl;
 }
 
-export async function resolveProductAssetBuffer(asset: ProductAssetRow | null) {
+export async function resolveProductAssetBuffer(
+  asset: ProductAssetRow | null,
+): Promise<ResolvedProductAssetBufferResult> {
   if (!asset) {
-    return null;
+    return {
+      asset: null,
+      buffer: null,
+      reasonCode: "remote_image_missing",
+      warning: "No image source is available for this product.",
+      recoveredFromRemote: false,
+    };
   }
 
   if (asset.storage_bucket && asset.storage_path) {
-    const buffer = await downloadStorageBuffer(asset.storage_bucket, asset.storage_path);
+    const storedBuffer = await downloadStorageBuffer(asset.storage_bucket, asset.storage_path);
 
-    if (buffer) {
-      return buffer;
-    }
-  }
+    if (storedBuffer) {
+      const normalizedStoredBuffer = await normalizePdfRenderableImageBuffer(storedBuffer);
 
-  if (asset.image_url) {
-    const response = await fetch(asset.image_url, {
-      headers: {
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        accept: "image/webp,image/avif,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8",
-        referer: "https://www.makro.pro/",
-        "accept-language": "th-TH,th;q=0.9,en;q=0.8",
-      },
-    }).catch(() => null);
-
-    if (response?.ok) {
-      const contentType = response.headers.get("content-type") ?? "";
-      if (contentType.startsWith("image/")) {
-        return Buffer.from(await response.arrayBuffer());
+      if (normalizedStoredBuffer.buffer) {
+        return {
+          asset,
+          buffer: normalizedStoredBuffer.buffer,
+          reasonCode: null,
+          warning: null,
+          recoveredFromRemote: false,
+        };
       }
+
+      if (!asset.image_url) {
+        return {
+          asset,
+          buffer: null,
+          reasonCode: "invalid_image",
+          warning:
+            normalizedStoredBuffer.warning
+            ?? "Stored image could not be prepared for PDF export.",
+          recoveredFromRemote: false,
+        };
+      }
+    } else if (!asset.image_url) {
+      return {
+        asset,
+        buffer: null,
+        reasonCode: "download_failed",
+        warning: "Stored image could not be downloaded for PDF export.",
+        recoveredFromRemote: false,
+      };
     }
   }
 
-  return null;
+  if (!asset.image_url) {
+    return {
+      asset,
+      buffer: null,
+      reasonCode: "remote_image_missing",
+      warning: "No image source is available for this product.",
+      recoveredFromRemote: false,
+    };
+  }
+
+  const admin = getAdminClientOrThrow();
+  const recovered = await ensureProductAssetStorageBacked(admin, asset);
+
+  return {
+    asset: recovered.asset,
+    buffer: recovered.buffer,
+    reasonCode: recovered.reasonCode,
+    warning: recovered.warning,
+    recoveredFromRemote: recovered.wasCached,
+  };
 }
 
 export async function resolveProductAssetPreviewUrl(asset: ProductAssetRow | null) {

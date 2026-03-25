@@ -22,6 +22,7 @@ interface Candidate {
   productName: string;
   previewUrl: string | null;
   confidence: number;
+  isExactSkuMatch?: boolean;
 }
 
 interface ReviewItem {
@@ -31,6 +32,7 @@ interface ReviewItem {
   confidence: number | null;
   reviewNote: string | null;
   currentImageUrl: string | null;
+  usedPdfPlaceholder?: boolean;
   candidates: Candidate[];
   jobId: string;
 }
@@ -40,8 +42,11 @@ interface ManualSearchResult {
   sku: string | null;
   productName: string;
   imageUrl: string | null;
+  previewUrl?: string | null;
   confidence: number;
+  reasons: string[];
   assetId?: string;
+  exactSkuMatch?: boolean;
 }
 
 function ConfidenceBadge({ value }: { value: number }) {
@@ -50,11 +55,20 @@ function ConfidenceBadge({ value }: { value: number }) {
     pct >= 80
       ? "bg-emerald-100 text-emerald-700"
       : pct >= 50
-      ? "bg-amber-100 text-amber-700"
-      : "bg-rose-100 text-rose-700";
+        ? "bg-amber-100 text-amber-700"
+        : "bg-rose-100 text-rose-700";
+
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${color}`}>
       {pct}%
+    </span>
+  );
+}
+
+function ExactSkuBadge() {
+  return (
+    <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+      Exact SKU
     </span>
   );
 }
@@ -78,88 +92,101 @@ function InlineSearchPanel({
   async function handleSearch() {
     setLoading(true);
     setError(null);
+
     try {
       const res = await fetch(`/api/items/${itemId}/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Search failed.");
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Search failed.");
+      }
+
       setResults(data.results ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Search failed.");
+    } catch (searchError) {
+      setError(searchError instanceof Error ? searchError.message : "Search failed.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="border-t border-line bg-gradient-to-b from-white to-gray-50/80 px-4 py-4 space-y-4">
+    <div className="space-y-4 border-t border-line bg-gradient-to-b from-white to-gray-50/80 px-4 py-4">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Manual search</p>
-        <p className="mt-1 text-xs text-muted">Search Makro by SKU or product name, then approve the best replacement asset.</p>
+        <p className="mt-1 text-xs text-muted">
+          Search Makro by SKU or product name, then approve the best replacement asset.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Search by SKU or product name…"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => event.key === "Enter" && handleSearch()}
+          placeholder="Search by SKU or product name..."
           className="h-9 text-xs"
         />
         <Button
           type="button"
           variant="secondary"
-          className="h-9 shrink-0 px-3 text-xs gap-1"
+          className="h-9 shrink-0 gap-1 px-3 text-xs"
           onClick={handleSearch}
           disabled={loading}
         >
           {loading ? <Loader2 className="size-3 animate-spin" /> : <Search className="size-3" />}
-          {loading ? "Searching…" : "Search"}
+          {loading ? "Searching..." : "Search"}
         </Button>
       </div>
 
-      {error && <p className="text-xs text-rose-600">{error}</p>}
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
 
-      {results.length > 0 && (
+      {results.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {results.map((r) => {
-            const proxyUrl = r.imageUrl
-              ? `/api/images/proxy?url=${encodeURIComponent(r.imageUrl)}`
-              : null;
+          {results.map((result) => {
+            const previewUrl = result.previewUrl ?? (
+              result.imageUrl
+                ? `/api/images/proxy?url=${encodeURIComponent(result.imageUrl)}`
+                : null
+            );
+
             return (
               <div
-                key={`${r.sourceProductId ?? r.productName}`}
+                key={`${result.sourceProductId ?? result.productName}`}
                 className="rounded-xl border border-line bg-white p-3 shadow-sm"
               >
                 <div className="relative h-28 overflow-hidden rounded-lg border border-line bg-gray-50">
-                  {proxyUrl ? (
+                  {previewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={proxyUrl} alt={r.productName} className="h-full w-full object-contain" />
+                    <img src={previewUrl} alt={result.productName} className="h-full w-full object-contain" />
                   ) : (
                     <div className="flex h-full items-center justify-center">
                       <ImageOff className="size-4 text-muted" />
                     </div>
                   )}
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <p className="line-clamp-2 text-[11px] font-semibold text-foreground">{r.productName}</p>
-                  <ConfidenceBadge value={r.confidence} />
+                <div className="mt-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0 space-y-1">
+                    <p className="line-clamp-2 text-[11px] font-semibold text-foreground">{result.productName}</p>
+                    {result.exactSkuMatch ? <ExactSkuBadge /> : null}
+                  </div>
+                  <ConfidenceBadge value={result.confidence} />
                 </div>
-                <p className="mt-1 text-[10px] text-muted">{r.sku ?? "No SKU"}</p>
+                <p className="mt-1 text-[10px] text-muted">{result.sku ?? "No SKU"}</p>
                 <form
-                  action={async (fd) => {
-                    await approveCandidateAction(fd);
+                  action={async (formData) => {
+                    await approveCandidateAction(formData);
                     onApproved();
                   }}
                   className="mt-3"
                 >
                   <input type="hidden" name="itemId" value={itemId} />
                   <input type="hidden" name="jobId" value={jobId} />
-                  <input type="hidden" name="assetId" value={r.assetId ?? ""} />
+                  <input type="hidden" name="assetId" value={result.assetId ?? ""} />
                   <input type="hidden" name="saveManualMapping" value="on" />
                   <Button
                     variant="secondary"
-                    className="w-full text-[11px] h-8"
-                    disabled={!r.assetId}
+                    className="h-8 w-full text-[11px]"
+                    disabled={!result.assetId}
                   >
                     Use this
                   </Button>
@@ -168,11 +195,11 @@ function InlineSearchPanel({
             );
           })}
         </div>
-      )}
+      ) : null}
 
-      {!loading && results.length === 0 && query && (
+      {!loading && results.length === 0 && query ? (
         <p className="text-xs text-muted">No results. Try a different keyword or SKU.</p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -193,8 +220,13 @@ export function ReviewGrid({
   function toggleSearch(itemId: string) {
     setExpandedSearch((prev) => {
       const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
+
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+
       return next;
     });
   }
@@ -202,14 +234,19 @@ export function ReviewGrid({
   function toggleSelect(itemId: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
+
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+
       return next;
     });
   }
 
   function selectAll() {
-    setSelected(new Set(items.map((i) => i.id)));
+    setSelected(new Set(items.map((item) => item.id)));
   }
 
   function clearSelection() {
@@ -218,6 +255,7 @@ export function ReviewGrid({
 
   async function bulkApprove(opts: { minConfidence?: number; itemIds?: string[] }) {
     setBulkMessage(null);
+
     try {
       const res = await fetch(`/api/jobs/${jobId}/bulk-approve`, {
         method: "POST",
@@ -225,28 +263,32 @@ export function ReviewGrid({
         body: JSON.stringify(opts),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Bulk approve failed.");
-      setBulkMessage(`✓ Approved ${data.approved} item(s).`);
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Bulk approve failed.");
+      }
+
+      setBulkMessage(`Success: Approved ${data.approved} item(s).`);
       setSelected(new Set());
       router.refresh();
-    } catch (e) {
-      setBulkMessage(e instanceof Error ? e.message : "Bulk approve failed.");
+    } catch (error) {
+      setBulkMessage(error instanceof Error ? error.message : "Bulk approve failed.");
     }
   }
 
   const highConfidenceCount = items.filter(
-    (i) => (i.confidence ?? 0) >= 0.8 && i.candidates.length > 0,
+    (item) => (item.confidence ?? 0) >= 0.8 && item.candidates.length > 0,
   ).length;
 
   if (items.length === 0) {
     return (
       <div className="rounded-2xl border border-line bg-card px-6 py-12 text-center shadow-sm">
-        <CheckCircle className="mx-auto size-10 text-emerald-500 mb-3" />
+        <CheckCircle className="mx-auto mb-3 size-10 text-emerald-500" />
         <p className="text-sm font-semibold text-foreground">All items reviewed!</p>
         <p className="mt-1 text-sm text-muted">Ready to proceed to the master card editor.</p>
         <Link
           href={`/catalogs/${jobId}/master-card`}
-          className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
+          className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand/90"
         >
           Continue to Master Card
         </Link>
@@ -283,11 +325,11 @@ export function ReviewGrid({
                 </Button>
                 <Button
                   type="button"
-                  className="h-8 px-3 text-xs gap-1"
+                  className="h-8 gap-1 px-3 text-xs"
                   disabled={approving}
                   onClick={() => startApproving(() => bulkApprove({ itemIds: [...selected] }))}
                 >
-                  {approving && <Loader2 className="size-3 animate-spin" />}
+                  {approving ? <Loader2 className="size-3 animate-spin" /> : null}
                   Approve selected ({selected.size})
                 </Button>
               </>
@@ -301,28 +343,34 @@ export function ReviewGrid({
                 >
                   Select all
                 </Button>
-                {highConfidenceCount > 0 && (
+                {highConfidenceCount > 0 ? (
                   <Button
                     type="button"
-                    className="h-8 px-3 text-xs gap-1"
+                    className="h-8 gap-1 px-3 text-xs"
                     disabled={approving}
                     onClick={() => startApproving(() => bulkApprove({ minConfidence: 0.8 }))}
                   >
-                    {approving && <Loader2 className="size-3 animate-spin" />}
-                    Approve all ≥ 80% ({highConfidenceCount})
+                    {approving ? <Loader2 className="size-3 animate-spin" /> : null}
+                    Approve all {"\u003e="} 80% ({highConfidenceCount})
                   </Button>
-                )}
+                ) : null}
               </>
             )}
           </div>
         </div>
       </div>
 
-      {bulkMessage && (
-        <p className={`rounded-lg px-4 py-2 text-sm ${bulkMessage.startsWith("✓") ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+      {bulkMessage ? (
+        <p
+          className={`rounded-lg px-4 py-2 text-sm ${
+            bulkMessage.startsWith("Success:")
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+        >
           {bulkMessage}
         </p>
-      )}
+      ) : null}
 
       <div className="space-y-4">
         {items.map((item) => (
@@ -333,7 +381,7 @@ export function ReviewGrid({
                   type="checkbox"
                   checked={selected.has(item.id)}
                   onChange={() => toggleSelect(item.id)}
-                  className="mt-1 size-4 rounded accent-brand shrink-0 cursor-pointer"
+                  className="mt-1 size-4 shrink-0 cursor-pointer rounded accent-brand"
                 />
 
                 <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-gray-50">
@@ -354,10 +402,15 @@ export function ReviewGrid({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">{item.productName}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                        <span>SKU: {item.sku ?? "—"}</span>
+                        <span>SKU: {item.sku ?? "-"}</span>
                         {item.reviewNote ? (
                           <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
                             {item.reviewNote}
+                          </span>
+                        ) : null}
+                        {item.usedPdfPlaceholder ? (
+                          <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-rose-700">
+                            PDF placeholder used last export
                           </span>
                         ) : null}
                       </div>
@@ -378,8 +431,12 @@ export function ReviewGrid({
                   {item.candidates.length > 0 ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Suggested matches</p>
-                        <p className="text-[11px] text-muted">Pick the best asset or open manual search below.</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                          Suggested matches
+                        </p>
+                        <p className="text-[11px] text-muted">
+                          Pick the best asset or open manual search below.
+                        </p>
                       </div>
                       <div className="grid gap-3 lg:grid-cols-3">
                         {item.candidates.slice(0, 3).map((candidate) => (
@@ -404,7 +461,12 @@ export function ReviewGrid({
                               </div>
                               <div className="space-y-2">
                                 <div className="flex items-start justify-between gap-2">
-                                  <p className="line-clamp-2 text-[11px] font-semibold text-foreground">{candidate.productName}</p>
+                                  <div className="min-w-0 space-y-1">
+                                    <p className="line-clamp-2 text-[11px] font-semibold text-foreground">
+                                      {candidate.productName}
+                                    </p>
+                                    {candidate.isExactSkuMatch ? <ExactSkuBadge /> : null}
+                                  </div>
                                   <ConfidenceBadge value={candidate.confidence} />
                                 </div>
                                 <span className="inline-flex rounded-full border border-brand/20 bg-brand-soft/30 px-2.5 py-1 text-[11px] font-medium text-brand">
@@ -437,14 +499,25 @@ export function ReviewGrid({
                     <label className="flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-line bg-white px-3 text-xs font-medium text-muted-strong transition hover:border-brand/30 hover:text-brand">
                       <Upload className="size-3.5" />
                       Upload image
-                      <input name="asset" type="file" accept="image/png,image/jpeg" required className="sr-only" onChange={(e) => e.target.form?.requestSubmit()} />
+                      <input
+                        name="asset"
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        required
+                        className="sr-only"
+                        onChange={(event) => event.target.form?.requestSubmit()}
+                      />
                     </label>
                   </form>
 
                   <button
                     type="button"
                     onClick={() => toggleSearch(item.id)}
-                    className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition ${expandedSearch.has(item.id) ? "border-brand/30 bg-brand-soft/10 text-brand" : "border-line bg-white text-muted-strong hover:border-brand/30 hover:text-brand"}`}
+                    className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition ${
+                      expandedSearch.has(item.id)
+                        ? "border-brand/30 bg-brand-soft/10 text-brand"
+                        : "border-line bg-white text-muted-strong hover:border-brand/30 hover:text-brand"
+                    }`}
                   >
                     <Search className="size-3.5" />
                     Manual search
@@ -462,7 +535,7 @@ export function ReviewGrid({
               </div>
             </div>
 
-            {expandedSearch.has(item.id) && (
+            {expandedSearch.has(item.id) ? (
               <InlineSearchPanel
                 itemId={item.id}
                 jobId={jobId}
@@ -476,7 +549,7 @@ export function ReviewGrid({
                   router.refresh();
                 }}
               />
-            )}
+            ) : null}
           </div>
         ))}
       </div>

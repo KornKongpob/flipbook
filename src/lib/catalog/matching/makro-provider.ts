@@ -4,6 +4,9 @@ import { normalizeName, normalizeSku } from "@/lib/utils";
 export interface ProviderAssetCandidate {
   sourceProductId: string | null;
   sku: string | null;
+  makroId: string | null;
+  productCode: string | null;
+  providerSku: string | null;
   productName: string;
   productUrl: string | null;
   imageUrl: string | null;
@@ -59,7 +62,10 @@ export class MakroSearchProvider {
 
         for (const hit of hits) {
           const doc = hit.document || hit;
-          const sku = doc.productCode || doc.sku || doc.makroId;
+          const makroId = doc.makroId ?? null;
+          const productCode = doc.productCode ?? null;
+          const providerSku = doc.sku ?? null;
+          const sku = makroId || productCode || providerSku;
           const productName = doc.title || doc.name || doc.titleEn || doc.productName || "Unknown product";
           const imageUrl = doc.images?.[0] || doc.imageUrls?.[0] || doc.image;
           
@@ -68,6 +74,9 @@ export class MakroSearchProvider {
           rawCandidates.push({
             sourceProductId: doc.id || sku,
             sku,
+            makroId,
+            productCode,
+            providerSku,
             productName,
             productUrl: sku ? `${env.MAKRO_BASE_URL}/th/p/${sku}` : null,
             imageUrl: imageUrl || null,
@@ -109,12 +118,24 @@ export class MakroSearchProvider {
       .filter((candidate) => {
         // Exact or partial SKU match
         const qSkuStr = query.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-        const cSkuStr = candidate.sku?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || '';
-        const mSkuStr = candidate.sourceProductId?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || '';
+        const candidateSkuValues = [
+          candidate.sku,
+          candidate.makroId,
+          candidate.productCode,
+          candidate.providerSku,
+          candidate.sourceProductId,
+        ]
+          .map((value) => value?.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "")
+          .filter(Boolean);
         
         if (qSkuStr) {
-          if (cSkuStr === qSkuStr || cSkuStr.includes(qSkuStr) || qSkuStr.includes(cSkuStr)) return true;
-          if (mSkuStr === qSkuStr || mSkuStr.includes(qSkuStr) || qSkuStr.includes(mSkuStr)) return true;
+          if (
+            candidateSkuValues.some((value) =>
+              value === qSkuStr || value.includes(qSkuStr) || qSkuStr.includes(value),
+            )
+          ) {
+            return true;
+          }
         }
         // Name substring match
         if (normalizedQuery && candidate.normalizedName.includes(normalizedQuery)) return true;

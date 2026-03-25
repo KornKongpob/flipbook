@@ -1,10 +1,12 @@
 import type { Json } from "@/lib/database.types";
+import type { ProductAssetImageReasonCode } from "@/lib/catalog/product-assets";
 
 export interface CatalogPdfImageWarningItem {
   itemId: string;
   sku: string | null;
   displayName: string;
   reason: string;
+  reasonCode?: ProductAssetImageReasonCode | null;
 }
 
 interface CatalogPdfWarningEvent {
@@ -78,6 +80,9 @@ export function formatCatalogPdfImageWarningDescription(
   });
   const remainingCount = Math.max(summary.count - visibleItems.length, 0);
   const remainingLabel = remainingCount > 0 ? ` and ${remainingCount} more` : "";
+  const reasonHint = summary.items.some((item) => item.reasonCode === "remote_image_missing")
+    ? " The selected image is no longer available for at least one item."
+    : "";
 
-  return `${summary.count} item(s) used a placeholder image in the latest PDF export: ${visibleItems.join(", ")}${remainingLabel}.`;
+  return `${summary.count} item(s) used a placeholder image in the latest PDF export: ${visibleItems.join(", ")}${remainingLabel}.${reasonHint} Open Review and upload a PNG or JPEG if the warning stays on the next export.`;
 }
