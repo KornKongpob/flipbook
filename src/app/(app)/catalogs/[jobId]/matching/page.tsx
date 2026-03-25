@@ -45,11 +45,11 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 function getNextHref(jobId: string, status: string) {
-  if (status === "needs_review") return `/catalogs/${jobId}/review`;
-  if (["pdf_ready", "completed", "converting_flipbook", "generating_pdf"].includes(status)) {
-    return `/catalogs/${jobId}/result`;
+  if (DONE_STATUSES.has(status)) {
+    return `/catalogs/${jobId}/review`;
   }
-  return `/catalogs/${jobId}/master-card`;
+
+  return `/catalogs/${jobId}/review`;
 }
 
 export default function CatalogMatchingPage({
@@ -111,7 +111,7 @@ export default function CatalogMatchingPage({
       : 0;
   const nextHref = jobId && data ? getNextHref(jobId, data.status) : null;
   const actionHref = isDone ? nextHref : null;
-  const nextLabel = data?.status === "needs_review" ? "Go to Review" : "Continue to Master Card";
+  const nextLabel = "Open Fix Products";
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -122,7 +122,7 @@ export default function CatalogMatchingPage({
           error
             ? "Something interrupted automatic matching. Review the status details below and try again."
             : isDone
-            ? "Automatic matching is finished. You can continue immediately to the next workflow stage."
+            ? "Automatic matching is finished. Continue into Fix Products to audit every item, resolve blockers, or remove any product that should not stay in this catalog."
             : "We’re matching uploaded rows against Makro assets. This screen updates automatically as work progresses."
         }
         actions={
@@ -145,7 +145,7 @@ export default function CatalogMatchingPage({
           <div className="rounded-xl border border-white/60 bg-white/70 px-4 py-3 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Next step</p>
             <p className="mt-2 text-sm font-semibold text-foreground">
-              {data ? (data.reviewCount > 0 ? `${data.reviewCount} item(s) likely need review` : "Ready for editor when done") : "Determining route"}
+              {data ? (data.reviewCount > 0 ? `${data.reviewCount} item(s) need attention` : "Ready for product audit") : "Determining route"}
             </p>
           </div>
         </div>
@@ -217,7 +217,7 @@ export default function CatalogMatchingPage({
                     <p className="mt-1 text-sm text-muted-strong">
                       {data.reviewCount > 0
                         ? `We found ${data.reviewCount} item(s) that still need human review.`
-                        : "No review blockers detected. You can continue straight into the editor."}
+                        : "Matching is done. Open Fix Products to verify the full catalog before design and export."}
                     </p>
                     <Link href={nextHref} className={`${buttonClassName("primary")} mt-4 inline-flex`}>
                       {nextLabel}

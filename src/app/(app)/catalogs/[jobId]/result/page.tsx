@@ -12,6 +12,19 @@ import {
 } from "@/lib/catalog/pdf-warnings";
 import { getCatalogJobBundle, getLatestPdfFile } from "@/lib/catalog/repository";
 
+function getLatestCatalogMutationTimestamp(bundle: Awaited<ReturnType<typeof getCatalogJobBundle>>) {
+  const timestamps = [
+    ...bundle.items.map((item) => item.updated_at),
+    ...bundle.events
+      .filter((event) => ["style", "review", "editor"].includes(event.step))
+      .map((event) => event.created_at),
+  ]
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+
+  return timestamps.length ? Math.max(...timestamps) : 0;
+}
+
 export default async function CatalogResultPage({
   params,
   searchParams,
@@ -34,6 +47,10 @@ export default async function CatalogResultPage({
   const matchingInProgress = ["uploaded", "parsing", "matching"].includes(bundle.job.status);
   const canGenerate = !isGenerating && !matchingInProgress && bundle.job.review_required_count === 0 && visibleCount > 0;
   const pdfImageWarningSummary = getLatestCatalogPdfImageWarningSummary(bundle.events);
+  const latestMutationTimestamp = getLatestCatalogMutationTimestamp(bundle);
+  const latestPdfTimestamp = latestPdf ? new Date(latestPdf.created_at).getTime() : 0;
+  const isExportOutdated = Boolean(latestPdf) && latestMutationTimestamp > latestPdfTimestamp;
+  const canPublishFlipbook = Boolean(latestPdf) && !isExportOutdated;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -42,19 +59,16 @@ export default async function CatalogResultPage({
         jobName={bundle.job.job_name}
         currentStep="result"
         jobStatus={bundle.job.status}
-        title="Export and publish"
+        title="Export & Publish"
         description={
           isPdfReady
-            ? "Your PDF catalog is ready to download, publish, or convert into a flipbook."
-            : "Generate the final PDF, then continue to download or publish the catalog."
+            ? "Generate or regenerate the latest PDF, then download or publish the current catalog from one export hub."
+            : "Generate the latest PDF, then continue to download or publish the catalog from this same export hub."
         }
         actions={
           <div className="flex w-full flex-wrap items-center gap-2 sm:justify-end">
             <Link href={`/catalogs/${jobId}/page-design`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}>
-              Back to Page Design
-            </Link>
-            <Link href={`/catalogs/${jobId}/generate`} className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}>
-              Generate step
+              Back to Design Catalog
             </Link>
             <form action={`/api/jobs/${jobId}/generate-pdf`} method="post">
               <input type="hidden" name="returnTo" value="result" />
@@ -68,7 +82,7 @@ export default async function CatalogResultPage({
         metrics={[
           { label: "Total pages", value: bundle.job.page_count ? `${bundle.job.page_count}` : "-" },
           { label: "Products included", value: `${visibleCount}` },
-          { label: "Excluded / hidden", value: `${hiddenCount}` },
+          { label: "Export state", value: isExportOutdated ? "Outdated" : latestPdf ? "Current" : "Not generated" },
         ]}
       />
 
@@ -84,12 +98,104 @@ export default async function CatalogResultPage({
         <StatusBanner
           tone="warning"
           title="Some images used placeholders in the latest PDF"
-          description={formatCatalogPdfImageWarningDescription(pdfImageWarningSummary)}
+          description={(
+            <div className="space-y-2">
+              <p>{formatCatalogPdfImageWarningDescription(pdfImageWarningSummary)}</p>
+              <Link href={`/catalogs/${jobId}/review?focus=pdf-placeholders`} className="inline-flex font-semibold underline underline-offset-2">
+                Open Fix Products for affected items
+              </Link>
+            </div>
+          )}
+        />
+      ) : null}
+
+      {isExportOutdated ? (
+        <StatusBanner
+          tone="warning"
+          title="The latest export is outdated"
+          description="Products or design settings changed after the most recent PDF was generated. Regenerate the PDF before publishing or trusting this export as final."
         />
       ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5">
+          <SurfaceCard>
+            <SurfaceCardHeader>
+              <div>
+                <h2 id="generate" className="text-sm font-semibold text-foreground">Generation checklist</h2>
+                <p className="mt-1 text-xs text-muted">Confirm the catalog is ready, then generate the latest PDF from here.</p>
+              </div>
+            </SurfaceCardHeader>
+            <SurfaceCardBody className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-line bg-white/70 px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Review blockers</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{bundle.job.review_required_count}</p>
+                </div>
+                <div className="rounded-2xl border border-line bg-white/70 px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Visible products</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{visibleCount}</p>
+                </div>
+                <div className="rounded-2xl border border-line bg-white/70 px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Hidden products</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{hiddenCount}</p>
+                </div>
+                <div className="rounded-2xl border border-line bg-white/70 px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Latest PDF</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">
+                    {latestPdf ? (isExportOutdated ? "Previous export" : "Current export") : "Not yet"}
+                  </p>
+                </div>
+              </div>
+
+              {matchingInProgress ? (
+                <StatusBanner
+                  tone="warning"
+                  title="Matching is still in progress"
+                  description="Wait for matching to finish before generating the PDF."
+                />
+              ) : bundle.job.review_required_count > 0 ? (
+                <StatusBanner
+                  tone="warning"
+                  title="Fix Products still has blockers"
+                  description={(
+                    <span>
+                      Resolve the remaining product issues before generating the latest PDF.{" "}
+                      <Link href={`/catalogs/${jobId}/review`} className="font-semibold underline underline-offset-2">
+                        Open Fix Products
+                      </Link>
+                    </span>
+                  )}
+                />
+              ) : visibleCount === 0 ? (
+                <StatusBanner
+                  tone="warning"
+                  title="No visible products to export"
+                  description={(
+                    <span>
+                      Add or reveal at least one product in Design Catalog before generating the PDF.{" "}
+                      <Link href={`/catalogs/${jobId}/page-design`} className="font-semibold underline underline-offset-2">
+                        Open Design Catalog
+                      </Link>
+                    </span>
+                  )}
+                />
+              ) : isExportOutdated ? (
+                <StatusBanner
+                  tone="warning"
+                  title="Regeneration required"
+                  description="The current file list below belongs to an older export. Generate again to publish the latest catalog state."
+                />
+              ) : (
+                <StatusBanner
+                  tone="success"
+                  title="Export is ready"
+                  description="There are no blockers for generating the latest PDF."
+                />
+              )}
+            </SurfaceCardBody>
+          </SurfaceCard>
+
           <SurfaceCard className="overflow-hidden">
             <SurfaceCardHeader>
               <h2 className="flex items-center gap-2 font-semibold text-foreground">
@@ -104,8 +210,12 @@ export default async function CatalogResultPage({
                 {latestPdf ? (
                   <div className="flex flex-col justify-between gap-4 rounded-xl border border-line bg-gray-50/30 p-4 sm:flex-row sm:items-center">
                     <div>
-                      <p className="text-sm font-medium text-foreground">{bundle.job.job_name}.pdf</p>
-                      <p className="mt-0.5 text-xs text-muted">{bundle.job.page_count} pages • Generated {new Date(latestPdf.created_at).toLocaleDateString()}</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {bundle.job.job_name}.pdf {isExportOutdated ? "(previous export)" : ""}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {bundle.job.page_count} pages • Generated {new Date(latestPdf.created_at).toLocaleDateString()}
+                      </p>
                     </div>
                     <a
                       href={`/api/files/${latestPdf.id}/download`}
@@ -117,7 +227,7 @@ export default async function CatalogResultPage({
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-line px-4 py-4 text-sm text-muted">
-                    No PDF generated yet. Generate the final export when you are ready.
+                    No PDF generated yet. Use the generation checklist above when you are ready.
                   </div>
                 )}
               </div>
@@ -126,7 +236,7 @@ export default async function CatalogResultPage({
                 <div>
                   <h3 className="mb-3 text-sm font-medium text-foreground">Digital flipbook</h3>
 
-                  {bundle.flipbook?.flipbook_url ? (
+                  {bundle.flipbook?.flipbook_url && canPublishFlipbook ? (
                     <div className="rounded-xl border border-brand/30 bg-brand-soft/10 p-4">
                       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                         <div>
@@ -149,22 +259,28 @@ export default async function CatalogResultPage({
                       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {bundle.job.flipbook_mode === "manual" ? "Manual Upload Mode" : "Not generated yet"}
+                            {isExportOutdated
+                              ? "Regenerate PDF first"
+                              : bundle.job.flipbook_mode === "manual"
+                                ? "Manual Upload Mode"
+                                : "Not generated yet"}
                           </p>
                           <p className="mt-1 max-w-[300px] text-xs text-muted">
-                            {bundle.job.flipbook_mode === "manual"
-                              ? "Download the PDF above and upload it directly to Heyzine."
-                              : "Click below to send the PDF to Heyzine and generate a digital flipbook."}
+                            {isExportOutdated
+                              ? "The current export is older than the latest catalog changes. Regenerate the PDF before publishing or creating a new flipbook."
+                              : bundle.job.flipbook_mode === "manual"
+                                ? "Download the PDF above and upload it directly to Heyzine."
+                                : "Click below to send the PDF to Heyzine and generate a digital flipbook."}
                           </p>
                         </div>
-                        {bundle.job.flipbook_mode === "client_id" && (
+                        {bundle.job.flipbook_mode === "client_id" && canPublishFlipbook ? (
                           <form action={`/api/jobs/${jobId}/flipbook`} method="post">
                             <Button className="h-auto min-h-10 max-w-full gap-2 px-4 py-2 text-center leading-5">
                               <RefreshCw className="size-4" />
                               Generate Flipbook
                             </Button>
                           </form>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -192,6 +308,13 @@ export default async function CatalogResultPage({
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-strong">Excluded/Hidden</span>
                   <span className="text-base font-bold text-muted">{hiddenCount}</span>
+                </div>
+                <div className="h-px w-full bg-line" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-strong">Export freshness</span>
+                  <span className={`text-base font-bold ${isExportOutdated ? "text-amber-700" : "text-foreground"}`}>
+                    {isExportOutdated ? "Outdated" : latestPdf ? "Current" : "Pending"}
+                  </span>
                 </div>
               </div>
             </SurfaceCardBody>
@@ -230,9 +353,9 @@ export default async function CatalogResultPage({
                       {matchingInProgress
                         ? "Matching is still running. Wait for the workflow to finish before exporting."
                         : bundle.job.review_required_count > 0
-                          ? "Clear the remaining review blockers before generating the final PDF."
+                          ? "Clear the remaining product blockers in Fix Products before generating the latest PDF."
                           : visibleCount === 0
-                            ? "Make at least one product visible before generating the final PDF."
+                            ? "Make at least one product visible before generating the latest PDF."
                             : "Generate the PDF first, then this page becomes your hub for download and flipbook publishing."}
                     </p>
                   </div>

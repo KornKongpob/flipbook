@@ -84,5 +84,5 @@ export function formatCatalogPdfImageWarningDescription(
     ? " The selected image is no longer available for at least one item."
     : "";
 
-  return `${summary.count} item(s) used a placeholder image in the latest PDF export: ${visibleItems.join(", ")}${remainingLabel}.${reasonHint} Open Review and upload a PNG or JPEG if the warning stays on the next export.`;
+  return `${summary.count} item(s) used a placeholder image in the latest PDF export: ${visibleItems.join(", ")}${remainingLabel}.${reasonHint} Open Fix Products and upload a PNG or JPEG if the warning stays on the next export.`;
 }

@@ -9,11 +9,20 @@ import {
   approveCatalogItem,
   duplicateCatalogJob,
   moveCatalogItem,
+  removeCatalogItems,
   reorderCatalogItems,
   toggleCatalogItemVisibility,
   updateCatalogItemDisplayName,
   updateJobStyleOptions,
 } from "@/lib/catalog/repository";
+
+function revalidateCatalogWorkflow(jobId: string) {
+  revalidatePath(`/catalogs/${jobId}/review`);
+  revalidatePath(`/catalogs/${jobId}/master-card`);
+  revalidatePath(`/catalogs/${jobId}/page-design`);
+  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidatePath(`/catalogs/${jobId}/result`);
+}
 
 export async function signOutAction() {
   const supabase = await createServerSupabaseClient();
@@ -35,11 +44,7 @@ export async function approveCandidateAction(formData: FormData) {
     saveManualMapping,
   });
 
-  revalidatePath(`/catalogs/${jobId}/review`);
-  revalidatePath(`/catalogs/${jobId}/master-card`);
-  revalidatePath(`/catalogs/${jobId}/page-design`);
-  revalidatePath(`/catalogs/${jobId}/generate`);
-  revalidatePath(`/catalogs/${jobId}/result`);
+  revalidateCatalogWorkflow(jobId);
 }
 
 export async function saveDisplayNameAction(formData: FormData) {
@@ -50,9 +55,7 @@ export async function saveDisplayNameAction(formData: FormData) {
 
   await updateCatalogItemDisplayName(user.id, itemId, displayName || null);
 
-  revalidatePath(`/catalogs/${jobId}/master-card`);
-  revalidatePath(`/catalogs/${jobId}/page-design`);
-  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidateCatalogWorkflow(jobId);
 }
 
 export async function moveItemAction(formData: FormData) {
@@ -63,9 +66,7 @@ export async function moveItemAction(formData: FormData) {
 
   await moveCatalogItem(user.id, itemId, direction);
 
-  revalidatePath(`/catalogs/${jobId}/master-card`);
-  revalidatePath(`/catalogs/${jobId}/page-design`);
-  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidateCatalogWorkflow(jobId);
 }
 
 export async function reorderItemsAction(jobId: string, orderedItemIds: string[]) {
@@ -73,9 +74,7 @@ export async function reorderItemsAction(jobId: string, orderedItemIds: string[]
 
   await reorderCatalogItems(user.id, jobId, orderedItemIds);
 
-  revalidatePath(`/catalogs/${jobId}/master-card`);
-  revalidatePath(`/catalogs/${jobId}/page-design`);
-  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidateCatalogWorkflow(jobId);
 }
 
 export async function toggleItemVisibilityAction(formData: FormData) {
@@ -86,9 +85,37 @@ export async function toggleItemVisibilityAction(formData: FormData) {
 
   await toggleCatalogItemVisibility(user.id, itemId, nextVisible);
 
-  revalidatePath(`/catalogs/${jobId}/master-card`);
-  revalidatePath(`/catalogs/${jobId}/page-design`);
-  revalidatePath(`/catalogs/${jobId}/generate`);
+  revalidateCatalogWorkflow(jobId);
+}
+
+export async function removeCatalogItemAction(args: {
+  jobId: string;
+  itemId: string;
+}) {
+  const user = await requireUser();
+  const result = await removeCatalogItems({
+    userId: user.id,
+    jobId: args.jobId,
+    itemIds: [args.itemId],
+  });
+
+  revalidateCatalogWorkflow(args.jobId);
+  return result;
+}
+
+export async function removeCatalogItemsAction(args: {
+  jobId: string;
+  itemIds: string[];
+}) {
+  const user = await requireUser();
+  const result = await removeCatalogItems({
+    userId: user.id,
+    jobId: args.jobId,
+    itemIds: args.itemIds,
+  });
+
+  revalidateCatalogWorkflow(args.jobId);
+  return result;
 }
 
 export async function saveStyleOptionsAction(formData: FormData) {
@@ -163,10 +190,7 @@ export async function saveStyleOptionsAction(formData: FormData) {
     }),
   );
 
-  revalidatePath(`/catalogs/${jobId}/master-card`);
-  revalidatePath(`/catalogs/${jobId}/page-design`);
-  revalidatePath(`/catalogs/${jobId}/generate`);
-  revalidatePath(`/catalogs/${jobId}/result`);
+  revalidateCatalogWorkflow(jobId);
 }
 
 export async function duplicateJobAction(formData: FormData) {
@@ -174,5 +198,5 @@ export async function duplicateJobAction(formData: FormData) {
   const jobId = String(formData.get("jobId"));
   const newJobId = await duplicateCatalogJob(jobId, user.id);
 
-  redirect(`/catalogs/${newJobId}/master-card`);
+  redirect(`/catalogs/${newJobId}/page-design`);
 }

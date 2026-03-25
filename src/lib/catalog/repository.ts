@@ -24,6 +24,7 @@ import {
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { mergeCatalogStyleOptions, type CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { normalizeSku } from "@/lib/utils";
+import type { CatalogJobStatus } from "@/lib/database.types";
 
 type AdminClient = SupabaseClient<Database>;
 type CatalogJobRow = Database["public"]["Tables"]["catalog_jobs"]["Row"];
@@ -107,6 +108,76 @@ function toCatalogItemCanonicalFields(item: Pick<
     packSize: item.pack_size,
     unit: item.unit,
   } satisfies CatalogItemCanonicalFields;
+}
+
+function getCatalogJobStatusAfterInteractiveChange(
+  currentStatus: CatalogJobStatus,
+  reviewRequiredCount: number,
+): CatalogJobStatus {
+  if (["uploaded", "parsing", "matching"].includes(currentStatus)) {
+    return currentStatus;
+  }
+
+  if (reviewRequiredCount > 0) {
+    return "needs_review";
+  }
+
+  if (["generating_pdf", "pdf_ready", "converting_flipbook", "completed"].includes(currentStatus)) {
+    return currentStatus;
+  }
+
+  return "ready_to_generate";
+}
+
+async function syncCatalogJobReviewState(
+  admin: AdminClient,
+  job: Pick<CatalogJobRow, "id" | "status">,
+) {
+  const itemsResponse = await admin
+    .from("catalog_items")
+    .select("id, match_status")
+    .eq("job_id", job.id);
+  const items = asRows<Pick<CatalogItemRow, "id" | "match_status">>(itemsResponse.data);
+  const reviewRequiredCount = items.filter((entry) => entry.match_status === "needs_review").length;
+
+  await admin
+    .from("catalog_jobs")
+    .update({
+      review_required_count: reviewRequiredCount,
+      status: getCatalogJobStatusAfterInteractiveChange(job.status, reviewRequiredCount),
+    })
+    .eq("id", job.id);
+
+  return {
+    remainingItemsCount: items.length,
+    reviewRequiredCount,
+  };
+}
+
+async function compactCatalogItemDisplayOrder(
+  admin: AdminClient,
+  jobId: string,
+) {
+  const itemsResponse = await admin
+    .from("catalog_items")
+    .select("id, display_order, row_no")
+    .eq("job_id", jobId)
+    .order("display_order", { ascending: true })
+    .order("row_no", { ascending: true });
+  const items = asRows<Pick<CatalogItemRow, "id" | "display_order" | "row_no">>(itemsResponse.data);
+
+  await Promise.all(
+    items.map((item, index) =>
+      item.display_order === index
+        ? Promise.resolve()
+        : admin
+            .from("catalog_items")
+            .update({ display_order: index })
+            .eq("id", item.id),
+    ),
+  );
+
+  return items.length;
 }
 
 function getAdminClientOrThrow() {
@@ -487,22 +558,7 @@ export async function approveCatalogItem(args: {
     );
   }
 
-  const reviewResponse = await admin
-    .from("catalog_items")
-    .select("id, match_status")
-    .eq("job_id", job.id);
-  const reviewRows = asRows<Pick<CatalogItemRow, "id" | "match_status">>(reviewResponse.data);
-  const reviewRequiredCount = reviewRows.filter(
-    (entry) => entry.match_status === "needs_review",
-  ).length;
-
-  await admin
-    .from("catalog_jobs")
-    .update({
-      review_required_count: reviewRequiredCount,
-      status: reviewRequiredCount > 0 ? "needs_review" : "ready_to_generate",
-    })
-    .eq("id", job.id);
+  await syncCatalogJobReviewState(admin, job);
 
   await appendJobEvent(job.id, "review", "Manually approved a product match.", {
     itemId: item.id,
@@ -646,6 +702,80 @@ export async function reorderCatalogItems(
   await appendJobEvent(jobId, "editor", "Reordered catalog items from the interactive editor.", {
     itemCount: orderedItemIds.length,
   });
+}
+
+export async function removeCatalogItems(args: {
+  userId: string;
+  jobId: string;
+  itemIds: string[];
+}) {
+  const admin = getAdminClientOrThrow();
+  const submittedIds = [...new Set(args.itemIds.filter(Boolean))];
+
+  if (!submittedIds.length) {
+    return {
+      removedCount: 0,
+      removedItemIds: [] as string[],
+      remainingItemsCount: 0,
+      reviewRequiredCount: 0,
+    };
+  }
+
+  const job = await ensureJobAccess(admin, args.jobId, args.userId);
+  const itemsResponse = await admin
+    .from("catalog_items")
+    .select("id, job_id, sku, product_name")
+    .eq("job_id", args.jobId)
+    .in("id", submittedIds);
+  const items = asRows<Pick<CatalogItemRow, "id" | "job_id" | "sku" | "product_name">>(itemsResponse.data);
+
+  if (items.length !== submittedIds.length) {
+    throw new Error("Some catalog items could not be found for removal.");
+  }
+
+  const deletedCandidatesResponse = await admin
+    .from("product_match_candidates")
+    .delete()
+    .in("item_id", submittedIds);
+
+  if (deletedCandidatesResponse.error) {
+    throw deletedCandidatesResponse.error;
+  }
+
+  const deletedItemsResponse = await admin
+    .from("catalog_items")
+    .delete()
+    .in("id", submittedIds);
+
+  if (deletedItemsResponse.error) {
+    throw deletedItemsResponse.error;
+  }
+
+  await compactCatalogItemDisplayOrder(admin, args.jobId);
+  const reviewState = await syncCatalogJobReviewState(admin, job);
+
+  await appendJobEvent(
+    args.jobId,
+    "review",
+    submittedIds.length === 1
+      ? "Removed an item from the catalog."
+      : `Removed ${submittedIds.length} items from the catalog.`,
+    {
+      removedCount: submittedIds.length,
+      removedItems: items.map((item) => ({
+        itemId: item.id,
+        sku: item.sku,
+        productName: item.product_name,
+      })),
+    },
+  );
+
+  return {
+    removedCount: submittedIds.length,
+    removedItemIds: submittedIds,
+    remainingItemsCount: reviewState.remainingItemsCount,
+    reviewRequiredCount: reviewState.reviewRequiredCount,
+  };
 }
 
 export async function duplicateCatalogJob(jobId: string, userId: string) {
@@ -1245,20 +1375,8 @@ export async function bulkApproveCatalogItems(args: {
     .update({ match_status: "approved", review_note: "Bulk approved." })
     .in("id", candidates.map((candidate) => candidate.id));
 
-  const remainingResponse = await admin
-    .from("catalog_items")
-    .select("id, match_status")
-    .eq("job_id", args.jobId);
-  const remaining = asRows<Pick<CatalogItemRow, "id" | "match_status">>(remainingResponse.data);
-  const reviewRequiredCount = remaining.filter((item) => item.match_status === "needs_review").length;
-
-  await admin
-    .from("catalog_jobs")
-    .update({
-      review_required_count: reviewRequiredCount,
-      status: reviewRequiredCount > 0 ? "needs_review" : "ready_to_generate",
-    })
-    .eq("id", args.jobId);
+  const job = await ensureJobAccess(admin, args.jobId, args.userId);
+  await syncCatalogJobReviewState(admin, job);
 
   await appendJobEvent(args.jobId, "review", `Bulk approved ${candidates.length} item(s).`, {
     approved: candidates.length,

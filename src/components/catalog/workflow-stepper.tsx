@@ -10,55 +10,64 @@ interface WorkflowStep {
 }
 
 const STEPS: WorkflowStep[] = [
-  { key: "matching", label: "Matching", href: "matching" },
-  { key: "review", label: "Review", href: "review" },
-  { key: "master-card", label: "Master Card", href: "master-card" },
-  { key: "page-design", label: "Page Design", href: "page-design" },
-  { key: "generate", label: "Generate PDF", href: "generate" },
+  { key: "review", label: "Fix Products", href: "review" },
+  { key: "page-design", label: "Design Catalog", href: "page-design" },
+  { key: "result", label: "Export & Publish", href: "result" },
 ];
 
 function getUnlockedStepIndex(jobStatus: CatalogJobStatus) {
+  if (["uploaded", "parsing", "matching"].includes(jobStatus)) {
+    return -1;
+  }
+
   if (jobStatus === "needs_review") {
     return 1;
   }
 
-  if (["ready_to_generate", "generating_pdf", "pdf_ready", "converting_flipbook", "completed"].includes(jobStatus)) {
-    return 4;
+  if ([
+    "ready_to_generate",
+    "generating_pdf",
+    "pdf_ready",
+    "converting_flipbook",
+    "completed",
+    "failed",
+    "cancelled",
+  ].includes(jobStatus)) {
+    return 2;
   }
 
-  if (["uploaded", "parsing", "matching"].includes(jobStatus)) {
-    return 0;
-  }
-
-  return -1;
+  return 0;
 }
 
 interface WorkflowStepperProps {
   jobId: string;
-  currentStep: WorkflowStep["key"] | "result";
+  currentStep: WorkflowStep["key"] | "master-card" | "generate";
   jobStatus: CatalogJobStatus;
+}
+
+function normalizeStepKey(currentStep: WorkflowStepperProps["currentStep"]): WorkflowStep["key"] {
+  if (currentStep === "master-card") {
+    return "page-design";
+  }
+
+  if (currentStep === "generate") {
+    return "result";
+  }
+
+  return currentStep;
 }
 
 export function WorkflowStepper({ jobId, currentStep, jobStatus }: WorkflowStepperProps) {
   const unlockedUpTo = getUnlockedStepIndex(jobStatus);
-  const currentStepIndex = STEPS.findIndex((step) => step.key === currentStep);
-  const completedUpTo = currentStep === "result"
-    ? STEPS.length - 1
-    : currentStepIndex > 0
-      ? currentStepIndex - 1
-      : currentStep === "matching" && unlockedUpTo === 0
-        ? -1
-        : currentStep === "review" && unlockedUpTo >= 1
-          ? 0
-          : -1;
+  const normalizedCurrentStep = normalizeStepKey(currentStep);
+  const currentStepIndex = STEPS.findIndex((step) => step.key === normalizedCurrentStep);
+  const completedUpTo = currentStepIndex > 0 ? currentStepIndex - 1 : -1;
 
   return (
     <nav aria-label="Catalog workflow" className="flex items-center gap-0 overflow-x-auto thin-scrollbar py-1">
       {STEPS.map((step, index) => {
-        const isCurrent = step.key === currentStep;
-        const isCompleted = currentStep === "result"
-          ? index <= completedUpTo
-          : index <= completedUpTo;
+        const isCurrent = step.key === normalizedCurrentStep;
+        const isCompleted = index <= completedUpTo;
         const isAccessible = index <= unlockedUpTo;
 
         const inner = isAccessible ? (

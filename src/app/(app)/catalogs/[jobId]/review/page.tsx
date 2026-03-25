@@ -18,17 +18,17 @@ export default async function CatalogReviewPage({
   const resolvedSearchParams = await searchParams;
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
-  const reviewItems = bundle.items.filter((item) => item.match_status === "needs_review");
   const latestPdfWarningSummary = getLatestCatalogPdfImageWarningSummary(bundle.events);
   const latestPdfWarningItemIds = new Set(
     latestPdfWarningSummary?.items.map((item) => item.itemId) ?? [],
   );
+  const focusPdfPlaceholders = resolvedSearchParams.focus === "pdf-placeholders";
   const errorMessage = resolvedSearchParams.error
     ? decodeURIComponent(resolvedSearchParams.error)
     : null;
 
   const enrichedItems = await Promise.all(
-    reviewItems.map(async (item) => {
+    bundle.items.map(async (item) => {
       const currentImageUrl = await resolveProductAssetPreviewUrl(item.selectedAsset);
       const candidates = await Promise.all(
         item.candidates.map(async (c) => ({
@@ -44,6 +44,7 @@ export default async function CatalogReviewPage({
         id: item.id,
         productName: item.product_name,
         sku: item.sku,
+        matchStatus: item.match_status,
         confidence: item.confidence,
         reviewNote: item.review_note,
         currentImageUrl,
@@ -61,16 +62,16 @@ export default async function CatalogReviewPage({
         jobName={bundle.job.job_name}
         currentStep="review"
         jobStatus={bundle.job.status}
-        title="Review product matches"
-        description="Approve confident image matches, correct uncertain items, and clear blockers before moving into page design."
+        title="Fix Products"
+        description="Audit every product in this catalog, approve the right image, replace weak matches, or remove products that should not stay in the final export."
         actions={
-          <Link href={`/catalogs/${jobId}/master-card`} className={`shrink-0 ${buttonClassName("secondary")}`}>
-            Continue to Master Card
+          <Link href={`/catalogs/${jobId}/page-design`} className={`shrink-0 ${buttonClassName("secondary")}`}>
+            Continue to Design Catalog
           </Link>
         }
         metrics={[
-          { label: "Pending review", value: `${enrichedItems.length} item(s)` },
-          { label: "Already approved", value: `${bundle.items.length - reviewItems.length} item(s)` },
+          { label: "Needs action", value: `${enrichedItems.filter((item) => item.matchStatus !== "approved").length} item(s)` },
+          { label: "Approved", value: `${enrichedItems.filter((item) => item.matchStatus === "approved").length} item(s)` },
           { label: "Total products", value: `${bundle.items.length} item(s)` },
         ]}
         notice={
@@ -84,7 +85,7 @@ export default async function CatalogReviewPage({
         }
       />
 
-      <ReviewGrid items={enrichedItems} jobId={jobId} />
+      <ReviewGrid items={enrichedItems} jobId={jobId} initialFocusPdfPlaceholders={focusPdfPlaceholders} />
     </div>
   );
 }

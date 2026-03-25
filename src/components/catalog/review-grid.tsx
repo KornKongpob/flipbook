@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle,
@@ -11,8 +11,13 @@ import {
   ChevronRight,
   Loader2,
   ImageOff,
+  Trash2,
 } from "lucide-react";
-import { approveCandidateAction } from "@/app/(app)/actions";
+import {
+  approveCandidateAction,
+  removeCatalogItemAction,
+  removeCatalogItemsAction,
+} from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -29,6 +34,7 @@ interface ReviewItem {
   id: string;
   productName: string;
   sku: string | null;
+  matchStatus: "pending" | "matched" | "needs_review" | "approved" | "rejected" | "rendered";
   confidence: number | null;
   reviewNote: string | null;
   currentImageUrl: string | null;
@@ -47,6 +53,12 @@ interface ManualSearchResult {
   reasons: string[];
   assetId?: string;
   exactSkuMatch?: boolean;
+}
+
+type ReviewFilter = "needs-action" | "approved" | "all";
+
+function getNeedsAction(item: ReviewItem) {
+  return item.matchStatus !== "approved";
 }
 
 function ConfidenceBadge({ value }: { value: number }) {
@@ -69,6 +81,30 @@ function ExactSkuBadge() {
   return (
     <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
       Exact SKU
+    </span>
+  );
+}
+
+function MatchStatusBadge({ item }: { item: ReviewItem }) {
+  if (item.matchStatus === "approved") {
+    return (
+      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+        Approved
+      </span>
+    );
+  }
+
+  if (item.matchStatus === "needs_review") {
+    return (
+      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+        Needs action
+      </span>
+    );
+  }
+
+  return (
+    <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+      {item.matchStatus}
     </span>
   );
 }
@@ -207,15 +243,27 @@ function InlineSearchPanel({
 export function ReviewGrid({
   items,
   jobId,
+  initialFocusPdfPlaceholders = false,
 }: {
   items: ReviewItem[];
   jobId: string;
+  initialFocusPdfPlaceholders?: boolean;
 }) {
   const router = useRouter();
+  const [rows, setRows] = useState<ReviewItem[]>(items);
   const [expandedSearch, setExpandedSearch] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [approving, startApproving] = useTransition();
+  const [activeFilter, setActiveFilter] = useState<ReviewFilter>(() =>
+    initialFocusPdfPlaceholders ? "all" : items.some((item) => getNeedsAction(item)) ? "needs-action" : "all",
+  );
+  const [focusPdfPlaceholders, setFocusPdfPlaceholders] = useState(initialFocusPdfPlaceholders);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [approving, startApproving] = useTransition();
+  const [removing, startRemoving] = useTransition();
+
+  useEffect(() => {
+    setRows(items);
+  }, [items]);
 
   function toggleSearch(itemId: string) {
     setExpandedSearch((prev) => {
@@ -245,8 +293,41 @@ export function ReviewGrid({
     });
   }
 
-  function selectAll() {
-    setSelected(new Set(items.map((item) => item.id)));
+  const needsActionCount = useMemo(
+    () => rows.filter((item) => getNeedsAction(item)).length,
+    [rows],
+  );
+  const approvedCount = useMemo(
+    () => rows.filter((item) => item.matchStatus === "approved").length,
+    [rows],
+  );
+
+  const filteredItems = useMemo(() => {
+    const byFilter = rows.filter((item) => {
+      if (activeFilter === "needs-action") {
+        return getNeedsAction(item);
+      }
+
+      if (activeFilter === "approved") {
+        return item.matchStatus === "approved";
+      }
+
+      return true;
+    });
+
+    if (!focusPdfPlaceholders) {
+      return byFilter;
+    }
+
+    return byFilter.filter((item) => item.usedPdfPlaceholder);
+  }, [activeFilter, focusPdfPlaceholders, rows]);
+
+  const highConfidenceCount = rows.filter(
+    (item) => getNeedsAction(item) && (item.confidence ?? 0) >= 0.8 && item.candidates.length > 0,
+  ).length;
+
+  function selectAllFiltered() {
+    setSelected(new Set(filteredItems.map((item) => item.id)));
   }
 
   function clearSelection() {
@@ -276,22 +357,105 @@ export function ReviewGrid({
     }
   }
 
-  const highConfidenceCount = items.filter(
-    (item) => (item.confidence ?? 0) >= 0.8 && item.candidates.length > 0,
-  ).length;
+  async function removeItems(itemIds: string[], label: string) {
+    setBulkMessage(null);
 
-  if (items.length === 0) {
+    try {
+      const result = await removeCatalogItemsAction({ jobId, itemIds });
+      const removedIds = new Set(result.removedItemIds);
+
+      setRows((prev) => prev.filter((item) => !removedIds.has(item.id)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        itemIds.forEach((itemId) => next.delete(itemId));
+        return next;
+      });
+      setExpandedSearch((prev) => {
+        const next = new Set(prev);
+        itemIds.forEach((itemId) => next.delete(itemId));
+        return next;
+      });
+      setBulkMessage(`Success: Removed ${label}.`);
+      router.refresh();
+    } catch (error) {
+      setBulkMessage(error instanceof Error ? error.message : "Could not remove products from this catalog.");
+    }
+  }
+
+  function handleBulkRemove() {
+    const itemIds = [...selected];
+
+    if (!itemIds.length) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${itemIds.length} selected product(s) from this catalog? This only removes them from this job and cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    startRemoving(() => {
+      void removeItems(itemIds, `${itemIds.length} item(s)`);
+    });
+  }
+
+  function handleSingleRemove(item: ReviewItem) {
+    const skuLine = item.sku ? `\nSKU: ${item.sku}` : "";
+    const confirmed = window.confirm(
+      `Remove "${item.productName}" from this catalog?${skuLine}\n\nThis only removes it from this job. Assets and saved mappings stay intact.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    startRemoving(() => {
+      void removeCatalogItemAction({ jobId, itemId: item.id })
+        .then((result) => {
+          const removedIds = new Set(result.removedItemIds);
+          setRows((prev) => prev.filter((row) => !removedIds.has(row.id)));
+          setExpandedSearch((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+          setSelected((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+          setBulkMessage(`Success: Removed ${item.productName} from this catalog.`);
+          router.refresh();
+        })
+        .catch((error: unknown) => {
+          setBulkMessage(error instanceof Error ? error.message : "Could not remove the selected product.");
+        });
+    });
+  }
+
+  if (rows.length === 0) {
     return (
       <div className="rounded-2xl border border-line bg-card px-6 py-12 text-center shadow-sm">
         <CheckCircle className="mx-auto mb-3 size-10 text-emerald-500" />
-        <p className="text-sm font-semibold text-foreground">All items reviewed!</p>
-        <p className="mt-1 text-sm text-muted">Ready to proceed to the master card editor.</p>
-        <Link
-          href={`/catalogs/${jobId}/master-card`}
-          className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand/90"
-        >
-          Continue to Master Card
-        </Link>
+        <p className="text-sm font-semibold text-foreground">This catalog has no products left.</p>
+        <p className="mt-1 text-sm text-muted">Start a new catalog or go back to the upload flow if this removal was intentional.</p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <Link
+            href={`/catalogs/${jobId}/page-design`}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 text-sm font-medium text-foreground transition-colors hover:bg-gray-50"
+          >
+            Open Design Catalog
+          </Link>
+          <Link
+            href="/catalogs/new"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand/90"
+          >
+            Create New Catalog
+          </Link>
+        </div>
       </div>
     );
   }
@@ -301,62 +465,109 @@ export function ReviewGrid({
       <div className="sticky top-5 z-10 rounded-2xl border border-line bg-card/95 px-4 py-3 shadow-sm backdrop-blur-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-foreground">
-              {items.length} item{items.length !== 1 ? "s" : ""} need review
-            </p>
+            <p className="text-sm font-semibold text-foreground">Audit products before design and export</p>
             <p className="mt-1 text-xs text-muted">
-              Approve high-confidence suggestions quickly, then resolve the harder rows with upload or search.
+              Approve matches, search or upload replacements, and remove products that should not stay in this catalog.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {selected.size > 0 ? (
-              <>
-                <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-xs text-muted-strong">
-                  {selected.size} selected
-                </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-8 px-3 text-xs"
-                  onClick={clearSelection}
-                >
-                  Clear
-                </Button>
+            {[{
+              key: "needs-action",
+              label: `Needs action (${needsActionCount})`,
+            }, {
+              key: "approved",
+              label: `Approved (${approvedCount})`,
+            }, {
+              key: "all",
+              label: `All (${rows.length})`,
+            }].map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setActiveFilter(filter.key as ReviewFilter)}
+                className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
+                  activeFilter === filter.key
+                    ? "border-brand/30 bg-brand-soft/15 text-brand"
+                    : "border-line bg-white text-muted-strong hover:border-brand/20 hover:text-foreground"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {selected.size > 0 ? (
+            <>
+              <span className="rounded-full border border-line bg-white/80 px-3 py-1 text-xs text-muted-strong">
+                {selected.size} selected
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-3 text-xs"
+                onClick={clearSelection}
+              >
+                Clear
+              </Button>
+              <Button
+                type="button"
+                className="h-8 gap-1 px-3 text-xs"
+                disabled={approving}
+                onClick={() => startApproving(() => bulkApprove({ itemIds: [...selected] }))}
+              >
+                {approving ? <Loader2 className="size-3 animate-spin" /> : null}
+                Approve selected ({selected.size})
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                className="h-8 gap-1 px-3 text-xs"
+                disabled={removing}
+                onClick={handleBulkRemove}
+              >
+                {removing ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+                Remove selected ({selected.size})
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-3 text-xs"
+                onClick={selectAllFiltered}
+              >
+                Select current filter
+              </Button>
+              {highConfidenceCount > 0 ? (
                 <Button
                   type="button"
                   className="h-8 gap-1 px-3 text-xs"
                   disabled={approving}
-                  onClick={() => startApproving(() => bulkApprove({ itemIds: [...selected] }))}
+                  onClick={() => startApproving(() => bulkApprove({ minConfidence: 0.8 }))}
                 >
                   {approving ? <Loader2 className="size-3 animate-spin" /> : null}
-                  Approve selected ({selected.size})
+                  Approve all {"\u003e="} 80% ({highConfidenceCount})
                 </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-8 px-3 text-xs"
-                  onClick={selectAll}
-                >
-                  Select all
-                </Button>
-                {highConfidenceCount > 0 ? (
-                  <Button
-                    type="button"
-                    className="h-8 gap-1 px-3 text-xs"
-                    disabled={approving}
-                    onClick={() => startApproving(() => bulkApprove({ minConfidence: 0.8 }))}
-                  >
-                    {approving ? <Loader2 className="size-3 animate-spin" /> : null}
-                    Approve all {"\u003e="} 80% ({highConfidenceCount})
-                  </Button>
-                ) : null}
-              </>
-            )}
-          </div>
+              ) : null}
+            </>
+          )}
+          {rows.some((item) => item.usedPdfPlaceholder) ? (
+            <button
+              type="button"
+              onClick={() => setFocusPdfPlaceholders((prev) => !prev)}
+              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
+                focusPdfPlaceholders
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                  : "border-line bg-white text-muted-strong hover:border-rose-200 hover:text-rose-700"
+              }`}
+            >
+              {focusPdfPlaceholders ? "Showing PDF placeholder items" : "Focus PDF placeholder items"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -372,8 +583,14 @@ export function ReviewGrid({
         </p>
       ) : null}
 
+      {!filteredItems.length ? (
+        <div className="rounded-2xl border border-dashed border-line bg-card px-6 py-10 text-center text-sm text-muted shadow-sm">
+          No products match the current filter.
+        </div>
+      ) : null}
+
       <div className="space-y-4">
-        {items.map((item) => (
+        {filteredItems.map((item) => (
           <div key={item.id} className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
             <div className="flex flex-col gap-4 px-4 py-4 xl:flex-row">
               <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -403,6 +620,7 @@ export function ReviewGrid({
                       <p className="truncate text-sm font-semibold text-foreground">{item.productName}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
                         <span>SKU: {item.sku ?? "-"}</span>
+                        <MatchStatusBadge item={item} />
                         {item.reviewNote ? (
                           <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
                             {item.reviewNote}
@@ -428,65 +646,71 @@ export function ReviewGrid({
                     </div>
                   </div>
 
-                  {item.candidates.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                          Suggested matches
-                        </p>
-                        <p className="text-[11px] text-muted">
-                          Pick the best asset or open manual search below.
-                        </p>
-                      </div>
-                      <div className="grid gap-3 lg:grid-cols-3">
-                        {item.candidates.slice(0, 3).map((candidate) => (
-                          <form key={candidate.id} action={approveCandidateAction}>
-                            <input type="hidden" name="itemId" value={item.id} />
-                            <input type="hidden" name="jobId" value={jobId} />
-                            <input type="hidden" name="assetId" value={candidate.assetId ?? ""} />
-                            <input type="hidden" name="saveManualMapping" value="on" />
-                            <button
-                              type="submit"
-                              title={`Use ${candidate.productName}`}
-                              disabled={!candidate.assetId}
-                              className="flex w-full flex-col gap-3 rounded-xl border border-line bg-white p-3 text-left transition-all hover:border-brand/30 hover:shadow-sm disabled:opacity-60"
-                            >
-                              <div className="relative flex h-24 items-center justify-center overflow-hidden rounded-lg border border-line bg-gray-50">
-                                {candidate.previewUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={candidate.previewUrl} alt={candidate.productName} className="h-full w-full object-contain" />
-                                ) : (
-                                  <ImageOff className="size-4 text-muted" />
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 space-y-1">
-                                    <p className="line-clamp-2 text-[11px] font-semibold text-foreground">
-                                      {candidate.productName}
-                                    </p>
-                                    {candidate.isExactSkuMatch ? <ExactSkuBadge /> : null}
-                                  </div>
-                                  <ConfidenceBadge value={candidate.confidence} />
+                  {getNeedsAction(item) ? (
+                    item.candidates.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                            Suggested matches
+                          </p>
+                          <p className="text-[11px] text-muted">
+                            Pick the best asset or open manual search below.
+                          </p>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-3">
+                          {item.candidates.slice(0, 3).map((candidate) => (
+                            <form key={candidate.id} action={approveCandidateAction}>
+                              <input type="hidden" name="itemId" value={item.id} />
+                              <input type="hidden" name="jobId" value={jobId} />
+                              <input type="hidden" name="assetId" value={candidate.assetId ?? ""} />
+                              <input type="hidden" name="saveManualMapping" value="on" />
+                              <button
+                                type="submit"
+                                title={`Use ${candidate.productName}`}
+                                disabled={!candidate.assetId}
+                                className="flex w-full flex-col gap-3 rounded-xl border border-line bg-white p-3 text-left transition-all hover:border-brand/30 hover:shadow-sm disabled:opacity-60"
+                              >
+                                <div className="relative flex h-24 items-center justify-center overflow-hidden rounded-lg border border-line bg-gray-50">
+                                  {candidate.previewUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={candidate.previewUrl} alt={candidate.productName} className="h-full w-full object-contain" />
+                                  ) : (
+                                    <ImageOff className="size-4 text-muted" />
+                                  )}
                                 </div>
-                                <span className="inline-flex rounded-full border border-brand/20 bg-brand-soft/30 px-2.5 py-1 text-[11px] font-medium text-brand">
-                                  Use this match
-                                </span>
-                              </div>
-                            </button>
-                          </form>
-                        ))}
+                                <div className="space-y-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 space-y-1">
+                                      <p className="line-clamp-2 text-[11px] font-semibold text-foreground">
+                                        {candidate.productName}
+                                      </p>
+                                      {candidate.isExactSkuMatch ? <ExactSkuBadge /> : null}
+                                    </div>
+                                    <ConfidenceBadge value={candidate.confidence} />
+                                  </div>
+                                  <span className="inline-flex rounded-full border border-brand/20 bg-brand-soft/30 px-2.5 py-1 text-[11px] font-medium text-brand">
+                                    Approve this match
+                                  </span>
+                                </div>
+                              </button>
+                            </form>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-line bg-white/50 px-4 py-3 text-sm text-muted">
+                        No suggested candidates. Use manual search or upload a replacement image.
+                      </div>
+                    )
                   ) : (
-                    <div className="rounded-xl border border-dashed border-line bg-white/50 px-4 py-3 text-sm text-muted">
-                      No suggested candidates. Use manual search or upload a replacement image.
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-800">
+                      This product is approved and ready for design. You can still replace the image with manual search or upload if needed.
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="xl:w-48 xl:border-l xl:border-line xl:pl-4">
+              <div className="xl:w-56 xl:border-l xl:border-line xl:pl-4">
                 <div className="flex h-full flex-col gap-2">
                   <form
                     action={`/api/items/${item.id}/upload`}
@@ -527,6 +751,17 @@ export function ReviewGrid({
                       <ChevronRight className="size-3.5" />
                     )}
                   </button>
+
+                  <Button
+                    type="button"
+                    variant="danger"
+                    className="h-10 gap-1.5 text-xs"
+                    disabled={removing}
+                    onClick={() => handleSingleRemove(item)}
+                  >
+                    {removing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                    Remove from catalog
+                  </Button>
 
                   <p className="rounded-xl bg-white/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
                     Uploaded assets can also be saved as reusable manual mappings for the same SKU.

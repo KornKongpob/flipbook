@@ -950,7 +950,7 @@ export function CatalogStyleControls({
                 onClick={onOpenExport}
               >
                 {(exportPending || styleSaving) && <Loader2 className="size-3 animate-spin" />}
-                {hasUnsavedStyleChanges ? "Save + generate" : "Generate PDF step"}
+                {hasUnsavedStyleChanges ? "Save + export" : "Open export hub"}
               </Button>
             </div>
           </div>

@@ -848,7 +848,7 @@ export function MasterCardWorkspace({
     return (
       <StatusBanner
         tone="warning"
-        title="No products available for master card editing"
+        title="No products available for card layout mode"
         description="Add or reveal at least one product before editing the shared card layout."
       />
     );
@@ -861,25 +861,25 @@ export function MasterCardWorkspace({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Step 3</p>
-                <h2 className="mt-1 text-sm font-semibold text-foreground">Master Card Layout</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Design catalog</p>
+                <h2 className="mt-1 text-sm font-semibold text-foreground">Card layout mode</h2>
               </div>
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaveError ? "border-rose-200 bg-rose-50 text-rose-700" : styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
                 {styleSaveError ? "Save failed" : styleSaving ? "Saving…" : hasUnsavedStyleChanges ? "Unsaved" : "Saved"}
               </span>
             </div>
             <p className="text-xs leading-5 text-muted-strong">
-              Define the shared product-card structure once: move layout boxes, toggle shared elements, and manage card display plus text sizing before saving the job.
+              Adjust the shared product-card structure inside the same design workspace, then jump back to page preview when the reusable card layout feels right.
             </p>
           </div>
         </SurfaceCardHeader>
         <SurfaceCardBody className="space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:thin-scrollbar">
           {styleSaveError ? (
-            <StatusBanner tone="danger" title="Could not save master card" description={styleSaveError} />
+            <StatusBanner tone="danger" title="Could not save card layout" description={styleSaveError} />
           ) : hasUnappliedChanges ? (
             <StatusBanner tone="warning" title="Draft changes not applied" description="Apply the current draft layout before saving or moving to page design. Display toggles and text sizing update live, but shared layout box changes still need Apply." />
           ) : (
-            <StatusBanner tone="success" title="Master card is applied" description={styleStatusLabel} />
+            <StatusBanner tone="success" title="Card layout is applied" description={styleStatusLabel} />
           )}
 
           <div className="rounded-2xl border border-brand/20 bg-brand-soft/10 px-4 py-3 text-[11px] leading-5 text-muted-strong">
@@ -1119,11 +1119,11 @@ export function MasterCardWorkspace({
           <div className="grid gap-2 sm:grid-cols-2">
             <Button type="button" className="h-10 gap-2" onClick={() => { void handleSave(); }} disabled={styleSaving || pageDesignPending}>
               {styleSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save master card
+              Save card layout
             </Button>
             <Button type="button" variant="secondary" className="h-10 gap-2" onClick={() => { void handleOpenPageDesign(); }} disabled={styleSaving || pageDesignPending}>
               {pageDesignPending ? <Loader2 className="size-4 animate-spin" /> : <Grip className="size-4" />}
-              Open Page Design
+              Back to Page Preview
             </Button>
           </div>
         </SurfaceCardBody>
@@ -1134,7 +1134,7 @@ export function MasterCardWorkspace({
           <SurfaceCardHeader>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Master card canvas</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Card layout canvas</p>
                 <h2 className="mt-1 text-sm font-semibold text-foreground">Drag and resize the active card elements</h2>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">

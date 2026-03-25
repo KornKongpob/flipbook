@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CatalogEditorExportButton } from "@/components/catalog/catalog-editor-export-button";
 import { CatalogJobHeader } from "@/components/catalog/catalog-job-header";
 import { EditorPanel } from "@/components/catalog/editor-panel";
+import { MasterCardWorkspace } from "@/components/catalog/master-card-workspace";
 import { buttonClassName } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import {
@@ -17,10 +18,14 @@ import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 
 export default async function CatalogPageDesignPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ jobId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { jobId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const mode = resolvedSearchParams.mode === "card" ? "card" : "page";
   const user = await requireUser();
   const bundle = await getCatalogJobBundle(jobId, user.id);
   const rawStyleOptions = bundle.job.style_options_json as Record<string, unknown>;
@@ -73,7 +78,24 @@ export default async function CatalogPageDesignPage({
     }),
   );
 
-  const pendingReview = bundle.items.filter((i) => i.match_status === "needs_review").length;
+  const pendingReview = bundle.items.filter((item) => item.match_status !== "approved").length;
+  const visibleCount = items.filter((item) => item.isVisible).length;
+  const modeSwitcher = (
+    <div className="flex items-center gap-1 rounded-xl border border-line bg-white/80 p-1">
+      <Link
+        href={`/catalogs/${jobId}/page-design`}
+        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${mode === "page" ? "bg-brand text-white shadow-sm" : "text-muted-strong hover:bg-slate-50 hover:text-foreground"}`}
+      >
+        Page preview
+      </Link>
+      <Link
+        href={`/catalogs/${jobId}/page-design?mode=card`}
+        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${mode === "card" ? "bg-brand text-white shadow-sm" : "text-muted-strong hover:bg-slate-50 hover:text-foreground"}`}
+      >
+        Card layout
+      </Link>
+    </div>
+  );
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -82,8 +104,12 @@ export default async function CatalogPageDesignPage({
         jobName={bundle.job.job_name}
         currentStep="page-design"
         jobStatus={bundle.job.status}
-        title="Page design workspace"
-        description="Refine the page background, header, footer, product visibility, and A4 layout with a cleaner live design workspace before moving to PDF generation."
+        title="Design Catalog"
+        description={
+          mode === "card"
+            ? "Adjust the shared master card inside the same design workspace, then jump back to page preview without leaving the canonical design route."
+            : "Arrange the A4 catalog, manage included products, and switch into card layout only when you need shared element adjustments."
+        }
         actions={
           <div className="flex w-full flex-wrap items-center gap-2 sm:justify-end">
             {pendingReview > 0 && (
@@ -91,30 +117,42 @@ export default async function CatalogPageDesignPage({
                 href={`/catalogs/${jobId}/review`}
                 className="inline-flex min-h-9 min-w-0 max-w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium leading-4 text-amber-700 transition hover:bg-amber-100"
               >
-                {pendingReview} unreviewed
+                {pendingReview} need attention
               </Link>
             )}
-            <Link
-              href={`/catalogs/${jobId}/master-card`}
-              className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}
-            >
-              ← Master Card
-            </Link>
-            <CatalogEditorExportButton />
+            {modeSwitcher}
+            {mode === "page" ? (
+              <CatalogEditorExportButton />
+            ) : (
+              <Link
+                href={`/catalogs/${jobId}/result#generate`}
+                className={buttonClassName("secondary", "h-auto min-h-9 max-w-full px-3 py-2 text-center text-xs leading-4")}
+              >
+                Open Export Hub
+              </Link>
+            )}
           </div>
         }
         metrics={[
-          { label: "Visible on page", value: `${items.filter((i) => i.isVisible).length} item(s)` },
-          { label: "Total products", value: `${items.length} item(s)` },
-          { label: "Pending review", value: pendingReview ? `${pendingReview} blocker(s)` : "No blockers" },
+          { label: "Included products", value: `${items.length} item(s)` },
+          { label: "Visible on pages", value: `${visibleCount} item(s)` },
+          { label: "Needs action", value: pendingReview ? `${pendingReview} item(s)` : "Ready for export" },
         ]}
       />
 
-      <EditorPanel
-        initialItems={items}
-        jobId={jobId}
-        initialStyle={styleOptions}
-      />
+      {mode === "card" ? (
+        <MasterCardWorkspace
+          initialItems={items}
+          jobId={jobId}
+          initialStyle={styleOptions}
+        />
+      ) : (
+        <EditorPanel
+          initialItems={items}
+          jobId={jobId}
+          initialStyle={styleOptions}
+        />
+      )}
     </div>
   );
 }

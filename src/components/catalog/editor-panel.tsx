@@ -12,8 +12,15 @@ import {
   X,
   ImageOff,
   Loader2,
+  Trash2,
 } from "lucide-react";
-import { moveItemAction, reorderItemsAction, toggleItemVisibilityAction, saveStyleOptionsAction } from "@/app/(app)/actions";
+import {
+  moveItemAction,
+  reorderItemsAction,
+  removeCatalogItemAction,
+  toggleItemVisibilityAction,
+  saveStyleOptionsAction,
+} from "@/app/(app)/actions";
 import { OPEN_CATALOG_EXPORT_EVENT } from "@/components/catalog/catalog-editor-export-button";
 import { CatalogPageCanvas } from "@/components/catalog/catalog-page-canvas";
 import { CatalogStyleControls } from "@/components/catalog/catalog-style-controls";
@@ -190,6 +197,7 @@ export function EditorPanel({
   const [styleStatusLabel, setStyleStatusLabel] = useState("All changes saved.");
   const [exportPending, setExportPending] = useState(false);
   const [orderSaving, setOrderSaving] = useState(false);
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const persistedStyleSignatureRef = useRef<string | null>(serializeStyleFormData(buildCatalogStyleFormData(jobId, initialStyle)));
   const [orderError, setOrderError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
@@ -550,7 +558,7 @@ export function EditorPanel({
         : true;
 
       if (didSaveSucceed) {
-        router.push(`/catalogs/${jobId}/generate`);
+        router.push(`/catalogs/${jobId}/result#generate`);
       }
     } finally {
       setExportPending(false);
@@ -703,6 +711,50 @@ export function EditorPanel({
     [currentPageItems, itemsPerPage, jobId, orderSaving, orderedItems, previewPage, visibleItems],
   );
 
+  const handleRemoveItem = useCallback(
+    async (item: EditorItem) => {
+      const skuLine = item.sku ? `\nSKU: ${item.sku}` : "";
+      const confirmed = window.confirm(
+        `Remove "${item.displayName ?? item.productName}" from this catalog?${skuLine}\n\nThis only removes it from this job. Assets and saved mappings stay intact.`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setRemovingItemId(item.id);
+      setOrderError(null);
+
+      try {
+        const result = await removeCatalogItemAction({
+          jobId,
+          itemId: item.id,
+        });
+        const removedIds = new Set(result.removedItemIds);
+
+        setItems((prev) =>
+          prev
+            .filter((entry) => !removedIds.has(entry.id))
+            .map((entry, index) => ({
+              ...entry,
+              displayOrder: index,
+            })),
+        );
+
+        if (editingId === item.id) {
+          setEditingId(null);
+        }
+
+        router.refresh();
+      } catch (error) {
+        setOrderError(error instanceof Error ? error.message : "Could not remove the selected product.");
+      } finally {
+        setRemovingItemId(null);
+      }
+    },
+    [editingId, jobId, router],
+  );
+
   return (
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[380px_minmax(0,1fr)]">
       <div className="space-y-4 xl:min-w-0">
@@ -710,10 +762,10 @@ export function EditorPanel({
           <div className="space-y-3 border-b border-line/70 bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 px-4 py-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Editor workspace</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">Manage products and visual design</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Design catalog</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">Manage included products and live page design</p>
                 <p className="mt-1 text-[11px] leading-5 text-muted-strong">
-                  Switch between product visibility and the design system without losing the live A4 preview.
+                  Keep the A4 preview visible while you hide, remove, reorder, and style the products that stay in this export.
                 </p>
               </div>
               <span className="rounded-full border border-line/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-muted-strong shadow-sm">
@@ -723,7 +775,7 @@ export function EditorPanel({
 
             <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line/80 bg-white/80 p-1 shadow-sm">
               {[
-                { key: "products", label: "Products", description: `${items.length} items` },
+                { key: "products", label: "Products", description: `${items.length} included` },
                 { key: "design", label: "Design", description: "Theme + layout" },
               ].map((tab) => (
                 <button
@@ -881,6 +933,22 @@ export function EditorPanel({
                             {item.isVisible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                           </button>
                         </form>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleRemoveItem(item);
+                          }}
+                          className="flex size-8 items-center justify-center rounded-lg text-muted transition hover:bg-rose-50 hover:text-rose-600"
+                          disabled={removingItemId === item.id}
+                          aria-label={`Remove ${item.displayName ?? item.productName} from catalog`}
+                        >
+                          {removingItemId === item.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                        </button>
                       </div>
                     </div>
 
@@ -910,7 +978,7 @@ export function EditorPanel({
         <div className="border-b border-line bg-gray-50/50 px-4 py-3 space-y-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">A4 live preview</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Design preview</p>
               <p className="mt-1 text-sm font-semibold text-foreground">Page {previewPage + 1} of {Math.max(1, pages.length)}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -936,7 +1004,7 @@ export function EditorPanel({
                 disabled={exportPending || styleSaving || isUploadingMedia || orderSaving}
                 className="inline-flex min-h-8 min-w-0 max-w-full items-center justify-center rounded-lg bg-brand px-3 py-1.5 text-center text-xs font-medium leading-4 text-white transition hover:bg-brand/90 disabled:opacity-60"
               >
-                {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + generate" : "Generate PDF step"}
+                {exportPending ? (hasUnsavedStyleChanges ? "Saving…" : "Opening…") : hasUnsavedStyleChanges ? "Save + export" : "Open export hub"}
               </button>
               <div className="flex items-center gap-2">
                 <button
