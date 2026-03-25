@@ -16,6 +16,15 @@ export interface ThaiTextLayoutResult {
   totalHeight: number;
 }
 
+export type CatalogTextVerticalAlign = "top" | "middle" | "bottom";
+
+interface SingleLineTextLayoutArgs {
+  fontSize: number;
+  lineHeight: number;
+  rectHeight: number;
+  verticalAlign?: CatalogTextVerticalAlign;
+}
+
 interface WrapThaiTextWithAutoScalingArgs {
   initialFontSize: number;
   lineHeight: number;
@@ -158,6 +167,42 @@ function buildThaiTextLayout(
     lineHeightPx,
     lines,
     totalHeight: lines.length * lineHeightPx,
+  };
+}
+
+export function getCatalogTextVerticalOffset(
+  containerHeight: number,
+  textHeight: number,
+  verticalAlign: CatalogTextVerticalAlign,
+) {
+  const remainingHeight = Math.max(containerHeight - textHeight, 0);
+
+  if (verticalAlign === "middle") {
+    return remainingHeight / 2;
+  }
+
+  if (verticalAlign === "bottom") {
+    return remainingHeight;
+  }
+
+  return 0;
+}
+
+export function resolveSingleLineTextBlockLayout({
+  fontSize,
+  lineHeight,
+  rectHeight,
+  verticalAlign = "top",
+}: SingleLineTextLayoutArgs) {
+  const lineHeightPx = fontSize * lineHeight;
+  const availableHeight = rectHeight > 0 ? rectHeight : lineHeightPx;
+  const textHeight = Math.min(lineHeightPx, availableHeight);
+
+  return {
+    fontSize,
+    lineHeightPx,
+    textHeight,
+    yOffset: getCatalogTextVerticalOffset(availableHeight, textHeight, verticalAlign),
   };
 }
 

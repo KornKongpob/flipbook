@@ -8,7 +8,11 @@ import {
 } from "@/lib/catalog/card-layout";
 import { chunk, formatCurrency, formatThaiFlyerDateRange } from "@/lib/utils";
 import { PDF_FONT_PATHS } from "@/lib/catalog/pdf/fonts";
-import { wrapThaiTextWithAutoScaling } from "@/lib/catalog/pdf/text-layout";
+import {
+  getCatalogTextVerticalOffset,
+  resolveSingleLineTextBlockLayout,
+  wrapThaiTextWithAutoScaling,
+} from "@/lib/catalog/pdf/text-layout";
 import { DEFAULT_STYLE_OPTIONS } from "@/lib/catalog/constants";
 import {
   CATALOG_A4_PAGE_SIZE,
@@ -80,24 +84,6 @@ interface PdfTextBlockArgs {
   ellipsis?: boolean;
 }
 
-function getPdfVerticalOffset(
-  containerHeight: number,
-  textHeight: number,
-  verticalAlign: NonNullable<PdfTextBlockArgs["verticalAlign"]>,
-) {
-  const remainingHeight = Math.max(containerHeight - textHeight, 0);
-
-  if (verticalAlign === "middle") {
-    return remainingHeight / 2;
-  }
-
-  if (verticalAlign === "bottom") {
-    return remainingHeight;
-  }
-
-  return 0;
-}
-
 function drawPdfTextBlock(
   doc: PDFKit.PDFDocument,
   originX: number,
@@ -114,9 +100,14 @@ function drawPdfTextBlock(
   doc.save();
   doc.fillColor(args.color).font(args.fontName).fontSize(args.fontSize);
 
-  const targetLineBoxHeight = args.fontSize * args.lineHeight;
+  const singleLineLayout = resolveSingleLineTextBlockLayout({
+    fontSize: args.fontSize,
+    lineHeight: args.lineHeight,
+    rectHeight: args.rect.height,
+    verticalAlign: args.verticalAlign ?? "top",
+  });
   const pdfLineBoxHeight = doc.currentLineHeight(true);
-  const lineGap = targetLineBoxHeight - pdfLineBoxHeight;
+  const lineGap = singleLineLayout.lineHeightPx - pdfLineBoxHeight;
   const textOptions = {
     width: args.rect.width,
     height: args.rect.height,
@@ -124,20 +115,18 @@ function drawPdfTextBlock(
     lineGap,
     align: args.align,
   };
-  const textHeight = Math.min(doc.heightOfString(args.text, textOptions), args.rect.height);
-  const yOffset = getPdfVerticalOffset(args.rect.height, textHeight, args.verticalAlign ?? "top");
 
   doc.text(
     args.text,
     originX + args.rect.x,
-    originY + args.rect.y + yOffset,
+    originY + args.rect.y + singleLineLayout.yOffset,
     textOptions,
   );
   doc.restore();
 
   return {
     lineGap,
-    textHeight,
+    textHeight: singleLineLayout.textHeight,
   };
 }
 
@@ -180,7 +169,7 @@ function drawPdfThaiTitleBlock(
   const pdfLineBoxHeight = doc.currentLineHeight(true);
   const lineGap = layout.lineHeightPx - pdfLineBoxHeight;
   const textHeight = layout.totalHeight;
-  const yOffset = getPdfVerticalOffset(args.rect.height, textHeight, args.verticalAlign ?? "top");
+  const yOffset = getCatalogTextVerticalOffset(args.rect.height, textHeight, args.verticalAlign ?? "top");
 
   doc.text(
     layout.lines.join("\n"),

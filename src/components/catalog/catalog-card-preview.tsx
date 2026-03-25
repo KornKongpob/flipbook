@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { wrapThaiTextWithAutoScaling } from "@/lib/catalog/pdf/text-layout";
+import {
+  resolveSingleLineTextBlockLayout,
+  wrapThaiTextWithAutoScaling,
+} from "@/lib/catalog/pdf/text-layout";
 import {
   CATALOG_CARD_META_LINE_HEIGHT,
   CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
@@ -66,6 +69,58 @@ function measureBrowserTextWidth(text: string, fontSize: number, fontWeight = 40
 
   context.font = `${fontWeight} ${fontSize}px ${getBrowserFontFamily()}`;
   return context.measureText(text).width;
+}
+
+function SingleLineTextBlock({
+  align = "left",
+  className,
+  color,
+  fontSize,
+  lineHeight,
+  rect,
+  text,
+}: {
+  align?: "left" | "center" | "right";
+  className?: string;
+  color: string;
+  fontSize: number;
+  lineHeight: number;
+  rect: { x: number; y: number; width: number; height: number };
+  text: string;
+}) {
+  const layout = useMemo(
+    () => resolveSingleLineTextBlockLayout({
+      fontSize,
+      lineHeight,
+      rectHeight: rect.height,
+    }),
+    [fontSize, lineHeight, rect.height],
+  );
+
+  return (
+    <div
+      className="absolute overflow-hidden"
+      style={{
+        ...rectStyle(rect),
+        color,
+      }}
+    >
+      <span
+        className={`absolute inset-x-0 block whitespace-nowrap ${className ?? ""}`}
+        style={{
+          top: `${layout.yOffset}px`,
+          fontSize: `${fontSize}px`,
+          lineHeight: `${layout.lineHeightPx}px`,
+          height: `${layout.textHeight}px`,
+          textAlign: align,
+          textOverflow: "ellipsis",
+          overflow: "hidden",
+        }}
+      >
+        {text || "\u00A0"}
+      </span>
+    </div>
+  );
 }
 
 export function CatalogCardPreview({
@@ -313,45 +368,34 @@ export function CatalogCardPreview({
           ) : null}
 
           {elementRects?.metaRect ? (
-            <p
-              className="absolute overflow-hidden text-ellipsis whitespace-nowrap"
-              style={{
-                ...rectStyle(elementRects.metaRect),
-                color: style.metaColor,
-                fontSize: `${cardLayout.metaFontSize}px`,
-                lineHeight: CATALOG_CARD_META_LINE_HEIGHT,
-              }}
-            >
-              {meta || "\u00A0"}
-            </p>
+            <SingleLineTextBlock
+              rect={elementRects.metaRect}
+              text={meta || "\u00A0"}
+              color={style.metaColor}
+              fontSize={cardLayout.metaFontSize}
+              lineHeight={CATALOG_CARD_META_LINE_HEIGHT}
+            />
           ) : null}
 
           {showPromoLine && elementRects?.promoPriceRect ? (
-            <div
-              className="absolute overflow-hidden font-bold"
-              style={{
-                ...rectStyle(elementRects.promoPriceRect),
-                color: style.promoPriceColor,
-                fontSize: `${cardLayout.promoPriceFontSize}px`,
-                lineHeight: CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT,
-              }}
-            >
-              {promoPriceLabel}
-            </div>
+            <SingleLineTextBlock
+              rect={elementRects.promoPriceRect}
+              text={promoPriceLabel}
+              color={style.promoPriceColor}
+              fontSize={cardLayout.promoPriceFontSize}
+              lineHeight={CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT}
+              className="font-bold"
+            />
           ) : null}
 
           {showPromoLine && showNormalPrice && elementRects?.normalPriceRect ? (
-            <div
-              className="absolute overflow-hidden whitespace-nowrap"
-              style={{
-                ...rectStyle(elementRects.normalPriceRect),
-                color: style.normalPriceColor,
-                fontSize: `${cardLayout.normalPriceFontSize}px`,
-                lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
-              }}
-            >
-              <span>{normalPriceLabel}</span>
-            </div>
+            <SingleLineTextBlock
+              rect={elementRects.normalPriceRect}
+              text={normalPriceLabel}
+              color={style.normalPriceColor}
+              fontSize={cardLayout.normalPriceFontSize}
+              lineHeight={CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT}
+            />
           ) : null}
 
           {showPromoLine && showNormalPrice && elementRects?.strikeLineRect ? (
@@ -368,32 +412,25 @@ export function CatalogCardPreview({
           ) : null}
 
           {showPromoLine && showNormalPrice && elementRects?.discountPercentRect && style.showDiscountPercent && discountPercent ? (
-            <div
-              className="absolute overflow-hidden whitespace-nowrap"
-              style={{
-                ...rectStyle(elementRects.discountPercentRect),
-                color: style.normalPriceColor,
-                fontSize: `${Math.max(cardLayout.normalPriceFontSize - 2, 9)}px`,
-                lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
-              }}
-            >
-              {discountPercent.toFixed(0)}% off
-            </div>
+            <SingleLineTextBlock
+              rect={elementRects.discountPercentRect}
+              text={`${discountPercent.toFixed(0)}% off`}
+              color={style.normalPriceColor}
+              fontSize={Math.max(cardLayout.normalPriceFontSize - 2, 9)}
+              lineHeight={CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT}
+            />
           ) : null}
 
           {showSinglePrice && !showPromoLine && elementRects?.singlePriceRect ? (
-            <div
-              className="absolute overflow-hidden font-bold"
-              style={{
-                ...rectStyle(elementRects.singlePriceRect),
-                color: style.flyerType === "normal" ? style.normalPriceColor : style.promoPriceColor,
-                fontSize: `${cardLayout.singlePriceFontSize}px`,
-                lineHeight: 1,
-                textAlign: style.flyerType === "normal" ? "center" : "left",
-              }}
-            >
-              {singlePriceLabel}
-            </div>
+            <SingleLineTextBlock
+              rect={elementRects.singlePriceRect}
+              text={singlePriceLabel}
+              color={style.flyerType === "normal" ? style.normalPriceColor : style.promoPriceColor}
+              fontSize={cardLayout.singlePriceFontSize}
+              lineHeight={CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT}
+              align={style.flyerType === "normal" ? "center" : "left"}
+              className="font-bold"
+            />
           ) : null}
         </>
       ) : null}

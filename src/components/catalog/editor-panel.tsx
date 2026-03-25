@@ -704,7 +704,7 @@ export function EditorPanel({
   );
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
+    <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[380px_minmax(0,1fr)]">
       <div className="space-y-4 xl:min-w-0">
         <div className="overflow-hidden rounded-2xl border border-line/80 bg-white/80 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.35)] backdrop-blur-sm xl:flex xl:min-h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)] xl:flex-col">
           <div className="space-y-3 border-b border-line/70 bg-gradient-to-br from-slate-50 via-white to-brand-soft/10 px-4 py-4">
@@ -992,7 +992,7 @@ export function EditorPanel({
 
         <div className="p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:thin-scrollbar">
           {currentPageItems.length > 0 ? (
-            <div className="mx-auto w-full max-w-[620px]">
+            <div className="mx-auto w-full max-w-[820px] 2xl:max-w-[900px]">
               <CatalogPageCanvas
                 items={currentPageItems.map((item) => ({
                   id: item.id,

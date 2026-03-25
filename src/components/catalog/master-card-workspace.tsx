@@ -18,7 +18,12 @@ import {
   type CatalogMasterCardLayout,
   type CatalogResolvedCardElementRects,
 } from "@/lib/catalog/master-card-layout";
-import { CATALOG_A4_PAGE_HEIGHT, CATALOG_A4_PAGE_WIDTH, resolveCatalogPageLayout } from "@/lib/catalog/layout";
+import {
+  CATALOG_A4_PAGE_HEIGHT,
+  CATALOG_A4_PAGE_WIDTH,
+  getCatalogItemsPerPage,
+  resolveCatalogPageLayout,
+} from "@/lib/catalog/layout";
 import type { FlyerType } from "@/lib/database.types";
 import { buildCatalogStyleFormData, serializeStyleFormData } from "@/lib/catalog/style-form-data";
 import type { CatalogLayoutVariant, EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
@@ -67,14 +72,14 @@ const ELEMENT_LABELS: Record<CatalogCardElementKey, { label: string; rectKey: ke
   strikeLine: { label: "Strike line", rectKey: "strikeLineRect" },
 };
 
-const GRID_SIZE_OPTIONS = [4, 8, 16] as const;
-const NUDGE_STEP_OPTIONS = [1, 4, 8] as const;
+const MASTER_CARD_GRID_SIZE = 8;
 const MASTER_CARD_TARGET_PREVIEW_WIDTH = 300;
 const MASTER_CARD_MAX_PREVIEW_WIDTH = 360;
 const MASTER_CARD_MAX_EDITOR_CANVAS_ZOOM = 4;
-
-type GridSizeOption = (typeof GRID_SIZE_OPTIONS)[number];
-type NudgeStepOption = (typeof NUDGE_STEP_OPTIONS)[number];
+const MASTER_CARD_FOCUSED_COMPARE_WIDTH = 280;
+const MASTER_CARD_FOCUSED_COMPARE_MAX_WIDTH = 320;
+const GRID_SIZE_OPTIONS = [8, 12, 16] as const;
+const NUDGE_STEP_OPTIONS = [2, 4, 8] as const;
 type MasterCardDisplayFieldKey =
   | "showPromoPrice"
   | "showNormalPrice"
@@ -227,10 +232,16 @@ export function MasterCardWorkspace({
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
-  const [gridSize, setGridSize] = useState<GridSizeOption>(8);
-  const [nudgeStep, setNudgeStep] = useState<NudgeStepOption>(1);
   const [previewFlyerType, setPreviewFlyerType] = useState<FlyerType>(initialStyle.flyerType);
   const [resolvedPagePreviewCardSize, setResolvedPagePreviewCardSize] = useState<CatalogPageCanvasResolvedCardPreviewSize | null>(null);
+  const gridSize = MASTER_CARD_GRID_SIZE;
+  const nudgeStep = MASTER_CARD_GRID_SIZE;
+  const setGridSize = useCallback((nextValue: number) => {
+    void nextValue;
+  }, []);
+  const setNudgeStep = useCallback((nextValue: number) => {
+    void nextValue;
+  }, []);
 
   const visibleItems = useMemo(
     () => [...initialItems].sort((left, right) => left.displayOrder - right.displayOrder).filter((item) => item.isVisible),
@@ -266,8 +277,27 @@ export function MasterCardWorkspace({
   );
   const currentStyleSignature = serializeStyleFormData(buildCatalogStyleFormData(jobId, style));
   const hasUnsavedStyleChanges = currentStyleSignature !== persistedStyleSignatureRef.current;
+  const previewItemsPerPage = useMemo(
+    () => getCatalogItemsPerPage(style.layoutPreset),
+    [style.layoutPreset],
+  );
+  const previewPageIndex = useMemo(() => {
+    if (!selectedItem) {
+      return 0;
+    }
+
+    const selectedIndex = previewItems.findIndex((item) => item.id === selectedItem.id);
+
+    if (selectedIndex < 0) {
+      return 0;
+    }
+
+    return Math.floor(selectedIndex / previewItemsPerPage);
+  }, [previewItems, previewItemsPerPage, selectedItem]);
   const pagePreviewItems = useMemo(
-    () => previewItems.slice(0, 9).map((item) => ({
+    () => previewItems
+      .slice(previewPageIndex * previewItemsPerPage, (previewPageIndex + 1) * previewItemsPerPage)
+      .map((item) => ({
       id: item.id,
       title: item.displayName ?? item.productName,
       sku: item.sku,
@@ -279,7 +309,7 @@ export function MasterCardWorkspace({
       discountPercent: item.discountPercent,
       imageUrl: item.previewUrl,
     })),
-    [previewItems],
+    [previewItems, previewItemsPerPage, previewPageIndex],
   );
   const fallbackPageLayout = useMemo(
     () => resolveCatalogPageLayout(CATALOG_A4_PAGE_WIDTH, CATALOG_A4_PAGE_HEIGHT, {
@@ -330,6 +360,100 @@ export function MasterCardWorkspace({
     }),
     [editorCanvasZoom, editorCardBaseSize.height, editorCardBaseSize.width],
   );
+  const focusedCompareZoom = useMemo(() => {
+    if (editorCardBaseSize.width <= 0) {
+      return 1;
+    }
+
+    const targetWidth = clampNumber(
+      editorCardBaseSize.width,
+      MASTER_CARD_FOCUSED_COMPARE_WIDTH,
+      MASTER_CARD_FOCUSED_COMPARE_MAX_WIDTH,
+    );
+
+    return clampNumber(targetWidth / editorCardBaseSize.width, 1, 2.4);
+  }, [editorCardBaseSize.width]);
+  const focusedCompareViewportSize = useMemo(
+    () => ({
+      width: editorCardBaseSize.width * focusedCompareZoom,
+      height: editorCardBaseSize.height * focusedCompareZoom,
+    }),
+    [editorCardBaseSize.height, editorCardBaseSize.width, focusedCompareZoom],
+  );
+  const previewPageCount = Math.max(Math.ceil(previewItems.length / previewItemsPerPage), 1);
+  const selectedItemPageSlotIndex = useMemo(() => {
+    if (!selectedItem) {
+      return 0;
+    }
+
+    const selectedIndex = pagePreviewItems.findIndex((item) => item.id === selectedItem.id);
+
+    return selectedIndex >= 0 ? selectedIndex : 0;
+  }, [pagePreviewItems, selectedItem]);
+  const focusedCompareSlotRects = useMemo(
+    () =>
+      Array.from({ length: previewItemsPerPage }, (_, index) => {
+        const column = index % fallbackPageLayout.columns;
+        const row = Math.floor(index / fallbackPageLayout.columns);
+
+        return {
+          index,
+          x: fallbackPageLayout.frameX + column * (fallbackPageLayout.cardWidth + fallbackPageLayout.gap),
+          y: fallbackPageLayout.frameY + row * (fallbackPageLayout.cardHeight + fallbackPageLayout.gap),
+          width: fallbackPageLayout.cardWidth,
+          height: fallbackPageLayout.cardHeight,
+        };
+      }),
+    [fallbackPageLayout.cardHeight, fallbackPageLayout.cardWidth, fallbackPageLayout.columns, fallbackPageLayout.frameX, fallbackPageLayout.frameY, fallbackPageLayout.gap, previewItemsPerPage],
+  );
+  const focusedCompareSelectedSlot = focusedCompareSlotRects[selectedItemPageSlotIndex] ?? null;
+  const focusedCompareScale = useMemo(() => {
+    if (editorCardBaseSize.width <= 0) {
+      return 1;
+    }
+
+    return focusedCompareViewportSize.width / editorCardBaseSize.width;
+  }, [editorCardBaseSize.width, focusedCompareViewportSize.width]);
+  const focusedCompareViewportHeight = useMemo(
+    () => clampNumber(focusedCompareViewportSize.height + 110, 340, 500),
+    [focusedCompareViewportSize.height],
+  );
+  const focusedCompareViewportWidth = clampNumber(
+    focusedCompareViewportSize.width + 52,
+    MASTER_CARD_FOCUSED_COMPARE_WIDTH + 24,
+    MASTER_CARD_FOCUSED_COMPARE_MAX_WIDTH + 40,
+  );
+  const focusedComparePageSize = useMemo(
+    () => ({
+      width: fallbackPageLayout.pageWidth * focusedCompareScale,
+      height: fallbackPageLayout.pageHeight * focusedCompareScale,
+    }),
+    [fallbackPageLayout.pageHeight, fallbackPageLayout.pageWidth, focusedCompareScale],
+  );
+  const focusedCompareOffset = useMemo(() => {
+    if (!focusedCompareSelectedSlot) {
+      return { x: 0, y: 0 };
+    }
+
+    const slotCenterX = (focusedCompareSelectedSlot.x + focusedCompareSelectedSlot.width / 2) * focusedCompareScale;
+    const slotCenterY = (focusedCompareSelectedSlot.y + focusedCompareSelectedSlot.height / 2) * focusedCompareScale;
+    const maxTranslateX = 0;
+    const minTranslateX = Math.min(focusedCompareViewportWidth - focusedComparePageSize.width, 0);
+    const maxTranslateY = 0;
+    const minTranslateY = Math.min(focusedCompareViewportHeight - focusedComparePageSize.height, 0);
+
+    return {
+      x: clampNumber(focusedCompareViewportWidth / 2 - slotCenterX, minTranslateX, maxTranslateX),
+      y: clampNumber(focusedCompareViewportHeight / 2 - slotCenterY, minTranslateY, maxTranslateY),
+    };
+  }, [
+    focusedComparePageSize.height,
+    focusedComparePageSize.width,
+    focusedCompareScale,
+    focusedCompareSelectedSlot,
+    focusedCompareViewportHeight,
+    focusedCompareViewportWidth,
+  ]);
 
   useEffect(() => {
     if (!selectedItemId && previewItems.length) {
@@ -491,15 +615,15 @@ export function MasterCardWorkspace({
       options: { snap?: boolean } = {},
     ) => {
       const shouldSnap = options.snap ?? false;
-      const resolvedX = shouldSnap ? snapAdjustmentToGrid(nextX, gridSize) : nextX;
-      const resolvedY = shouldSnap ? snapAdjustmentToGrid(nextY, gridSize) : nextY;
+      const resolvedX = shouldSnap ? snapAdjustmentToGrid(nextX, MASTER_CARD_GRID_SIZE) : nextX;
+      const resolvedY = shouldSnap ? snapAdjustmentToGrid(nextY, MASTER_CARD_GRID_SIZE) : nextY;
 
       updateDraftLayoutEntry(key, {
         x: clampAdjustment(resolvedX),
         y: clampAdjustment(resolvedY),
       });
     },
-    [gridSize, updateDraftLayoutEntry],
+    [updateDraftLayoutEntry],
   );
 
   const updateDraftSize = useCallback(
@@ -510,15 +634,15 @@ export function MasterCardWorkspace({
       options: { snap?: boolean } = {},
     ) => {
       const shouldSnap = options.snap ?? false;
-      const resolvedWidth = shouldSnap ? snapAdjustmentToGrid(nextWidth, gridSize) : nextWidth;
-      const resolvedHeight = shouldSnap ? snapAdjustmentToGrid(nextHeight, gridSize) : nextHeight;
+      const resolvedWidth = shouldSnap ? snapAdjustmentToGrid(nextWidth, MASTER_CARD_GRID_SIZE) : nextWidth;
+      const resolvedHeight = shouldSnap ? snapAdjustmentToGrid(nextHeight, MASTER_CARD_GRID_SIZE) : nextHeight;
 
       updateDraftLayoutEntry(key, {
         width: clampAdjustment(resolvedWidth),
         height: clampAdjustment(resolvedHeight),
       });
     },
-    [gridSize, updateDraftLayoutEntry],
+    [updateDraftLayoutEntry],
   );
 
   const updateDraftVisibility = useCallback(
@@ -527,26 +651,26 @@ export function MasterCardWorkspace({
     },
     [updateDraftLayoutEntry],
   );
-
   const nudgeSelectedElement = useCallback(
-    (deltaX: number, deltaY: number) => {
-      const currentLayout = draftLayout[selectedElement];
+    (deltaXMultiplier: number, deltaYMultiplier: number) => {
+      const elementLayout = draftLayout[selectedElement];
+
       updateDraftPosition(
         selectedElement,
-        currentLayout.x + deltaX * nudgeStep,
-        currentLayout.y + deltaY * nudgeStep,
+        elementLayout.x + deltaXMultiplier * nudgeStep,
+        elementLayout.y + deltaYMultiplier * nudgeStep,
       );
     },
     [draftLayout, nudgeStep, selectedElement, updateDraftPosition],
   );
-
   const resizeSelectedElement = useCallback(
-    (deltaWidth: number, deltaHeight: number) => {
-      const currentLayout = draftLayout[selectedElement];
+    (deltaWidthMultiplier: number, deltaHeightMultiplier: number) => {
+      const elementLayout = draftLayout[selectedElement];
+
       updateDraftSize(
         selectedElement,
-        currentLayout.width + deltaWidth * nudgeStep,
-        currentLayout.height + deltaHeight * nudgeStep,
+        elementLayout.width + deltaWidthMultiplier * nudgeStep,
+        elementLayout.height + deltaHeightMultiplier * nudgeStep,
       );
     },
     [draftLayout, nudgeStep, selectedElement, updateDraftSize],
@@ -1005,7 +1129,7 @@ export function MasterCardWorkspace({
         </SurfaceCardBody>
       </SurfaceCard>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_400px]">
         <SurfaceCard>
           <SurfaceCardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -1021,11 +1145,22 @@ export function MasterCardWorkspace({
                   {previewFlyerType === "promo" ? "Promo preview" : "Normal preview"}
                 </span>
                 <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                  Zoom {editorCanvasZoom.toFixed(2)}×
+                  Zoom {editorCanvasZoom.toFixed(2)}x
                 </span>
-                <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
-                  {snapToGrid ? `Snap ${gridSize}px` : "Free drag"}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowGrid((previous) => !previous)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${showGrid ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                >
+                  {showGrid ? "Grid on" : "Grid off"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSnapToGrid((previous) => !previous)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${snapToGrid ? "border-brand/30 bg-brand-soft/15 text-foreground" : "border-line bg-white text-muted-strong hover:border-brand/20"}`}
+                >
+                  {snapToGrid ? `Snap ${MASTER_CARD_GRID_SIZE}px` : "Free drag"}
+                </button>
               </div>
             </div>
           </SurfaceCardHeader>
@@ -1069,7 +1204,7 @@ export function MasterCardWorkspace({
                         style={{
                           backgroundImage:
                             "linear-gradient(to right, rgba(37, 99, 235, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(37, 99, 235, 0.12) 1px, transparent 1px)",
-                          backgroundSize: `${gridSize}px ${gridSize}px`,
+                          backgroundSize: `${MASTER_CARD_GRID_SIZE}px ${MASTER_CARD_GRID_SIZE}px`,
                         }}
                       />
                     ) : null}
@@ -1123,7 +1258,36 @@ export function MasterCardWorkspace({
               </div>
             </div>
 
-            <div className="grid gap-4 2xl:grid-cols-2">
+            <div className="rounded-2xl border border-line bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                  {ELEMENT_LABELS[selectedElement].label}
+                </span>
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${selectedLayout.visible ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                  {selectedLayout.visible ? "Layout on" : "Layout off"}
+                </span>
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${selectedRect ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                  {selectedRect ? "On canvas" : "Preview hidden"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateDraftVisibility(selectedElement, !selectedLayout.visible)}
+                  className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:border-brand/20 hover:bg-brand-soft/10"
+                >
+                  {selectedLayout.visible ? "Hide in shared layout" : "Show in shared layout"}
+                </button>
+              </div>
+              {selectedRect ? (
+                <p className="mt-3 text-[11px] leading-5 text-muted-strong">
+                  Resolved box {Math.round(selectedRect.width)} x {Math.round(selectedRect.height)} px at {Math.round(selectedRect.x)}, {Math.round(selectedRect.y)}.
+                  Shared adjustments: X {selectedLayout.x}, Y {selectedLayout.y}, W {selectedLayout.width}, H {selectedLayout.height}.
+                </p>
+              ) : (
+                <p className="mt-3 text-[11px] leading-5 text-muted">{selectedElementRenderHint}</p>
+              )}
+            </div>
+
+            <div className="hidden">
               <div className="rounded-2xl border border-line bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1339,7 +1503,158 @@ export function MasterCardWorkspace({
           </SurfaceCardBody>
         </SurfaceCard>
 
-        <SurfaceCard className="overflow-hidden xl:sticky xl:top-24 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col">
+        <div className="space-y-5 xl:sticky xl:top-24">
+          <SurfaceCard className="overflow-hidden">
+            <SurfaceCardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Focused compare</p>
+                  <h2 className="mt-1 text-sm font-semibold text-foreground">Selected card in page context</h2>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${hasUnappliedChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                    {hasUnappliedChanges ? "Live draft" : "Applied"}
+                  </span>
+                  <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted-strong">
+                    Page {previewPageIndex + 1} of {previewPageCount} · Slot {selectedItemPageSlotIndex + 1}
+                  </span>
+                </div>
+              </div>
+            </SurfaceCardHeader>
+            <SurfaceCardBody className="space-y-4">
+              <div className="rounded-2xl border border-brand/20 bg-brand-soft/10 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+                <p className="font-semibold text-foreground">Canvas edits update this compare preview immediately.</p>
+                <p className="mt-1">The selected item stays large enough to compare against your canvas while still showing its page slot context.</p>
+              </div>
+
+              <div className="mx-auto w-full" style={{ maxWidth: `${focusedCompareViewportWidth}px` }}>
+                <div
+                  className="relative overflow-hidden rounded-[30px] border border-line bg-slate-100/80 shadow-inner"
+                  style={{ height: `${focusedCompareViewportHeight}px` }}
+                >
+                  <div
+                    className="absolute left-0 top-0 overflow-hidden rounded-[34px] border border-line/70 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.14)]"
+                    style={{
+                      width: `${focusedComparePageSize.width}px`,
+                      height: `${focusedComparePageSize.height}px`,
+                      transform: `translate(${focusedCompareOffset.x}px, ${focusedCompareOffset.y}px)`,
+                    }}
+                  >
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        backgroundColor: style.pageBackgroundColor,
+                      }}
+                    />
+                    <div
+                      className="absolute border-b border-dashed border-line/80 bg-white/70"
+                      style={{
+                        left: `${fallbackPageLayout.headerX}px`,
+                        top: `${fallbackPageLayout.headerY}px`,
+                        width: `${fallbackPageLayout.headerWidth}px`,
+                        height: `${fallbackPageLayout.headerHeight}px`,
+                      }}
+                    />
+                    <div
+                      className="absolute border-t border-dashed border-line/80 bg-white/70"
+                      style={{
+                        left: `${fallbackPageLayout.footerX}px`,
+                        top: `${fallbackPageLayout.footerY}px`,
+                        width: `${fallbackPageLayout.footerWidth}px`,
+                        height: `${fallbackPageLayout.footerHeight}px`,
+                      }}
+                    />
+
+                    {focusedCompareSlotRects.map((slot) => {
+                      const slotItem = pagePreviewItems[slot.index] ?? null;
+                      const isSelectedSlot = slot.index === selectedItemPageSlotIndex;
+
+                      return (
+                        <div
+                          key={slot.index}
+                          className={`absolute overflow-hidden rounded-[22px] ${isSelectedSlot ? "ring-2 ring-brand/35 ring-offset-2 ring-offset-white/80" : ""}`}
+                          style={{
+                            left: `${slot.x}px`,
+                            top: `${slot.y}px`,
+                            width: `${slot.width}px`,
+                            height: `${slot.height}px`,
+                          }}
+                        >
+                          {isSelectedSlot ? (
+                            <CatalogCardPreview
+                              title={selectedItem.displayName ?? selectedItem.productName}
+                              sku={selectedItem.sku}
+                              packSize={selectedItem.packSize}
+                              unit={selectedItem.unit}
+                              normalPrice={selectedItem.normalPrice}
+                              promoPrice={selectedItem.promoPrice}
+                              discountAmount={selectedItem.discountAmount}
+                              discountPercent={selectedItem.discountPercent}
+                              imageUrl={selectedItem.previewUrl}
+                              options={liveCurrentJobPreviewStyle}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full flex-col justify-between rounded-[22px] border border-dashed border-line/80 bg-white/78 p-3 text-[10px] text-muted-strong">
+                              <span className="rounded-full border border-line bg-white px-2 py-0.5 font-medium">
+                                Slot {slot.index + 1}
+                              </span>
+                              <p className="line-clamp-3 text-[11px] font-medium text-foreground/80">
+                                {slotItem?.title ?? "Empty slot"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-[11px] text-muted-strong">
+                <span className="rounded-full border border-line bg-white px-2.5 py-1">
+                  Current job {style.flyerType === "promo" ? "Promo" : "Normal"}
+                </span>
+                <span className="rounded-full border border-line bg-white px-2.5 py-1">
+                  Selected SKU {selectedItem.sku ?? "N/A"}
+                </span>
+                <span className="rounded-full border border-line bg-white px-2.5 py-1">
+                  Compare zoom {focusedCompareScale.toFixed(2)}x
+                </span>
+              </div>
+            </SurfaceCardBody>
+          </SurfaceCard>
+
+          <SurfaceCard className="overflow-hidden">
+            <SurfaceCardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">A4 overview</p>
+                  <h2 className="mt-1 text-sm font-semibold text-foreground">Full-page context</h2>
+                </div>
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${styleSaving || hasUnsavedStyleChanges ? "border-amber-200 bg-amber-50 text-amber-700" : "border-line bg-white text-muted-strong"}`}>
+                  {styleSaving ? "Saving..." : hasUnsavedStyleChanges ? "Save pending" : "Saved"}
+                </span>
+              </div>
+            </SurfaceCardHeader>
+            <SurfaceCardBody className="space-y-4">
+              <div className="rounded-2xl border border-line bg-slate-50/80 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+                Keep an eye on overall page balance here while using the larger compare panel above for card-level adjustments.
+              </div>
+              <div className="mx-auto w-full max-w-[320px]">
+                <CatalogPageCanvas
+                  items={pagePreviewItems}
+                  options={liveCurrentJobPreviewStyle}
+                  pageBackgroundPreviewUrl={style.pageBackgroundPreviewUrl}
+                  headerMediaPreviewUrl={style.headerMediaPreviewUrl}
+                  footerMediaPreviewUrl={style.footerMediaPreviewUrl}
+                  onResolvedCardPreviewSize={setResolvedPagePreviewCardSize}
+                />
+              </div>
+            </SurfaceCardBody>
+          </SurfaceCard>
+        </div>
+
+        <SurfaceCard className="hidden">
           <SurfaceCardHeader>
             <div className="flex items-center justify-between gap-3">
               <div>
