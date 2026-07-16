@@ -5,6 +5,7 @@ import { getCatalogItemsPerPage } from "@/lib/catalog/layout";
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import type { CatalogItemView } from "@/lib/catalog/repository";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
+import { getCatalogItemSlabPrices } from "@/lib/catalog/slab-pricing";
 
 interface PagePreviewGridProps {
   items: Array<
@@ -52,6 +53,7 @@ export function PagePreviewGrid({ items, options }: PagePreviewGridProps) {
               promoPrice: pricing.promoPrice,
               discountAmount: pricing.discountAmount,
               discountPercent: pricing.discountPercent,
+              slabPrices: getCatalogItemSlabPrices(item.metadata_json),
               imageUrl: item.previewUrl,
             };
           })}

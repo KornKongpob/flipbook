@@ -12,11 +12,16 @@ import {
   type CatalogMasterCardLayout,
 } from "@/lib/catalog/master-card-layout";
 import type { FlyerType } from "@/lib/database.types";
+import {
+  isCatalogPricingMode,
+  type CatalogPricingMode,
+} from "@/lib/catalog/slab-pricing";
 
 export type CatalogLayoutVariant = "promo" | "clean";
 export type CatalogBackgroundFit = CatalogMediaFit;
 
 export interface CatalogStyleOptions {
+  pricingMode: CatalogPricingMode;
   variant: CatalogLayoutVariant;
   flyerType: FlyerType;
   layoutPreset: CatalogLayoutPreset;
@@ -30,6 +35,8 @@ export interface CatalogStyleOptions {
   showSku: boolean;
   showPackSize: boolean;
   showPriceDecimals: boolean;
+  showSlabPrices: boolean;
+  showSlabQuantity: boolean;
   masterCardLayout: CatalogMasterCardLayout;
   promoStartDate: string | null;
   promoEndDate: string | null;
@@ -69,6 +76,7 @@ export interface CatalogStyleOptions {
   skuFontSize: number;
   promoPriceFontSize: number;
   normalPriceFontSize: number;
+  slabPriceFontSize: number;
   cardBackgroundColor: string;
   cardBorderColor: string;
   imageBackgroundColor: string;
@@ -76,6 +84,7 @@ export interface CatalogStyleOptions {
   metaColor: string;
   promoPriceColor: string;
   normalPriceColor: string;
+  slabPriceColor: string;
   discountBadgeBackgroundColor: string;
   discountBadgeTextColor: string;
 }
@@ -235,6 +244,9 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
 
   return {
     ...DEFAULT_STYLE_OPTIONS,
+    pricingMode: isCatalogPricingMode(source.pricingMode)
+      ? source.pricingMode
+      : DEFAULT_STYLE_OPTIONS.pricingMode,
     variant: normalizedVariant,
     flyerType: normalizedFlyerType,
     layoutPreset: isCatalogLayoutPreset(source.layoutPreset)
@@ -250,6 +262,8 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
     showSku: asBoolean(source.showSku, DEFAULT_STYLE_OPTIONS.showSku),
     showPackSize: asBoolean(source.showPackSize, DEFAULT_STYLE_OPTIONS.showPackSize),
     showPriceDecimals: asBoolean(source.showPriceDecimals, DEFAULT_STYLE_OPTIONS.showPriceDecimals),
+    showSlabPrices: asBoolean(source.showSlabPrices, DEFAULT_STYLE_OPTIONS.showSlabPrices),
+    showSlabQuantity: asBoolean(source.showSlabQuantity, DEFAULT_STYLE_OPTIONS.showSlabQuantity),
     masterCardLayout: asMasterCardLayout(source.masterCardLayout),
     promoStartDate: asDateString(source.promoStartDate),
     promoEndDate: asDateString(source.promoEndDate),
@@ -369,6 +383,12 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
       8,
       22,
     ),
+    slabPriceFontSize: asNumber(
+      source.slabPriceFontSize,
+      DEFAULT_STYLE_OPTIONS.slabPriceFontSize,
+      10,
+      28,
+    ),
     cardBackgroundColor: asColor(source.cardBackgroundColor, DEFAULT_STYLE_OPTIONS.cardBackgroundColor),
     cardBorderColor: asColor(source.cardBorderColor, DEFAULT_STYLE_OPTIONS.cardBorderColor),
     imageBackgroundColor: asColor(source.imageBackgroundColor, DEFAULT_STYLE_OPTIONS.imageBackgroundColor),
@@ -376,6 +396,7 @@ export function mergeCatalogStyleOptions(raw: Record<string, unknown> | null | u
     metaColor: asColor(source.metaColor, DEFAULT_STYLE_OPTIONS.metaColor),
     promoPriceColor: asColor(source.promoPriceColor, DEFAULT_STYLE_OPTIONS.promoPriceColor),
     normalPriceColor: asColor(source.normalPriceColor, DEFAULT_STYLE_OPTIONS.normalPriceColor),
+    slabPriceColor: asColor(source.slabPriceColor, DEFAULT_STYLE_OPTIONS.slabPriceColor),
     discountBadgeBackgroundColor: asColor(
       source.discountBadgeBackgroundColor,
       DEFAULT_STYLE_OPTIONS.discountBadgeBackgroundColor,

@@ -81,6 +81,7 @@ export function resolveCatalogCardLayout(args: {
   showPromoLine: boolean;
   showNormalPrice: boolean;
   showSinglePrice?: boolean;
+  singlePriceLineCount?: number;
   metricScale?: number;
 }) {
   const {
@@ -92,6 +93,7 @@ export function resolveCatalogCardLayout(args: {
     showPromoLine,
     showNormalPrice,
     showSinglePrice = true,
+    singlePriceLineCount = 1,
     metricScale = 1,
   } = args;
   const scale = Math.max(metricScale, 0);
@@ -120,19 +122,26 @@ export function resolveCatalogCardLayout(args: {
     Math.max(padding * CATALOG_CARD_IMAGE_TOP_INSET_FACTOR, 4 * scale),
     padding,
   );
-  const singlePriceFontSize = isNormalFlyer
-    ? Math.max(scaledPromoPriceFontSize, scaledNormalPriceFontSize + 10 * scale)
-    : Math.max(
-        scaledPromoPriceFontSize - 4 * scale,
-        scaledNormalPriceFontSize + 6 * scale,
-      );
+  const singlePriceFontSize = options.pricingMode === "slab"
+    ? options.slabPriceFontSize * typographyScale
+    : isNormalFlyer
+      ? Math.max(scaledPromoPriceFontSize, scaledNormalPriceFontSize + 10 * scale)
+      : Math.max(
+          scaledPromoPriceFontSize - 4 * scale,
+          scaledNormalPriceFontSize + 6 * scale,
+        );
   const promoPriceLineHeight = scaledPromoPriceFontSize * CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT;
   const normalPriceLineHeight = scaledNormalPriceFontSize * CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT;
-  const singlePriceLineHeight = singlePriceFontSize * CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT;
+  const singlePriceLineHeight = singlePriceFontSize * (
+    options.pricingMode === "slab" ? CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT : CATALOG_CARD_PROMO_PRICE_LINE_HEIGHT
+  );
+  const singlePriceRows = Math.max(1, Math.floor(singlePriceLineCount));
+  const singlePriceBlockHeight = singlePriceLineHeight * singlePriceRows
+    + scaledTitleMetaGap * Math.max(singlePriceRows - 1, 0);
   const priceBlockHeight = effectiveShowPromoLine
     ? promoPriceLineHeight + (effectiveShowNormalPrice ? scaledTitleMetaGap + normalPriceLineHeight : 0)
     : effectiveShowSinglePrice
-      ? singlePriceLineHeight
+      ? singlePriceBlockHeight
       : 0;
   const metaHeight = scaledSkuFontSize * CATALOG_CARD_META_LINE_HEIGHT;
   const reservedMetaHeight = effectiveShowMeta && metaHeight > 0 ? metaHeight + scaledTitleMetaGap : 0;
@@ -211,7 +220,7 @@ export function resolveCatalogCardLayout(args: {
           innerRect.x,
           priceBlockTop,
           innerRect.width,
-          Math.min(singlePriceLineHeight, availablePriceHeight),
+          Math.min(singlePriceBlockHeight, availablePriceHeight),
         ),
     titleFontSize: scaledTitleFontSize,
     metaFontSize: scaledSkuFontSize,

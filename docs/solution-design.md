@@ -1,8 +1,8 @@
-# Promo Catalog Studio Solution Design
+# Catalog Studio Solution Design
 
 ## 1. High-level architecture
 
-Promo Catalog Studio is designed as a server-led internal workflow app:
+Catalog Studio is designed as a server-led internal workflow app for promotion and slab price catalogs:
 
 - Next.js App Router provides the authenticated UI, route handlers, and server actions.
 - Supabase Auth handles sign-in and session-backed access control.

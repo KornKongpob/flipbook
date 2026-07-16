@@ -15,6 +15,7 @@ import {
   withCatalogMediaPreviews,
 } from "@/lib/catalog/style-options";
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
+import { getCatalogItemSlabPrices } from "@/lib/catalog/slab-pricing";
 
 export default async function CatalogPageDesignPage({
   params,
@@ -71,6 +72,7 @@ export default async function CatalogPageDesignPage({
         promoPrice: pricing.promoPrice,
         discountAmount: pricing.discountAmount,
         discountPercent: pricing.discountPercent,
+        slabPrices: getCatalogItemSlabPrices(item.metadata_json),
         previewUrl: await resolveProductAssetPreviewUrl(item.selectedAsset),
         isVisible: item.is_visible,
         displayOrder: item.display_order,

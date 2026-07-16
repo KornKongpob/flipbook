@@ -26,6 +26,10 @@ import {
 } from "@/lib/catalog/layout";
 import { resolveCatalogCardElementRects } from "@/lib/catalog/master-card-layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
+import {
+  formatSlabQuantityLabel,
+  type SlabPriceTier,
+} from "@/lib/catalog/slab-pricing";
 
 export interface RenderableCatalogItem {
   id: string;
@@ -38,6 +42,7 @@ export interface RenderableCatalogItem {
   promoPrice: number | null;
   discountAmount: number | null;
   discountPercent: number | null;
+  slabPrices: SlabPriceTier[];
   imageBuffer: Buffer | null;
 }
 
@@ -245,6 +250,7 @@ function drawCard(
   options: CatalogStyleOptions,
 ) {
   const promoActive =
+    options.pricingMode !== "slab" &&
     options.flyerType === "promo" &&
     item.promoPrice !== null &&
     item.normalPrice !== null &&
@@ -252,13 +258,16 @@ function drawCard(
     item.promoPrice < item.normalPrice;
   const showDiscountAmount = options.showDiscountAmount;
   const showDiscountPercent = options.showDiscountPercent;
-  const showNormalPrice = options.showNormalPrice;
+  const isSlabMode = options.pricingMode === "slab" && item.slabPrices.length > 0;
+  const showNormalPrice = !isSlabMode && options.showNormalPrice;
   const showPromoPrice = options.showPromoPrice;
   const showSku = options.showSku;
   const showPackSize = options.showPackSize;
   const showDiscountBadge = promoActive && showDiscountAmount && item.discountAmount != null;
   const showPromoLine = promoActive && showPromoPrice;
-  const showSinglePrice = !showPromoLine && options.showNormalPrice;
+  const showSinglePrice = isSlabMode
+    ? options.showSlabPrices
+    : !showPromoLine && options.showNormalPrice;
   const meta = [showSku ? item.sku : null, showPackSize ? item.packSize : null, item.unit]
     .filter(Boolean)
     .join(" • ");
@@ -275,6 +284,7 @@ function drawCard(
     showPromoLine,
     showNormalPrice,
     showSinglePrice,
+    singlePriceLineCount: isSlabMode ? item.slabPrices.length : 1,
   });
   const normalPriceFontName = "Sarabun-Regular";
   const normalPriceTextWidth = showPromoLine && showNormalPrice && cardLayout.normalPriceRowRect
@@ -406,7 +416,61 @@ function drawCard(
     });
   }
 
-  if (showPromoLine && elementRects.promoPriceRect) {
+  if (isSlabMode && showSinglePrice && elementRects.singlePriceRect) {
+    const slabRect = elementRects.singlePriceRect;
+    const rowHeight = slabRect.height / item.slabPrices.length;
+
+    item.slabPrices.forEach((tier, index) => {
+      const rowRect = {
+        x: slabRect.x,
+        y: slabRect.y + rowHeight * index,
+        width: slabRect.width,
+        height: rowHeight,
+      };
+
+      if (index > 0) {
+        doc
+          .moveTo(originX + rowRect.x, originY + rowRect.y)
+          .lineTo(originX + rowRect.x + rowRect.width, originY + rowRect.y)
+          .lineWidth(0.6)
+          .strokeColor(options.cardBorderColor)
+          .stroke();
+      }
+
+      if (options.showSlabQuantity) {
+        drawPdfTextBlock(doc, originX, originY, {
+          rect: {
+            x: rowRect.x + 4,
+            y: rowRect.y,
+            width: rowRect.width * 0.48 - 6,
+            height: rowRect.height,
+          },
+          text: formatSlabQuantityLabel(tier, item.unit),
+          fontName: "Sarabun-SemiBold",
+          fontSize: Math.max(cardLayout.singlePriceFontSize * 0.62, 8),
+          color: options.metaColor,
+          lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
+          verticalAlign: "middle",
+        });
+      }
+
+      drawPdfTextBlock(doc, originX, originY, {
+        rect: {
+          x: options.showSlabQuantity ? rowRect.x + rowRect.width * 0.48 : rowRect.x + 4,
+          y: rowRect.y,
+          width: options.showSlabQuantity ? rowRect.width * 0.52 - 4 : rowRect.width - 8,
+          height: rowRect.height,
+        },
+        text: formatCurrency(tier.price, { showDecimals: options.showPriceDecimals }),
+        fontName: "Sarabun-Bold",
+        fontSize: cardLayout.singlePriceFontSize,
+        color: options.slabPriceColor,
+        lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
+        align: options.showSlabQuantity ? "right" : "center",
+        verticalAlign: "middle",
+      });
+    });
+  } else if (showPromoLine && elementRects.promoPriceRect) {
     drawPdfTextBlock(doc, originX, originY, {
       rect: elementRects.promoPriceRect,
       text: promoPriceLabel,
@@ -532,7 +596,7 @@ export async function renderCatalogPdf({
     font: PDF_FONT_PATHS.regular,
     info: {
       Title: jobName,
-      Author: "Promo Catalog Studio",
+      Author: "Catalog Studio",
     },
   });
 

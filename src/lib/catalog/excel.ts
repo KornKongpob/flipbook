@@ -1,5 +1,10 @@
 import * as XLSX from "xlsx";
 import { deriveCatalogPricing } from "@/lib/catalog/pricing";
+import {
+  normalizeSlabPriceTiers,
+  type CatalogPricingMode,
+  type SlabPriceTier,
+} from "@/lib/catalog/slab-pricing";
 import { normalizeName, normalizeSku } from "@/lib/utils";
 
 type ColumnKey =
@@ -8,9 +13,13 @@ type ColumnKey =
   | "normalPrice"
   | "promoPrice"
   | "packSize"
-  | "unit";
+  | "unit"
+  | "slabPrice"
+  | "slabMinQuantity"
+  | "slabMaxQuantity"
+  | "slabLabel";
 
-export const CATALOG_IMPORT_TEMPLATE_COLUMNS = [
+export const PROMOTION_IMPORT_TEMPLATE_COLUMNS = [
   {
     key: "sku" as const,
     header: "Item number",
@@ -37,6 +46,32 @@ export const CATALOG_IMPORT_TEMPLATE_COLUMNS = [
     required: true,
     description: "Shown as the promotional price on the catalog artwork.",
   },
+  {
+    key: "packSize" as const,
+    header: "Pack size",
+    required: false,
+    description: "Optional package size shown with the product metadata.",
+  },
+  {
+    key: "unit" as const,
+    header: "Unit",
+    required: false,
+    description: "Optional selling unit shown with the product metadata.",
+  },
+] as const;
+
+export const SLAB_IMPORT_TEMPLATE_COLUMNS = [
+  { header: "Item number", width: 22 },
+  { header: "Item name", width: 34 },
+  { header: "Normal price", width: 16 },
+  { header: "Slab 1 min qty", width: 18 },
+  { header: "Slab 1 price", width: 16 },
+  { header: "Slab 2 min qty", width: 18 },
+  { header: "Slab 2 price", width: 16 },
+  { header: "Slab 3 min qty", width: 18 },
+  { header: "Slab 3 price", width: 16 },
+  { header: "Pack size", width: 18 },
+  { header: "Unit", width: 14 },
 ] as const;
 
 const COLUMN_ALIASES: Record<ColumnKey, string[]> = {
@@ -50,17 +85,30 @@ const COLUMN_ALIASES: Record<ColumnKey, string[]> = {
     "product_code",
     "code",
   ],
-  productName: ["item name", "product name", "name", "description", "product"],
-  normalPrice: ["normal price", "regular price", "price", "original price"],
-  promoPrice: ["promo price", "promotion price", "promotional price", "sale price"],
-  packSize: ["pack size", "size", "packing", "pack"],
-  unit: ["unit", "uom"],
+  productName: ["item name", "product name", "name", "description", "product", "ชื่อสินค้า", "รายการ"],
+  normalPrice: ["normal price", "regular price", "price", "unit price", "original price", "ราคาปกติ", "ราคา"],
+  promoPrice: ["promo price", "promotion price", "promotional price", "sale price", "ราคาโปรโมชั่น", "ราคาโปร"],
+  packSize: ["pack size", "size", "packing", "pack", "ขนาดบรรจุ"],
+  unit: ["unit", "uom", "หน่วย"],
+  slabPrice: ["slab price", "slab_price", "tier price", "bulk price", "wholesale price", "ราคา slab", "ราคาสแลบ", "ราคาขั้นบันได"],
+  slabMinQuantity: ["slab min qty", "slab minimum qty", "minimum quantity", "min qty", "minimum qty", "จำนวนขั้นต่ำ"],
+  slabMaxQuantity: ["slab max qty", "slab maximum qty", "maximum quantity", "max qty", "maximum qty", "จำนวนสูงสุด"],
+  slabLabel: ["slab label", "quantity label", "tier label", "ป้ายจำนวน"],
 };
 
-const REQUIRED_COLUMN_KEYS: ColumnKey[] = ["sku", "normalPrice", "promoPrice"];
+const PROMOTION_REQUIRED_COLUMN_KEYS: ColumnKey[] = ["sku", "normalPrice", "promoPrice"];
+
+export interface SlabColumnMapping {
+  index: number;
+  priceHeader: string;
+  minQuantityHeader?: string;
+  maxQuantityHeader?: string;
+  labelHeader?: string;
+}
 
 export interface ColumnMappingResult {
   mapping: Partial<Record<ColumnKey, string>>;
+  slabMappings: SlabColumnMapping[];
   warnings: string[];
 }
 
@@ -77,12 +125,15 @@ export interface NormalizedCatalogRow {
   normalizedSku: string | null;
   normalizedName: string;
   displayOrder: number;
+  slabPrices: SlabPriceTier[];
 }
 
 export interface ParsedWorkbookResult {
   sheetName: string;
   headers: string[];
   mapping: Partial<Record<ColumnKey, string>>;
+  slabMappings: SlabColumnMapping[];
+  pricingMode: CatalogPricingMode;
   warnings: string[];
   rows: NormalizedCatalogRow[];
   previewRows: Array<Record<string, string | number | null>>;
@@ -110,7 +161,47 @@ function parsePrice(value: unknown) {
   return Number.isFinite(numeric) ? Number(numeric.toFixed(2)) : null;
 }
 
-function detectColumnMapping(headers: string[]): ColumnMappingResult {
+function detectNumberedSlabColumns(headers: string[]) {
+  const numbered = new Map<number, Partial<SlabColumnMapping>>();
+
+  headers.forEach((header) => {
+    const normalized = normalizeHeader(header);
+    const match = normalized.match(/(?:slab|tier)\s*(\d+)/);
+
+    if (!match) {
+      return;
+    }
+
+    const index = Number(match[1]);
+    if (!Number.isInteger(index) || index < 1 || index > 20) {
+      return;
+    }
+
+    const entry = numbered.get(index) ?? { index };
+    if (/\b(?:min|minimum)\b/.test(normalized) && /\b(?:qty|quantity)\b/.test(normalized)) {
+      entry.minQuantityHeader = header;
+    } else if (/\b(?:max|maximum)\b/.test(normalized) && /\b(?:qty|quantity)\b/.test(normalized)) {
+      entry.maxQuantityHeader = header;
+    } else if (/\b(?:qty|quantity)\b/.test(normalized)) {
+      entry.minQuantityHeader = header;
+    } else if (/\blabel\b/.test(normalized)) {
+      entry.labelHeader = header;
+    } else if (/\bprice\b/.test(normalized) || normalized === `slab ${index}` || normalized === `tier ${index}`) {
+      entry.priceHeader = header;
+    }
+
+    numbered.set(index, entry);
+  });
+
+  return [...numbered.values()]
+    .filter((entry): entry is SlabColumnMapping => Boolean(entry.priceHeader))
+    .sort((left, right) => left.index - right.index);
+}
+
+function detectColumnMapping(
+  headers: string[],
+  pricingMode: CatalogPricingMode,
+): ColumnMappingResult {
   const normalizedHeaders = headers.map((header) => ({
     original: header,
     normalized: normalizeHeader(header),
@@ -128,6 +219,30 @@ function detectColumnMapping(headers: string[]): ColumnMappingResult {
     }
   });
 
+  const slabMappings = detectNumberedSlabColumns(headers);
+  if (mapping.slabPrice && !slabMappings.some((entry) => entry.priceHeader === mapping.slabPrice)) {
+    slabMappings.unshift({
+      index: 1,
+      priceHeader: mapping.slabPrice,
+      minQuantityHeader: mapping.slabMinQuantity,
+      maxQuantityHeader: mapping.slabMaxQuantity,
+      labelHeader: mapping.slabLabel,
+    });
+  }
+
+  if (pricingMode === "slab" && !slabMappings.length && mapping.normalPrice) {
+    const normalizedNormalHeader = normalizeHeader(mapping.normalPrice);
+    if (["price", "unit price", "ราคา"].includes(normalizedNormalHeader)) {
+      slabMappings.push({
+        index: 1,
+        priceHeader: mapping.normalPrice,
+        minQuantityHeader: mapping.slabMinQuantity,
+        maxQuantityHeader: mapping.slabMaxQuantity,
+        labelHeader: mapping.slabLabel,
+      });
+    }
+  }
+
   const warnings: string[] = [];
 
   if (!mapping.productName) {
@@ -136,7 +251,11 @@ function detectColumnMapping(headers: string[]): ColumnMappingResult {
     );
   }
 
-  return { mapping, warnings };
+  if (pricingMode === "slab" && !mapping.normalPrice) {
+    warnings.push("Normal price column was not found. Slab prices will be shown without a reference price.");
+  }
+
+  return { mapping, slabMappings, warnings };
 }
 
 function getCellValue(
@@ -149,16 +268,105 @@ function getCellValue(
 }
 
 function getRequiredColumnLabel(key: ColumnKey) {
-  return CATALOG_IMPORT_TEMPLATE_COLUMNS.find((column) => column.key === key)?.header ?? key;
+  return PROMOTION_IMPORT_TEMPLATE_COLUMNS.find((column) => column.key === key)?.header ?? key;
 }
 
-function validateRequiredColumns(mapping: Partial<Record<ColumnKey, string>>) {
-  const missingColumns = REQUIRED_COLUMN_KEYS.filter((key) => !mapping[key]);
+function validateRequiredColumns(
+  mapping: Partial<Record<ColumnKey, string>>,
+  slabMappings: SlabColumnMapping[],
+  pricingMode: CatalogPricingMode,
+) {
+  const requiredKeys = pricingMode === "slab" ? ["sku" as const] : PROMOTION_REQUIRED_COLUMN_KEYS;
+  const missingColumns = requiredKeys.filter((key) => !mapping[key]);
 
   if (missingColumns.length) {
     throw new Error(
       `Missing required columns: ${missingColumns.map(getRequiredColumnLabel).join(", ")}.`,
     );
+  }
+
+
+  if (pricingMode === "slab" && !slabMappings.length) {
+    throw new Error(
+      'Missing required slab price columns. Add "Slab price" or numbered columns such as "Slab 1 min qty" and "Slab 1 price".',
+    );
+  }
+}
+
+function parseQuantity(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numeric = typeof value === "number" ? value : Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isInteger(numeric) && numeric >= 1 ? numeric : null;
+}
+
+function hasCellValue(value: unknown) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function parseSlabPrices(
+  row: Record<string, unknown>,
+  rowNo: number,
+  slabMappings: SlabColumnMapping[],
+  validationErrors: string[],
+) {
+  const tiers: SlabPriceTier[] = [];
+
+  slabMappings.forEach((slab, mappingIndex) => {
+    const priceValue = row[slab.priceHeader];
+    const minValue = slab.minQuantityHeader ? row[slab.minQuantityHeader] : null;
+    const maxValue = slab.maxQuantityHeader ? row[slab.maxQuantityHeader] : null;
+    const labelValue = slab.labelHeader ? row[slab.labelHeader] : null;
+    const hasAnyValue = [priceValue, minValue, maxValue, labelValue].some(hasCellValue);
+
+    if (!hasAnyValue) {
+      return;
+    }
+
+    const price = parsePrice(priceValue);
+    const minQuantity = parseQuantity(minValue) ?? (mappingIndex === 0 && !hasCellValue(minValue) ? 1 : null);
+    const maxQuantity = parseQuantity(maxValue);
+
+    if (price === null || price < 0) {
+      validationErrors.push(`Row ${rowNo}: "${slab.priceHeader}" must be a valid price.`);
+      return;
+    }
+
+    if (minQuantity === null) {
+      validationErrors.push(`Row ${rowNo}: slab ${slab.index} needs a valid minimum quantity.`);
+      return;
+    }
+
+    if (hasCellValue(maxValue) && (maxQuantity === null || maxQuantity < minQuantity)) {
+      validationErrors.push(`Row ${rowNo}: slab ${slab.index} has an invalid maximum quantity.`);
+      return;
+    }
+
+    tiers.push({
+      minQuantity,
+      maxQuantity,
+      price,
+      label: hasCellValue(labelValue) ? String(labelValue).trim() : null,
+    });
+  });
+
+  tiers.sort((left, right) => left.minQuantity - right.minQuantity);
+  const inferredTiers = tiers.map((tier, index) => ({
+    ...tier,
+    maxQuantity: tier.maxQuantity ?? (
+      tiers[index + 1] && tiers[index + 1].minQuantity > tier.minQuantity
+        ? tiers[index + 1].minQuantity - 1
+        : null
+    ),
+  }));
+
+  try {
+    return normalizeSlabPriceTiers(inferredTiers);
+  } catch (error) {
+    validationErrors.push(`Row ${rowNo}: ${error instanceof Error ? error.message : "Invalid slab prices."}`);
+    return [];
   }
 }
 
@@ -193,27 +401,28 @@ function isNormalizedCatalogRow(
   return Boolean(row);
 }
 
-export function buildCatalogImportTemplateBuffer() {
+export function buildCatalogImportTemplateBuffer(pricingMode: CatalogPricingMode = "promotion") {
   const workbook = XLSX.utils.book_new();
   workbook.Props = {
     Title: "Catalog Import Template",
     Subject: "Catalog import workbook",
-    Author: "Promo Catalog Studio",
-    Company: "Promo Catalog Studio",
+    Author: "Catalog Studio",
+    Company: "Catalog Studio",
   };
 
+  const templateColumns = pricingMode === "slab"
+    ? SLAB_IMPORT_TEMPLATE_COLUMNS
+    : PROMOTION_IMPORT_TEMPLATE_COLUMNS.map((column, index) => ({
+        header: column.header,
+        width: [22, 34, 16, 16, 18, 14][index] ?? 16,
+      }));
   const dataSheet = XLSX.utils.aoa_to_sheet([
-    CATALOG_IMPORT_TEMPLATE_COLUMNS.map((column) => column.header),
+    templateColumns.map((column) => column.header),
   ]);
 
-  dataSheet["!cols"] = [
-    { wch: 22 },
-    { wch: 34 },
-    { wch: 16 },
-    { wch: 16 },
-  ];
+  dataSheet["!cols"] = templateColumns.map((column) => ({ wch: column.width }));
 
-  XLSX.utils.book_append_sheet(workbook, dataSheet, "Catalog Import");
+  XLSX.utils.book_append_sheet(workbook, dataSheet, pricingMode === "slab" ? "Slab Price Import" : "Catalog Import");
 
   const output = XLSX.write(workbook, {
     type: "buffer",
@@ -223,7 +432,11 @@ export function buildCatalogImportTemplateBuffer() {
   return Buffer.isBuffer(output) ? output : Buffer.from(output);
 }
 
-export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
+export function parseWorkbookBuffer(
+  buffer: Buffer,
+  options: { pricingMode?: CatalogPricingMode } = {},
+): ParsedWorkbookResult {
+  const pricingMode = options.pricingMode ?? "promotion";
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const firstSheetName = workbook.SheetNames[0];
 
@@ -243,8 +456,8 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
   }
 
   const headers = (table[0] ?? []).map((value) => String(value ?? "").trim());
-  const { mapping, warnings } = detectColumnMapping(headers);
-  validateRequiredColumns(mapping);
+  const { mapping, slabMappings, warnings } = detectColumnMapping(headers, pricingMode);
+  validateRequiredColumns(mapping, slabMappings, pricingMode);
 
   const objectRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: null,
@@ -263,26 +476,38 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
       const sku = String(getCellValue(row, mapping, "sku") ?? "").trim();
       const packSize = String(getCellValue(row, mapping, "packSize") ?? "").trim();
       const unit = String(getCellValue(row, mapping, "unit") ?? "").trim();
-      const normalPrice = parsePrice(getCellValue(row, mapping, "normalPrice"));
-      const promoPrice = parsePrice(getCellValue(row, mapping, "promoPrice"));
+      const normalPriceHeaderIsSlab = slabMappings.some((entry) => entry.priceHeader === mapping.normalPrice);
+      const normalPrice = normalPriceHeaderIsSlab
+        ? null
+        : parsePrice(getCellValue(row, mapping, "normalPrice"));
+      const promoPrice = pricingMode === "promotion"
+        ? parsePrice(getCellValue(row, mapping, "promoPrice"))
+        : null;
+      const slabPrices = pricingMode === "slab"
+        ? parseSlabPrices(row, rowNo, slabMappings, validationErrors)
+        : [];
 
       if (!sku) {
         validationErrors.push(`Row ${rowNo}: "${getRequiredColumnLabel("sku")}" is required.`);
       }
 
-      if (normalPrice === null) {
+      if (pricingMode === "promotion" && normalPrice === null) {
         validationErrors.push(
           `Row ${rowNo}: "${getRequiredColumnLabel("normalPrice")}" must be a valid number.`,
         );
       }
 
-      if (promoPrice === null) {
+      if (pricingMode === "promotion" && promoPrice === null) {
         validationErrors.push(
           `Row ${rowNo}: "${getRequiredColumnLabel("promoPrice")}" must be a valid number.`,
         );
       }
 
-      if (!sku || normalPrice === null || promoPrice === null) {
+      if (
+        !sku
+        || (pricingMode === "promotion" && (normalPrice === null || promoPrice === null))
+        || (pricingMode === "slab" && slabPrices.length === 0)
+      ) {
         return null;
       }
 
@@ -304,6 +529,7 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
         normalizedSku: sku ? normalizeSku(sku) : null,
         normalizedName: normalizeName(productName || sku),
         displayOrder: index,
+        slabPrices,
       };
 
       return normalizedRow;
@@ -325,12 +551,15 @@ export function parseWorkbookBuffer(buffer: Buffer): ParsedWorkbookResult {
     promo_price: row.promoPrice,
     pack_size: row.packSize,
     unit: row.unit,
+    slab_prices: row.slabPrices.map((tier) => `${tier.minQuantity}+: ${tier.price}`).join(" | ") || null,
   }));
 
   return {
     sheetName: firstSheetName,
     headers,
     mapping,
+    slabMappings,
+    pricingMode,
     warnings,
     rows,
     previewRows,

@@ -25,6 +25,13 @@ import { deriveCatalogPricing } from "@/lib/catalog/pricing";
 import { mergeCatalogStyleOptions, type CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { normalizeSku } from "@/lib/utils";
 import type { CatalogJobStatus } from "@/lib/database.types";
+import {
+  getCatalogItemSlabPrices,
+  mergeCatalogItemSlabPrices,
+  normalizeSlabPriceTiers,
+  type CatalogPricingMode,
+  type SlabPriceTier,
+} from "@/lib/catalog/slab-pricing";
 
 type AdminClient = SupabaseClient<Database>;
 type CatalogJobRow = Database["public"]["Tables"]["catalog_jobs"]["Row"];
@@ -62,6 +69,7 @@ export interface CatalogItemCanonicalFields {
   discountPercent: number | null;
   packSize: string | null;
   unit: string | null;
+  slabPrices: SlabPriceTier[];
 }
 
 export interface ResolvedProductAssetBufferResult {
@@ -93,6 +101,7 @@ function toCatalogItemCanonicalFields(item: Pick<
   | "discount_percent"
   | "pack_size"
   | "unit"
+  | "metadata_json"
 >) {
   const pricing = deriveCatalogPricing({
     normalPrice: item.normal_price,
@@ -107,6 +116,7 @@ function toCatalogItemCanonicalFields(item: Pick<
     discountPercent: pricing.discountPercent,
     packSize: item.pack_size,
     unit: item.unit,
+    slabPrices: getCatalogItemSlabPrices(item.metadata_json),
   } satisfies CatalogItemCanonicalFields;
 }
 
@@ -379,9 +389,10 @@ export async function createCatalogJobFromUpload(args: {
   jobName: string;
   flipbookMode: Database["public"]["Enums"]["flipbook_mode"];
   reuseManualMappings: boolean;
+  pricingMode: CatalogPricingMode;
 }) {
   const admin = getAdminClientOrThrow();
-  const parsed = parseWorkbookBuffer(args.fileBuffer);
+  const parsed = parseWorkbookBuffer(args.fileBuffer, { pricingMode: args.pricingMode });
 
   const jobResponse = await admin
     .from("catalog_jobs")
@@ -396,12 +407,15 @@ export async function createCatalogJobFromUpload(args: {
       page_count: 0,
       flipbook_mode: args.flipbookMode,
       column_mapping_json: asJson({
+        pricingMode: parsed.pricingMode,
         sheetName: parsed.sheetName,
         headers: parsed.headers,
         mapping: parsed.mapping,
         warnings: parsed.warnings,
         previewRows: parsed.previewRows,
+        slabMappings: parsed.slabMappings,
       }),
+      style_options_json: asJson({ pricingMode: parsed.pricingMode }),
     })
     .select("*")
     .single();
@@ -428,7 +442,8 @@ export async function createCatalogJobFromUpload(args: {
   await appendJobEvent(job.id, "upload", "Uploaded source workbook to storage.", {
     fileName: args.fileName,
     sheetName: parsed.sheetName,
-    rowCount: parsed.rows.length,
+      rowCount: parsed.rows.length,
+      pricingMode: parsed.pricingMode,
   });
 
   await admin
@@ -459,6 +474,10 @@ export async function createCatalogJobFromUpload(args: {
         normalized_name: row.normalizedName,
         display_order: row.displayOrder,
         match_status: "pending" as const,
+        metadata_json: asJson({
+          pricingMode: parsed.pricingMode,
+          slabPrices: row.slabPrices,
+        }),
       })),
     )
     .select("*");
@@ -1395,13 +1414,14 @@ export async function updateCatalogItemFields(
     promoPrice?: number | null;
     packSize?: string | null;
     unit?: string | null;
+    slabPrices?: SlabPriceTier[];
   },
 ) {
   const admin = getAdminClientOrThrow();
   const itemResponse = await admin
     .from("catalog_items")
     .select(
-      "id, job_id, display_name_override, normal_price, promo_price, discount_amount, discount_percent, pack_size, unit",
+      "id, job_id, display_name_override, normal_price, promo_price, discount_amount, discount_percent, pack_size, unit, metadata_json",
     )
     .eq("id", itemId)
     .maybeSingle();
@@ -1416,6 +1436,7 @@ export async function updateCatalogItemFields(
     | "discount_percent"
     | "pack_size"
     | "unit"
+    | "metadata_json"
   > | null>(itemResponse.data);
 
   if (!item) throw new Error("Catalog item not found.");
@@ -1426,6 +1447,13 @@ export async function updateCatalogItemFields(
   if ("displayName" in fields) update.display_name_override = fields.displayName?.trim() || null;
   if ("packSize" in fields) update.pack_size = fields.packSize?.trim() || null;
   if ("unit" in fields) update.unit = fields.unit?.trim() || null;
+  if ("slabPrices" in fields) {
+    const slabPrices = normalizeSlabPriceTiers(fields.slabPrices);
+    if (!slabPrices.length) {
+      throw new Error("Add at least one slab price tier.");
+    }
+    update.metadata_json = asJson(mergeCatalogItemSlabPrices(item.metadata_json, slabPrices));
+  }
 
   if ("normalPrice" in fields || "promoPrice" in fields) {
     const pricing = deriveCatalogPricing({
@@ -1448,7 +1476,7 @@ export async function updateCatalogItemFields(
     .update(update)
     .eq("id", itemId)
     .select(
-      "display_name_override, normal_price, promo_price, discount_amount, discount_percent, pack_size, unit",
+      "display_name_override, normal_price, promo_price, discount_amount, discount_percent, pack_size, unit, metadata_json",
     )
     .single();
   const updatedItem = asRow<Pick<
@@ -1460,6 +1488,7 @@ export async function updateCatalogItemFields(
     | "discount_percent"
     | "pack_size"
     | "unit"
+    | "metadata_json"
   > | null>(updateResponse.data);
 
   if (updateResponse.error || !updatedItem) {

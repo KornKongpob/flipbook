@@ -27,6 +27,7 @@ import type { FlyerType } from "@/lib/database.types";
 import { buildCatalogStyleFormData, serializeStyleFormData } from "@/lib/catalog/style-form-data";
 import type { CatalogLayoutVariant, EditorCatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
+import type { SlabPriceTier } from "@/lib/catalog/slab-pricing";
 import {
   ArrowDownRight,
   ArrowLeft,
@@ -52,6 +53,7 @@ interface MasterCardItem {
   promoPrice: number | null;
   discountAmount: number | null;
   discountPercent: number | null;
+  slabPrices: SlabPriceTier[];
   previewUrl: string | null;
   isVisible: boolean;
   displayOrder: number;
@@ -65,7 +67,7 @@ const ELEMENT_LABELS: Record<CatalogCardElementKey, { label: string; rectKey: ke
   promoPrice: { label: "Promo price", rectKey: "promoPriceRect" },
   normalPrice: { label: "Normal price", rectKey: "normalPriceRect" },
   discountPercent: { label: "Discount %", rectKey: "discountPercentRect" },
-  singlePrice: { label: "Single price", rectKey: "singlePriceRect" },
+  singlePrice: { label: "Single / slab price", rectKey: "singlePriceRect" },
   strikeLine: { label: "Strike line", rectKey: "strikeLineRect" },
 };
 
@@ -80,8 +82,10 @@ type MasterCardDisplayFieldKey =
   | "showDiscountPercent"
   | "showSku"
   | "showPackSize"
-  | "showPriceDecimals";
-type MasterCardFontSizeFieldKey = "titleFontSize" | "skuFontSize" | "promoPriceFontSize" | "normalPriceFontSize";
+  | "showPriceDecimals"
+  | "showSlabPrices"
+  | "showSlabQuantity";
+type MasterCardFontSizeFieldKey = "titleFontSize" | "skuFontSize" | "promoPriceFontSize" | "normalPriceFontSize" | "slabPriceFontSize";
 
 const MASTER_CARD_DISPLAY_FIELDS: Array<{
   key: MasterCardDisplayFieldKey;
@@ -131,6 +135,18 @@ const MASTER_CARD_DISPLAY_FIELDS: Array<{
     description: "Keeps decimals visible in promo, normal, and single-price labels.",
     previewLabel: "Both",
   },
+  {
+    key: "showSlabPrices",
+    label: "Slab prices",
+    description: "Shows the quantity-based slab prices on every product card.",
+    previewLabel: "Slab",
+  },
+  {
+    key: "showSlabQuantity",
+    label: "Slab quantities",
+    description: "Shows the quantity range beside each slab price.",
+    previewLabel: "Slab",
+  },
 ];
 
 const MASTER_CARD_FONT_SIZE_FIELDS: Array<{
@@ -171,6 +187,14 @@ const MASTER_CARD_FONT_SIZE_FIELDS: Array<{
     description: "Crossed or supporting regular price text.",
     min: 8,
     max: 22,
+    step: 1,
+  },
+  {
+    key: "slabPriceFontSize",
+    label: "Slab price",
+    description: "Price size for each slab tier.",
+    min: 10,
+    max: 28,
     step: 1,
   },
 ];
@@ -628,9 +652,25 @@ export function MasterCardWorkspace({
     () => CATALOG_CARD_ELEMENT_KEYS.filter((key) => Boolean(resolvedRects?.[ELEMENT_LABELS[key].rectKey])).length,
     [resolvedRects],
   );
+  const activeDisplayFields = useMemo(
+    () => MASTER_CARD_DISPLAY_FIELDS.filter((field) =>
+      style.pricingMode === "slab"
+        ? !["showPromoPrice", "showNormalPrice", "showDiscountAmount", "showDiscountPercent"].includes(field.key)
+        : !["showSlabPrices", "showSlabQuantity"].includes(field.key),
+    ),
+    [style.pricingMode],
+  );
+  const activeFontSizeFields = useMemo(
+    () => MASTER_CARD_FONT_SIZE_FIELDS.filter((field) =>
+      style.pricingMode === "slab"
+        ? !["promoPriceFontSize", "normalPriceFontSize"].includes(field.key)
+        : field.key !== "slabPriceFontSize",
+    ),
+    [style.pricingMode],
+  );
   const enabledDisplayFieldCount = useMemo(
-    () => MASTER_CARD_DISPLAY_FIELDS.filter((field) => Boolean(style[field.key])).length,
-    [style],
+    () => activeDisplayFields.filter((field) => Boolean(style[field.key])).length,
+    [activeDisplayFields, style],
   );
   const selectedElementRenderHint = useMemo(() => {
     if (selectedRect) {
@@ -793,8 +833,14 @@ export function MasterCardWorkspace({
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px] text-muted-strong">
                   <span className="rounded-full border border-line bg-white px-2.5 py-1">SKU {selectedItem.sku ?? "N/A"}</span>
-                  <span className="rounded-full border border-line bg-white px-2.5 py-1">Normal {formatCurrency(selectedItem.normalPrice, { showDecimals: style.showPriceDecimals })}</span>
-                  <span className="rounded-full border border-line bg-white px-2.5 py-1">Promo {formatCurrency(selectedItem.promoPrice, { showDecimals: style.showPriceDecimals })}</span>
+                  {style.pricingMode === "slab" ? (
+                    <span className="rounded-full border border-line bg-white px-2.5 py-1">
+                      {selectedItem.slabPrices.length} slab tier(s)
+                    </span>
+                  ) : <>
+                    <span className="rounded-full border border-line bg-white px-2.5 py-1">Normal {formatCurrency(selectedItem.normalPrice, { showDecimals: style.showPriceDecimals })}</span>
+                    <span className="rounded-full border border-line bg-white px-2.5 py-1">Promo {formatCurrency(selectedItem.promoPrice, { showDecimals: style.showPriceDecimals })}</span>
+                  </>}
                   <span className="rounded-full border border-line bg-white px-2.5 py-1">{visibleElementCount} visible</span>
                   <span className="rounded-full border border-line bg-white px-2.5 py-1">{renderedElementCount} on canvas</span>
                 </div>
@@ -872,10 +918,10 @@ export function MasterCardWorkspace({
           <InspectorSection
             title="Card content"
             description="Toggle job-level content rows. These update the live card immediately and only need Save, not Apply."
-            badge={`${enabledDisplayFieldCount}/${MASTER_CARD_DISPLAY_FIELDS.length} enabled`}
+            badge={`${enabledDisplayFieldCount}/${activeDisplayFields.length} enabled`}
           >
             <div className="grid gap-2">
-              {MASTER_CARD_DISPLAY_FIELDS.map((field) => (
+              {activeDisplayFields.map((field) => (
                 <label
                   key={field.key}
                   className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line/80 bg-white px-3 py-3 text-xs text-muted-strong shadow-sm transition hover:border-brand/20 has-[:checked]:border-brand/30 has-[:checked]:bg-brand-soft/10 has-[:checked]:text-foreground"
@@ -904,7 +950,7 @@ export function MasterCardWorkspace({
             badge="Live preview"
           >
             <div className="grid gap-3">
-              {MASTER_CARD_FONT_SIZE_FIELDS.map((field) => (
+              {activeFontSizeFields.map((field) => (
                 <div key={field.key} className="rounded-2xl border border-line/80 bg-slate-50/70 p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -1079,6 +1125,7 @@ export function MasterCardWorkspace({
                       promoPrice={selectedItem.promoPrice}
                       discountAmount={selectedItem.discountAmount}
                       discountPercent={selectedItem.discountPercent}
+                      slabPrices={selectedItem.slabPrices}
                       imageUrl={selectedItem.previewUrl}
                       options={previewStyle}
                       onResolvedElementRects={setResolvedRects}
@@ -1481,6 +1528,7 @@ export function MasterCardWorkspace({
                               promoPrice={selectedItem.promoPrice}
                               discountAmount={selectedItem.discountAmount}
                               discountPercent={selectedItem.discountPercent}
+                              slabPrices={selectedItem.slabPrices}
                               imageUrl={selectedItem.previewUrl}
                               options={liveCurrentJobPreviewStyle}
                             />

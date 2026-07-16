@@ -1,15 +1,18 @@
-# Promo Catalog Studio
+# Catalog Studio
 
-Promo Catalog Studio is a Next.js + Supabase internal tool for turning Excel product sheets into printable A4 promotional catalogs. The workflow is PDF-first, supports Thai content, caches product assets, and includes a manual review queue for image matching.
+Catalog Studio is a Next.js + Supabase internal tool for turning Excel product sheets into printable A4 promotion or slab price catalogs. The workflow is PDF-first, supports Thai content, caches product assets, and includes a manual review queue for image matching.
 
 ## What it does
 
 - Upload `.xlsx` product sheets for a new catalog job
+- Choose promotion pricing or quantity-based slab pricing per catalog
+- Import a single slab price or multiple numbered quantity tiers
 - Detect and validate required columns
 - Normalize rows and calculate promo discount values
 - Match Makro product images with SKU-first scoring and name fallback
 - Queue low-confidence items for manual review
 - Let users reorder, rename, hide, and style products before export
+- Add, remove, and edit slab price tiers with matching live preview and PDF output
 - Generate deterministic A4 PDFs in a 3x3 layout with server-side rendering
 - Store uploads, assets, and generated files in Supabase Storage
 - Support a manual flipbook flow by default, with optional Heyzine `client_id` conversion

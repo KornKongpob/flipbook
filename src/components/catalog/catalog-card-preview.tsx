@@ -21,6 +21,10 @@ import {
 } from "@/lib/catalog/master-card-layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatCurrency } from "@/lib/utils";
+import {
+  formatSlabQuantityLabel,
+  type SlabPriceTier,
+} from "@/lib/catalog/slab-pricing";
 
 interface CatalogCardPreviewProps {
   title: string;
@@ -31,6 +35,7 @@ interface CatalogCardPreviewProps {
   promoPrice?: number | null;
   discountAmount?: number | null;
   discountPercent?: number | null;
+  slabPrices?: SlabPriceTier[];
   imageUrl?: string | null;
   options?: Partial<CatalogStyleOptions>;
   onResolvedElementRects?: (rects: CatalogResolvedCardElementRects | null) => void;
@@ -132,6 +137,7 @@ export function CatalogCardPreview({
   promoPrice,
   discountAmount,
   discountPercent,
+  slabPrices = [],
   imageUrl,
   options,
   onResolvedElementRects,
@@ -147,6 +153,7 @@ export function CatalogCardPreview({
     [options],
   );
   const promoActive =
+    style.pricingMode !== "slab" &&
     style.flyerType === "promo" &&
     promoPrice !== null &&
     promoPrice !== undefined &&
@@ -155,13 +162,16 @@ export function CatalogCardPreview({
     promoPrice < normalPrice;
   const showDiscountBadge = promoActive && style.showDiscountAmount && discountAmount != null;
   const showPromoLine = promoActive && style.showPromoPrice;
-  const showNormalPrice = promoActive && style.showNormalPrice;
+  const isSlabMode = style.pricingMode === "slab" && slabPrices.length > 0;
+  const showNormalPrice = !isSlabMode && promoActive && style.showNormalPrice;
   const meta = [style.showSku ? sku : null, style.showPackSize ? packSize : null, unit]
     .filter(Boolean)
     .join(" • ");
   const normalPriceLabel = formatCurrency(normalPrice, { showDecimals: style.showPriceDecimals });
   const promoPriceLabel = formatCurrency(promoPrice, { showDecimals: style.showPriceDecimals });
-  const showSinglePrice = !showPromoLine && style.showNormalPrice;
+  const showSinglePrice = isSlabMode
+    ? style.showSlabPrices
+    : !showPromoLine && style.showNormalPrice;
   const singlePriceLabel = formatCurrency(normalPrice ?? promoPrice, { showDecimals: style.showPriceDecimals });
 
   useEffect(() => {
@@ -223,8 +233,9 @@ export function CatalogCardPreview({
       showPromoLine,
       showNormalPrice,
       showSinglePrice,
+      singlePriceLineCount: isSlabMode ? slabPrices.length : 1,
     });
-  }, [cardSize.height, cardSize.width, meta, showDiscountBadge, showNormalPrice, showPromoLine, showSinglePrice, style]);
+  }, [cardSize.height, cardSize.width, isSlabMode, meta, showDiscountBadge, showNormalPrice, showPromoLine, showSinglePrice, slabPrices.length, style]);
   const normalPriceTextWidth = useMemo(() => {
     if (!cardLayout?.normalPriceRowRect || !showPromoLine || !showNormalPrice) {
       return 0;
@@ -377,7 +388,40 @@ export function CatalogCardPreview({
             />
           ) : null}
 
-          {showPromoLine && elementRects?.promoPriceRect ? (
+          {isSlabMode && showSinglePrice && elementRects?.singlePriceRect ? (
+            <div
+              className="absolute flex flex-col overflow-hidden rounded-lg"
+              style={{
+                ...rectStyle(elementRects.singlePriceRect),
+                backgroundColor: `${style.slabPriceColor}0d`,
+              }}
+              aria-label="Slab prices"
+            >
+              {slabPrices.map((tier, index) => (
+                <div
+                  key={`${tier.minQuantity}-${tier.maxQuantity ?? "plus"}-${tier.price}`}
+                  className="flex min-h-0 flex-1 items-center justify-between gap-2 px-2"
+                  style={{
+                    borderTop: index > 0 ? `1px solid ${style.cardBorderColor}` : undefined,
+                    color: style.slabPriceColor,
+                    fontSize: `${cardLayout.singlePriceFontSize}px`,
+                    lineHeight: CATALOG_CARD_NORMAL_PRICE_LINE_HEIGHT,
+                  }}
+                >
+                  {style.showSlabQuantity ? (
+                    <span className="min-w-0 truncate font-medium" style={{ color: style.metaColor, fontSize: "0.68em" }}>
+                      {formatSlabQuantityLabel(tier, unit)}
+                    </span>
+                  ) : null}
+                  <span className={`shrink-0 font-bold ${style.showSlabQuantity ? "" : "mx-auto"}`}>
+                    {formatCurrency(tier.price, { showDecimals: style.showPriceDecimals })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {!isSlabMode && showPromoLine && elementRects?.promoPriceRect ? (
             <SingleLineTextBlock
               rect={elementRects.promoPriceRect}
               text={promoPriceLabel}
@@ -388,7 +432,7 @@ export function CatalogCardPreview({
             />
           ) : null}
 
-          {showPromoLine && showNormalPrice && elementRects?.normalPriceRect ? (
+          {!isSlabMode && showPromoLine && showNormalPrice && elementRects?.normalPriceRect ? (
             <SingleLineTextBlock
               rect={elementRects.normalPriceRect}
               text={normalPriceLabel}
@@ -398,7 +442,7 @@ export function CatalogCardPreview({
             />
           ) : null}
 
-          {showPromoLine && showNormalPrice && elementRects?.strikeLineRect ? (
+          {!isSlabMode && showPromoLine && showNormalPrice && elementRects?.strikeLineRect ? (
             <span
               aria-hidden="true"
               className="absolute"
@@ -411,7 +455,7 @@ export function CatalogCardPreview({
             />
           ) : null}
 
-          {showPromoLine && showNormalPrice && elementRects?.discountPercentRect && style.showDiscountPercent && discountPercent ? (
+          {!isSlabMode && showPromoLine && showNormalPrice && elementRects?.discountPercentRect && style.showDiscountPercent && discountPercent ? (
             <SingleLineTextBlock
               rect={elementRects.discountPercentRect}
               text={`${discountPercent.toFixed(0)}% off`}
@@ -421,7 +465,7 @@ export function CatalogCardPreview({
             />
           ) : null}
 
-          {showSinglePrice && !showPromoLine && elementRects?.singlePriceRect ? (
+          {!isSlabMode && showSinglePrice && !showPromoLine && elementRects?.singlePriceRect ? (
             <SingleLineTextBlock
               rect={elementRects.singlePriceRect}
               text={singlePriceLabel}

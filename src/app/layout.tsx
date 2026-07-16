@@ -41,7 +41,7 @@ const body = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Promo Catalog Studio",
+  title: "Catalog Studio",
   description:
     "Internal catalog generator for importing Excel product sheets, matching assets, reviewing layouts, and producing printable PDF catalogs.",
 };

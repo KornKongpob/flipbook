@@ -10,6 +10,8 @@ const BOOLEAN_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "showSku",
   "showPackSize",
   "showPriceDecimals",
+  "showSlabPrices",
+  "showSlabQuantity",
 ];
 
 const NULLABLE_STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
@@ -25,6 +27,7 @@ const NULLABLE_STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
 
 const STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "variant",
+  "pricingMode",
   "flyerType",
   "layoutPreset",
   "pageBackgroundColor",
@@ -40,6 +43,7 @@ const STRING_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "metaColor",
   "promoPriceColor",
   "normalPriceColor",
+  "slabPriceColor",
   "discountBadgeBackgroundColor",
   "discountBadgeTextColor",
 ];
@@ -70,6 +74,7 @@ const NUMBER_STYLE_KEYS: Array<keyof CatalogStyleOptions> = [
   "skuFontSize",
   "promoPriceFontSize",
   "normalPriceFontSize",
+  "slabPriceFontSize",
 ];
 
 export function serializeStyleFormData(formData: FormData) {

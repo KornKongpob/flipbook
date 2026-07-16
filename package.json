@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "tsx --test src/lib/catalog/__tests__/catalog-pricing.test.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
@@ -36,6 +37,7 @@
     "eslint-config-next": "16.1.6",
     "playwright": "^1.58.2",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createCatalogJobFromUpload } from "@/lib/catalog/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isCatalogPricingMode } from "@/lib/catalog/slab-pricing";
 
 export const runtime = "nodejs";
 const SEE_OTHER = 303;
@@ -24,6 +25,10 @@ export async function POST(request: Request) {
     | "client_id"
     | "disabled";
   const reuseManualMappings = formData.get("reuseManualMappings") === "on";
+  const requestedPricingMode = formData.get("pricingMode");
+  const pricingMode = isCatalogPricingMode(requestedPricingMode)
+    ? requestedPricingMode
+    : "promotion";
 
   if (!(file instanceof File)) {
     return NextResponse.redirect(
@@ -41,6 +46,7 @@ export async function POST(request: Request) {
       jobName,
       flipbookMode,
       reuseManualMappings,
+      pricingMode,
     });
 
     return NextResponse.redirect(new URL(`/catalogs/${jobId}/matching`, request.url), SEE_OTHER);

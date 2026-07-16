@@ -28,6 +28,7 @@ export const MATCH_THRESHOLDS = {
 export const DEFAULT_LAYOUT_PRESET: CatalogLayoutPreset = "3x3";
 
 export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
+  pricingMode: "promotion",
   variant: "promo",
   flyerType: "promo",
   layoutPreset: DEFAULT_LAYOUT_PRESET,
@@ -41,6 +42,8 @@ export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   showSku: true,
   showPackSize: true,
   showPriceDecimals: true,
+  showSlabPrices: true,
+  showSlabQuantity: true,
   masterCardLayout: createDefaultCatalogMasterCardLayout(),
   promoStartDate: null,
   promoEndDate: null,
@@ -80,6 +83,7 @@ export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   skuFontSize: 11,
   promoPriceFontSize: 28,
   normalPriceFontSize: 12,
+  slabPriceFontSize: 17,
   cardBackgroundColor: "#ffffff",
   cardBorderColor: "#eedbcf",
   imageBackgroundColor: "#fff5ef",
@@ -87,6 +91,7 @@ export const DEFAULT_STYLE_OPTIONS: CatalogStyleOptions = {
   metaColor: "#75675a",
   promoPriceColor: "#e60000",
   normalPriceColor: "#98816a",
+  slabPriceColor: "#e60000",
   discountBadgeBackgroundColor: "#ffc107",
   discountBadgeTextColor: "#a81a05",
 };

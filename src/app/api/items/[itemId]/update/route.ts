@@ -22,10 +22,15 @@ export async function PATCH(
     const body = await request.json();
     const item = await updateCatalogItemFields(user.id, itemId, {
       displayName: body.displayName,
-      normalPrice: body.normalPrice != null ? Number(body.normalPrice) : undefined,
-      promoPrice: body.promoPrice != null ? Number(body.promoPrice) : undefined,
+      normalPrice: "normalPrice" in body
+        ? body.normalPrice == null || body.normalPrice === "" ? null : Number(body.normalPrice)
+        : undefined,
+      promoPrice: "promoPrice" in body
+        ? body.promoPrice == null || body.promoPrice === "" ? null : Number(body.promoPrice)
+        : undefined,
       packSize: body.packSize,
       unit: body.unit,
+      slabPrices: "slabPrices" in body ? body.slabPrices : undefined,
     });
     return NextResponse.json({ item });
   } catch (error) {

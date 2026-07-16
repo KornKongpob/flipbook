@@ -12,6 +12,7 @@ import {
   X,
   ImageOff,
   Loader2,
+  Plus,
   Trash2,
 } from "lucide-react";
 import {
@@ -39,6 +40,11 @@ import {
   type EditorCatalogStyleOptions,
 } from "@/lib/catalog/style-options";
 import { formatCurrency, formatThaiFlyerDateRange } from "@/lib/utils";
+import {
+  MAX_SLAB_PRICE_TIERS,
+  type CatalogPricingMode,
+  type SlabPriceTier,
+} from "@/lib/catalog/slab-pricing";
 
 interface EditorItem {
   id: string;
@@ -51,6 +57,7 @@ interface EditorItem {
   promoPrice: number | null;
   discountAmount: number | null;
   discountPercent: number | null;
+  slabPrices: SlabPriceTier[];
   previewUrl: string | null;
   isVisible: boolean;
   displayOrder: number;
@@ -62,6 +69,52 @@ interface EditState {
   promoPrice: string;
   packSize: string;
   unit: string;
+  slabPrices: SlabPriceDraft[];
+}
+
+interface SlabPriceDraft {
+  minQuantity: string;
+  maxQuantity: string;
+  price: string;
+  label: string;
+}
+
+function createSlabPriceDraft(tier?: SlabPriceTier): SlabPriceDraft {
+  return {
+    minQuantity: tier ? String(tier.minQuantity) : "",
+    maxQuantity: tier?.maxQuantity != null ? String(tier.maxQuantity) : "",
+    price: tier ? String(tier.price) : "",
+    label: tier?.label ?? "",
+  };
+}
+
+function parseSlabPriceDrafts(drafts: SlabPriceDraft[]): SlabPriceTier[] {
+  if (!drafts.length) {
+    throw new Error("Add at least one slab price tier.");
+  }
+
+  return drafts.map((draft, index) => {
+    const minQuantity = Number(draft.minQuantity);
+    const maxQuantity = draft.maxQuantity ? Number(draft.maxQuantity) : null;
+    const price = Number(draft.price);
+
+    if (!Number.isInteger(minQuantity) || minQuantity < 1) {
+      throw new Error(`Slab ${index + 1} needs a minimum quantity of 1 or more.`);
+    }
+    if (maxQuantity !== null && (!Number.isInteger(maxQuantity) || maxQuantity < minQuantity)) {
+      throw new Error(`Slab ${index + 1} has an invalid maximum quantity.`);
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      throw new Error(`Slab ${index + 1} needs a valid price.`);
+    }
+
+    return {
+      minQuantity,
+      maxQuantity,
+      price,
+      label: draft.label.trim() || null,
+    };
+  });
 }
 
 type MediaSlotKey = "background" | "header" | "footer";
@@ -71,11 +124,13 @@ function ItemEditPanel({
   item,
   onSave,
   onCancel,
+  pricingMode,
 }: {
   error?: string | null;
   item: EditorItem;
   onSave: (fields: Partial<EditState>) => void;
   onCancel: () => void;
+  pricingMode: CatalogPricingMode;
 }) {
   const [fields, setFields] = useState<EditState>({
     displayName: item.displayName ?? item.productName,
@@ -83,6 +138,9 @@ function ItemEditPanel({
     promoPrice: item.promoPrice != null ? String(item.promoPrice) : "",
     packSize: item.packSize ?? "",
     unit: item.unit ?? "",
+    slabPrices: item.slabPrices.length
+      ? item.slabPrices.map(createSlabPriceDraft)
+      : [createSlabPriceDraft()],
   });
 
   return (
@@ -97,7 +155,7 @@ function ItemEditPanel({
             placeholder={item.productName}
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        {pricingMode === "promotion" ? <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted">Normal price</label>
             <Input
@@ -118,7 +176,7 @@ function ItemEditPanel({
               placeholder="0.00"
             />
           </div>
-        </div>
+        </div> : null}
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted">Pack size</label>
@@ -140,6 +198,57 @@ function ItemEditPanel({
           </div>
         </div>
       </div>
+      {pricingMode === "slab" ? (
+        <fieldset className="space-y-2 rounded-xl border border-sky-100 bg-white/80 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Slab price tiers</p>
+            <button
+              type="button"
+              disabled={fields.slabPrices.length >= MAX_SLAB_PRICE_TIERS}
+              onClick={() => setFields((previous) => ({
+                ...previous,
+                slabPrices: [...previous.slabPrices, createSlabPriceDraft()],
+              }))}
+              className="inline-flex h-7 items-center gap-1 rounded-lg border border-line bg-white px-2.5 text-[11px] font-medium text-muted-strong transition hover:border-brand/30 hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Plus className="size-3" /> Add tier
+            </button>
+          </div>
+          <p className="text-[11px] leading-5 text-muted">Maximum quantity and custom label are optional. Leave the final maximum empty for an open-ended tier.</p>
+          <div className="space-y-2">
+            {fields.slabPrices.map((tier, index) => (
+              <div key={index} className="grid gap-2 rounded-lg border border-line/80 bg-slate-50/60 p-2 sm:grid-cols-[32px_1fr_1fr_1.2fr_1.4fr_30px] sm:items-end">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-sky-100 text-[11px] font-bold text-sky-700">{index + 1}</span>
+                <label className="space-y-1 text-[10px] text-muted">
+                  <span>Min qty *</span>
+                  <Input type="number" min={1} step={1} value={tier.minQuantity} onChange={(event) => setFields((previous) => ({ ...previous, slabPrices: previous.slabPrices.map((entry, tierIndex) => tierIndex === index ? { ...entry, minQuantity: event.target.value } : entry) }))} className="h-8 text-xs" />
+                </label>
+                <label className="space-y-1 text-[10px] text-muted">
+                  <span>Max qty</span>
+                  <Input type="number" min={1} step={1} value={tier.maxQuantity} onChange={(event) => setFields((previous) => ({ ...previous, slabPrices: previous.slabPrices.map((entry, tierIndex) => tierIndex === index ? { ...entry, maxQuantity: event.target.value } : entry) }))} className="h-8 text-xs" />
+                </label>
+                <label className="space-y-1 text-[10px] text-muted">
+                  <span>Price *</span>
+                  <Input type="number" min={0} step="0.01" value={tier.price} onChange={(event) => setFields((previous) => ({ ...previous, slabPrices: previous.slabPrices.map((entry, tierIndex) => tierIndex === index ? { ...entry, price: event.target.value } : entry) }))} className="h-8 text-xs" />
+                </label>
+                <label className="space-y-1 text-[10px] text-muted">
+                  <span>Label</span>
+                  <Input value={tier.label} placeholder="e.g. Case deal" onChange={(event) => setFields((previous) => ({ ...previous, slabPrices: previous.slabPrices.map((entry, tierIndex) => tierIndex === index ? { ...entry, label: event.target.value } : entry) }))} className="h-8 text-xs" />
+                </label>
+                <button
+                  type="button"
+                  aria-label={`Remove slab tier ${index + 1}`}
+                  disabled={fields.slabPrices.length === 1}
+                  onClick={() => setFields((previous) => ({ ...previous, slabPrices: previous.slabPrices.filter((_, tierIndex) => tierIndex !== index) }))}
+                  className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
       <div className="flex justify-end gap-2 pt-1">
         <button
           type="button"
@@ -358,12 +467,13 @@ export function EditorPanel({
 
   function resetStyle() {
     markStyleDirty();
-    setStyle({
+    setStyle((previous) => ({
       ...DEFAULT_STYLE_OPTIONS,
+      pricingMode: previous.pricingMode,
       pageBackgroundPreviewUrl: null,
       headerMediaPreviewUrl: null,
       footerMediaPreviewUrl: null,
-    });
+    }));
     setMediaErrors({
       background: null,
       header: null,
@@ -592,6 +702,7 @@ export function EditorPanel({
         body.promoPrice = fields.promoPrice ? parseFloat(fields.promoPrice) : null;
       if (fields.packSize !== undefined) body.packSize = fields.packSize || null;
       if (fields.unit !== undefined) body.unit = fields.unit || null;
+      if (fields.slabPrices !== undefined) body.slabPrices = parseSlabPriceDrafts(fields.slabPrices);
 
       const res = await fetch(`/api/items/${itemId}/update`, {
         method: "PATCH",
@@ -609,6 +720,7 @@ export function EditorPanel({
               discountPercent: number | null;
               packSize: string | null;
               unit: string | null;
+              slabPrices: SlabPriceTier[];
             };
           }
         | null;
@@ -634,6 +746,7 @@ export function EditorPanel({
             discountPercent: updatedItem.discountPercent,
             packSize: updatedItem.packSize,
             unit: updatedItem.unit,
+            slabPrices: updatedItem.slabPrices,
           };
         }),
       );
@@ -870,12 +983,20 @@ export function EditorPanel({
                         </div>
                         <p className="mt-1 truncate text-[11px] text-muted">{item.sku ?? "No SKU"}</p>
                         <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-strong">
+                          {style.pricingMode === "slab" ? (
+                            item.slabPrices.map((tier) => (
+                              <span key={`${tier.minQuantity}-${tier.price}`}>
+                                {tier.minQuantity}+ → {formatCurrency(tier.price, { showDecimals: style.showPriceDecimals })}
+                              </span>
+                            ))
+                          ) : <>
                           <span>
                             Normal: {formatCurrency(item.normalPrice, { showDecimals: style.showPriceDecimals })}
                           </span>
                           <span>
                             Promo: {formatCurrency(item.promoPrice, { showDecimals: style.showPriceDecimals })}
                           </span>
+                          </>}
                         </div>
                       </div>
 
@@ -890,6 +1011,7 @@ export function EditorPanel({
                             setEditingId(editingId === item.id ? null : item.id);
                           }}
                           className={`flex size-8 items-center justify-center rounded-lg transition ${editingId === item.id ? "bg-brand-soft text-brand" : "text-muted hover:text-brand hover:bg-brand-soft"}`}
+                          aria-label={`${editingId === item.id ? "Close editor for" : "Edit"} ${item.displayName ?? item.productName}`}
                         >
                           {saving === item.id ? (
                             <Loader2 className="size-3.5 animate-spin" />
@@ -904,6 +1026,7 @@ export function EditorPanel({
                           <input type="hidden" name="direction" value="up" />
                           <button
                             type="submit"
+                            aria-label={`Move ${item.displayName ?? item.productName} up`}
                             className="flex size-8 items-center justify-center rounded-lg text-muted hover:bg-gray-100 hover:text-foreground transition"
                           >
                             <ChevronUp className="size-3.5" />
@@ -916,6 +1039,7 @@ export function EditorPanel({
                           <input type="hidden" name="direction" value="down" />
                           <button
                             type="submit"
+                            aria-label={`Move ${item.displayName ?? item.productName} down`}
                             className="flex size-8 items-center justify-center rounded-lg text-muted hover:bg-gray-100 hover:text-foreground transition"
                           >
                             <ChevronDown className="size-3.5" />
@@ -928,6 +1052,7 @@ export function EditorPanel({
                           <input type="hidden" name="nextVisible" value={String(!item.isVisible)} />
                           <button
                             type="submit"
+                            aria-label={`${item.isVisible ? "Hide" : "Show"} ${item.displayName ?? item.productName}`}
                             className={`flex size-8 items-center justify-center rounded-lg transition ${item.isVisible ? "text-muted hover:bg-rose-50 hover:text-rose-500" : "text-emerald-500 hover:bg-emerald-50"}`}
                           >
                             {item.isVisible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
@@ -956,6 +1081,7 @@ export function EditorPanel({
                       <ItemEditPanel
                         error={itemSaveErrors[item.id] ?? null}
                         item={item}
+                        pricingMode={style.pricingMode}
                         onSave={(fields) => handleSaveItem(item.id, fields)}
                         onCancel={() => setEditingId(null)}
                       />
@@ -1072,6 +1198,7 @@ export function EditorPanel({
                   promoPrice: item.promoPrice,
                   discountAmount: item.discountAmount,
                   discountPercent: item.discountPercent,
+                  slabPrices: item.slabPrices,
                   imageUrl: item.previewUrl,
                 }))}
                 options={style}

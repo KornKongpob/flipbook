@@ -15,6 +15,7 @@ import {
 } from "@/lib/catalog/layout";
 import type { CatalogStyleOptions } from "@/lib/catalog/style-options";
 import { formatThaiFlyerDateRange } from "@/lib/utils";
+import type { SlabPriceTier } from "@/lib/catalog/slab-pricing";
 
 export interface CatalogPageCanvasItem {
   id: string;
@@ -26,6 +27,7 @@ export interface CatalogPageCanvasItem {
   promoPrice?: number | null;
   discountAmount?: number | null;
   discountPercent?: number | null;
+  slabPrices?: SlabPriceTier[];
   imageUrl?: string | null;
 }
 
@@ -397,6 +399,7 @@ export function CatalogPageCanvas({
                       promoPrice={item.promoPrice}
                       discountAmount={item.discountAmount}
                       discountPercent={item.discountPercent}
+                      slabPrices={item.slabPrices}
                       imageUrl={item.imageUrl}
                       options={style}
                     />

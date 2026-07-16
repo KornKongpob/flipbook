@@ -16,6 +16,7 @@ import {
 } from "@/lib/catalog/repository";
 import { mergeCatalogStyleOptions } from "@/lib/catalog/style-options";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getCatalogItemSlabPrices } from "@/lib/catalog/slab-pricing";
 
 export const runtime = "nodejs";
 const SEE_OTHER = 303;
@@ -100,6 +101,7 @@ export async function POST(
             promoPrice: pricing.promoPrice,
             discountAmount: pricing.discountAmount,
             discountPercent: pricing.discountPercent,
+            slabPrices: getCatalogItemSlabPrices(item.metadata_json),
             imageBuffer: resolvedImage.buffer,
           },
           imageWarning,

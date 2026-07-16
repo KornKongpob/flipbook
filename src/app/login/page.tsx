@@ -14,7 +14,7 @@ const steps = [
   {
     step: "01",
     title: "Excel import",
-    description: "Upload your promo spreadsheet — prices and SKUs are validated automatically.",
+    description: "Upload a promotion or slab price workbook — prices, tiers, and SKUs are validated automatically.",
   },
   {
     step: "02",
@@ -64,12 +64,12 @@ export default async function LoginPage({
             </div>
             <div>
               <p className="text-base font-bold text-white">Catalog Studio</p>
-              <p className="text-xs text-white/50">Promo workflow v2</p>
+              <p className="text-xs text-white/50">Catalog workflow v3</p>
             </div>
           </div>
 
           <h1 className="text-4xl font-bold text-white leading-[1.15]">
-            Upload promotions,<br />review images,<br />
+            Upload price lists,<br />review images,<br />
             <span className="gradient-text bg-gradient-to-r from-indigo-300 to-purple-300" style={{ WebkitTextFillColor: "transparent", backgroundClip: "text" }}>publish clean PDFs.</span>
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-white/50">

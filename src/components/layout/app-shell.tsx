@@ -227,7 +227,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-foreground">Catalog Studio</p>
-                  <p className="text-[11px] text-muted-strong">Promo workflow v2</p>
+                  <p className="text-[11px] text-muted-strong">Catalog workflow v3</p>
                 </div>
               </div>
               <button
@@ -256,7 +256,7 @@ export function AppShell({ children, userLabel }: AppShellProps) {
           </div>
           <div>
             <p className="text-sm font-bold text-foreground">Catalog Studio</p>
-            <p className="text-xs text-muted-strong">Promo workflow v2</p>
+            <p className="text-xs text-muted-strong">Catalog workflow v3</p>
           </div>
         </div>
 

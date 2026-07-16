@@ -42,6 +42,8 @@ const DISPLAY_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> =
   { key: "showBarcode", label: "Barcode (phase 2)" },
   { key: "showSku", label: "SKU" },
   { key: "showPackSize", label: "Pack size" },
+  { key: "showSlabPrices", label: "Slab prices" },
+  { key: "showSlabQuantity", label: "Slab quantities" },
 ];
 
 const FLYER_TYPE_OPTIONS: Array<{
@@ -69,6 +71,7 @@ const COLOR_FIELDS: Array<{ key: keyof CatalogStyleOptions; label: string }> = [
   { key: "metaColor", label: "SKU / meta" },
   { key: "promoPriceColor", label: "Promo price" },
   { key: "normalPriceColor", label: "Normal price" },
+  { key: "slabPriceColor", label: "Slab price" },
   { key: "discountBadgeBackgroundColor", label: "Discount pill" },
   { key: "discountBadgeTextColor", label: "Discount pill text" },
 ];
@@ -84,6 +87,7 @@ const NUMBER_FIELDS: Array<{
   { key: "skuFontSize", label: "SKU size", min: 8, max: 18 },
   { key: "promoPriceFontSize", label: "Promo price size", min: 16, max: 40 },
   { key: "normalPriceFontSize", label: "Normal price size", min: 8, max: 22 },
+  { key: "slabPriceFontSize", label: "Slab price size", min: 10, max: 28 },
   { key: "headerSpace", label: "Header space", min: 0, max: 180 },
   { key: "footerSpace", label: "Footer space", min: 0, max: 120 },
   { key: "pagePadding", label: "Page padding", min: 8, max: 40 },
@@ -374,6 +378,21 @@ export function CatalogStyleControls({
   exportPending,
 }: CatalogStyleControlsProps) {
   const isUploadingMedia = mediaUploading.background || mediaUploading.header || mediaUploading.footer;
+  const activeDisplayFields = DISPLAY_FIELDS.filter((field) =>
+    style.pricingMode === "slab"
+      ? !["showNormalPrice", "showPromoPrice", "showDiscountAmount", "showDiscountPercent"].includes(field.key)
+      : !["showSlabPrices", "showSlabQuantity"].includes(field.key),
+  );
+  const activeColorFields = COLOR_FIELDS.filter((field) =>
+    style.pricingMode === "slab"
+      ? !["promoPriceColor", "normalPriceColor", "discountBadgeBackgroundColor", "discountBadgeTextColor"].includes(field.key)
+      : field.key !== "slabPriceColor",
+  );
+  const activeNumberFields = NUMBER_FIELDS.filter((field) =>
+    style.pricingMode === "slab"
+      ? !["promoPriceFontSize", "normalPriceFontSize"].includes(field.key)
+      : field.key !== "slabPriceFontSize",
+  );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line/80 bg-white/85 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.35)] backdrop-blur-sm">
@@ -393,6 +412,7 @@ export function CatalogStyleControls({
       </div>
       <form onSubmit={(event) => event.preventDefault()} className="space-y-3 bg-[linear-gradient(180deg,rgba(248,250,252,0.68)_0%,rgba(255,255,255,0.96)_100%)] p-4">
         <input type="hidden" name="jobId" value={jobId} />
+        <input type="hidden" name="pricingMode" value={style.pricingMode} />
         <input type="hidden" name="flyerType" value={style.flyerType} />
         <input type="hidden" name="layoutPreset" value={style.layoutPreset} />
         <input type="hidden" name="promoStartDate" value={style.promoStartDate ?? ""} />
@@ -462,7 +482,7 @@ export function CatalogStyleControls({
               </div>
             </div>
 
-            <div className="space-y-2">
+            {style.pricingMode === "promotion" ? <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-muted">Flyer type</p>
                 <span className="text-[11px] text-muted">Switches card layout instantly</span>
@@ -480,7 +500,12 @@ export function CatalogStyleControls({
                   </button>
                 ))}
               </div>
-            </div>
+            </div> : (
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+                <p className="text-xs font-semibold text-sky-800">Slab price layout</p>
+                <p className="mt-1 text-[11px] leading-5 text-sky-700">Cards reserve a row for every quantity tier and keep the tier editor in the Products panel.</p>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-line/80 bg-gradient-to-br from-white via-white to-violet-50/55 p-4 shadow-sm space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -541,7 +566,7 @@ export function CatalogStyleControls({
                   </p>
                 </div>
                 <span className="rounded-full border border-line/80 bg-white px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm">
-                  {DISPLAY_FIELDS.filter((field) => Boolean(style[field.key])).length}/{DISPLAY_FIELDS.length}
+                  {activeDisplayFields.filter((field) => Boolean(style[field.key])).length}/{activeDisplayFields.length}
                 </span>
               </div>
             </div>
@@ -563,7 +588,7 @@ export function CatalogStyleControls({
             </label>
 
             <div className="grid grid-cols-2 gap-2">
-            {DISPLAY_FIELDS.map((field) => (
+            {activeDisplayFields.map((field) => (
               <label
                 key={field.key}
                 className="flex cursor-pointer items-center gap-3 rounded-2xl border border-line/80 bg-white px-3 py-3 text-xs text-muted-strong shadow-sm transition hover:border-brand/20 has-[:checked]:border-brand/30 has-[:checked]:bg-brand-soft/10 has-[:checked]:text-foreground"
@@ -758,7 +783,7 @@ export function CatalogStyleControls({
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2">
-            {COLOR_FIELDS.map((field) => (
+            {activeColorFields.map((field) => (
               <label key={field.key} className="rounded-2xl border border-line/80 bg-white p-3 shadow-sm transition hover:border-brand/20">
                 <span className="block text-[11px] font-medium text-muted">{field.label}</span>
                 <div className="mt-2 flex items-center gap-3 rounded-xl border border-line/70 bg-slate-50/60 px-2.5 py-2">
@@ -893,7 +918,7 @@ export function CatalogStyleControls({
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2">
-              {NUMBER_FIELDS.map((field) => (
+              {activeNumberFields.map((field) => (
                 <label key={field.key} className="space-y-1 text-[11px] text-muted">
                   <span>{field.label}</span>
                   <Input
